@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { exportReportPDF, exportPlayerCSV } from '../utils/exportUtils'
 import {
   RadarChart,
   PolarGrid,
@@ -88,11 +89,14 @@ export default function PlayerReportPage() {
   const { playerId } = useParams()
   const navigate = useNavigate()
   const [playerName, setPlayerName] = useState('')
+  const [playerFirstName, setPlayerFirstName] = useState('')
+  const [playerLastName, setPlayerLastName] = useState('')
   const [history, setHistory] = useState([])
   const [targets, setTargets] = useState([])
   const [sessionAverages, setSessionAverages] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -106,7 +110,11 @@ export default function PlayerReportPage() {
         setHistory(hist)
 
         const found = playersRes.data.find((p) => p.id === playerId)
-        if (found) setPlayerName(`${found.first_name} ${found.last_name}`)
+        if (found) {
+          setPlayerName(`${found.first_name} ${found.last_name}`)
+          setPlayerFirstName(found.first_name)
+          setPlayerLastName(found.last_name)
+        }
 
         if (hist.length > 0) {
           const last = hist[hist.length - 1]
@@ -159,8 +167,10 @@ export default function PlayerReportPage() {
       ? generatePlayerComment(playerName, lastSession, targets, history)
       : null
 
+  const sessionDate = lastSession?.session_date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
+
   return (
-    <div className="space-y-6 pb-8">
+    <div id="report-content" className="space-y-6 pb-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
@@ -170,22 +180,34 @@ export default function PlayerReportPage() {
           >
             ←
           </button>
-          <div>
+          <div className="report-header">
             <h1 className="text-xl font-bold text-gray-900">
               {playerName || 'Giocatore'}
             </h1>
             <div className="text-sm text-gray-500 mt-0.5">Report individuale</div>
           </div>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div id="export-buttons" className="flex gap-2 shrink-0">
           <button
-            onClick={() => alert('Export disponibile nella prossima versione')}
-            className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            onClick={async () => {
+              setPdfLoading(true)
+              await exportReportPDF(
+                'report-content',
+                `report_${playerLastName}_${playerFirstName}_${sessionDate}.pdf`,
+                `${playerLastName} ${playerFirstName}`,
+                lastSession
+                  ? `Report individuale · ${sessionDate} · ${lastSession.group_name ?? ''}`
+                  : 'Report individuale'
+              )
+              setPdfLoading(false)
+            }}
+            disabled={pdfLoading}
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            📄 Esporta PDF
+            {pdfLoading ? 'Generazione...' : '📄 Esporta PDF'}
           </button>
           <button
-            onClick={() => alert('Export disponibile nella prossima versione')}
+            onClick={() => exportPlayerCSV(playerName, history, targets)}
             className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
           >
             📊 Esporta CSV
@@ -200,7 +222,7 @@ export default function PlayerReportPage() {
       ) : (
         <>
           {/* SEZIONE 1 — Ultima sessione vs Target */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 report-section">
             <h2 className="text-base font-semibold text-gray-800 mb-1">
               Ultima sessione vs Target
             </h2>
@@ -265,7 +287,7 @@ export default function PlayerReportPage() {
           </div>
 
           {/* SEZIONE 2 — Andamento nel tempo */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 report-section">
             <h2 className="text-base font-semibold text-gray-800 mb-4">
               Andamento nel tempo
             </h2>
@@ -327,7 +349,7 @@ export default function PlayerReportPage() {
 
           {/* SEZIONE 3 — vs Media squadra */}
           {sessionAverages && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="bg-white rounded-xl border border-gray-200 p-5 report-section">
               <h2 className="text-base font-semibold text-gray-800 mb-4">
                 vs Media squadra (ultima sessione)
               </h2>
@@ -347,7 +369,7 @@ export default function PlayerReportPage() {
 
           {/* SEZIONE 4 — Commento automatico */}
           {comment && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="bg-white rounded-xl border border-gray-200 p-5 report-section">
               <h2 className="text-base font-semibold text-gray-800 mb-3">
                 Commento automatico
               </h2>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { exportReportPDF, exportTeamCSV } from '../utils/exportUtils'
 import {
   BarChart,
   Bar,
@@ -95,6 +96,7 @@ export default function TeamReportPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [hiddenLines, setHiddenLines] = useState({})
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -187,8 +189,10 @@ export default function TeamReportPage() {
     return 'bg-yellow-50 text-yellow-800'
   }
 
+  const sessionDate = lastEntry?.session_date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
+
   return (
-    <div className="space-y-6 pb-8">
+    <div id="report-content" className="space-y-6 pb-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
@@ -198,20 +202,32 @@ export default function TeamReportPage() {
           >
             ←
           </button>
-          <div>
+          <div className="report-header">
             <h1 className="text-xl font-bold text-gray-900">{groupName || 'Squadra'}</h1>
             <div className="text-sm text-gray-500 mt-0.5">Report squadra</div>
           </div>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div id="export-buttons" className="flex gap-2 shrink-0">
           <button
-            onClick={() => alert('Export disponibile nella prossima versione')}
-            className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            onClick={async () => {
+              setPdfLoading(true)
+              await exportReportPDF(
+                'report-content',
+                `report_squadra_${groupName.replace(/\s/g, '_')}_${sessionDate}.pdf`,
+                groupName,
+                lastEntry
+                  ? `Report squadra · ${sessionDate} · ${lastEntry.session_type ?? ''}`
+                  : 'Report squadra'
+              )
+              setPdfLoading(false)
+            }}
+            disabled={pdfLoading}
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            📄 Esporta PDF
+            {pdfLoading ? 'Generazione...' : '📄 Esporta PDF'}
           </button>
           <button
-            onClick={() => alert('Export disponibile nella prossima versione')}
+            onClick={() => exportTeamCSV(groupName, history, playerRankings, targets)}
             className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
           >
             📊 Esporta CSV
@@ -226,7 +242,7 @@ export default function TeamReportPage() {
       ) : (
         <>
           {/* SEZIONE 1 — Ultima sessione: Media squadra vs Target */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 report-section">
             <h2 className="text-base font-semibold text-gray-800 mb-1">
               Ultima sessione — Media squadra vs Target
             </h2>
@@ -277,46 +293,146 @@ export default function TeamReportPage() {
             </table>
           </div>
 
-          {/* SEZIONE 1.5 — Classifica giocatori */}
+          {/* SEZIONE 2 — Dettaglio per parametro */}
           {presentMeasurements.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="bg-white rounded-xl border border-gray-200 p-5 report-section">
+              <h2 className="text-base font-semibold text-gray-800 mb-1">
+                Dettaglio per parametro
+              </h2>
+              <div className="text-xs text-gray-400 mb-4">
+                {formatDate(lastEntry.session_date)} · {lastEntry.session_type}
+              </div>
+              <div className="space-y-3">
+                {/* Riga 1: SR, DQI, AI */}
+                <div className="grid grid-cols-3 gap-3">
+                  {PARAMS.slice(0, 3).map(({ field, label, italianLabel }) => {
+                    const t = targetsMap[label]
+                    const withValue = [...presentMeasurements]
+                      .filter((m) => m[field] != null)
+                      .sort((a, b) => b[field] - a[field])
+                    const withoutValue = presentMeasurements.filter((m) => m[field] == null)
+                    const allSorted = [...withValue, ...withoutValue]
+                    return (
+                      <div key={field} className="border border-gray-100 rounded-lg p-3">
+                        <div className="text-xs font-semibold text-gray-600 text-center border-b border-gray-100 pb-2 mb-2">
+                          {italianLabel}
+                        </div>
+                        <div className="max-h-[220px] overflow-y-auto space-y-1">
+                          {allSorted.map((m, i) => {
+                            const val = m[field]
+                            const hasValue = val != null
+                            return (
+                              <div
+                                key={m.player_id}
+                                className="flex items-center justify-between gap-2 py-0.5"
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span className="text-gray-400 text-xs w-4 text-right shrink-0">
+                                    {hasValue ? i + 1 : ''}
+                                  </span>
+                                  <span className="text-xs text-gray-700">{m.last_name}</span>
+                                </div>
+                                <span
+                                  className={`text-xs font-semibold shrink-0 ${
+                                    hasValue ? cellClass(val, t) : 'text-gray-300'
+                                  }`}
+                                >
+                                  {hasValue ? val.toFixed(1) : '—'}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Riga 2: TRS, VCI — centrate */}
+                <div className="grid grid-cols-2 gap-3 max-w-[66%] mx-auto">
+                  {PARAMS.slice(3).map(({ field, label, italianLabel }) => {
+                    const t = targetsMap[label]
+                    const withValue = [...presentMeasurements]
+                      .filter((m) => m[field] != null)
+                      .sort((a, b) => b[field] - a[field])
+                    const withoutValue = presentMeasurements.filter((m) => m[field] == null)
+                    const allSorted = [...withValue, ...withoutValue]
+                    return (
+                      <div key={field} className="border border-gray-100 rounded-lg p-3">
+                        <div className="text-xs font-semibold text-gray-600 text-center border-b border-gray-100 pb-2 mb-2">
+                          {italianLabel}
+                        </div>
+                        <div className="max-h-[220px] overflow-y-auto space-y-1">
+                          {allSorted.map((m, i) => {
+                            const val = m[field]
+                            const hasValue = val != null
+                            return (
+                              <div
+                                key={m.player_id}
+                                className="flex items-center justify-between gap-2 py-0.5"
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span className="text-gray-400 text-xs w-4 text-right shrink-0">
+                                    {hasValue ? i + 1 : ''}
+                                  </span>
+                                  <span className="text-xs text-gray-700">{m.last_name}</span>
+                                </div>
+                                <span
+                                  className={`text-xs font-semibold shrink-0 ${
+                                    hasValue ? cellClass(val, t) : 'text-gray-300'
+                                  }`}
+                                >
+                                  {hasValue ? val.toFixed(1) : '—'}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SEZIONE 3 — Classifica giocatori */}
+          {presentMeasurements.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5 report-section">
               <h2 className="text-base font-semibold text-gray-800 mb-1">
                 Classifica giocatori — ultima sessione
               </h2>
               <div className="text-xs text-gray-400 mb-4">
                 {formatDate(lastEntry.session_date)} · {lastEntry.session_type}
               </div>
-
-              {/* Tabella principale */}
               <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[520px]">
+                <table className="w-full text-sm min-w-[520px] rankings-table">
                   <thead>
-                    <tr className="text-xs text-gray-500 border-b border-gray-100">
-                      <th className="pb-2 px-1 font-medium text-center w-6">#</th>
-                      <th className="pb-2 px-2 font-medium text-left">Giocatore</th>
+                    <tr className="text-xs text-gray-500">
+                      <th className="pb-2 px-1 font-medium text-center w-6 border-b-2 border-gray-400">#</th>
+                      <th className="pb-2 px-2 font-medium text-left border-b-2 border-gray-400">Giocatore</th>
                       {PARAMS.map(({ label }) => (
-                        <th key={label} className="pb-2 px-1 font-medium text-center">
+                        <th key={label} className="pb-2 px-1 font-medium text-center border-b-2 border-gray-400">
                           {label}
                         </th>
                       ))}
-                      <th className="pb-2 px-1 font-medium text-center">Media</th>
+                      <th className="pb-2 px-1 font-medium text-center border-b-2 border-gray-400">Media</th>
                     </tr>
                   </thead>
                   <tbody>
                     {playerRankings.map((m, i) => (
                       <tr
                         key={m.player_id}
-                        className="border-b border-gray-50 last:border-0"
                         style={i === 0 ? { backgroundColor: '#FEF9E7' } : {}}
                       >
-                        <td className="py-2 px-1 text-center text-gray-400 text-xs">{i + 1}</td>
-                        <td className="py-2 px-2 font-medium text-gray-800 whitespace-nowrap">
+                        <td className="py-2 px-1 text-center text-gray-400 text-xs border-b border-gray-300">{i + 1}</td>
+                        <td className="py-2 px-2 font-medium text-gray-800 whitespace-nowrap border-b border-gray-300">
                           {m.last_name} {m.first_name}
                         </td>
                         {PARAMS.map(({ field, label }) => (
                           <td
                             key={field}
-                            className={`py-1.5 px-1 text-center text-xs rounded ${cellClass(m[field], targetsMap[label])}`}
+                            className={`py-1.5 px-1 text-center text-xs rounded border-b border-gray-300 ${cellClass(m[field], targetsMap[label])}`}
                           >
                             {m[field] != null ? (
                               m[field].toFixed(1)
@@ -326,7 +442,7 @@ export default function TeamReportPage() {
                           </td>
                         ))}
                         <td
-                          className={`py-1.5 px-1 text-center text-xs font-bold rounded ${avgCellClass(m.avg)}`}
+                          className={`py-1.5 px-1 text-center text-xs font-bold rounded border-b border-gray-300 ${avgCellClass(m.avg)}`}
                         >
                           {m.avg != null ? (
                             m.avg.toFixed(1)
@@ -339,59 +455,11 @@ export default function TeamReportPage() {
                   </tbody>
                 </table>
               </div>
-
-              {/* Mini-classifiche per parametro */}
-              <h3 className="text-sm font-semibold text-gray-700 mt-6 mb-3">
-                Dettaglio per parametro
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                {PARAMS.map(({ field, label, italianLabel }) => {
-                  const t = targetsMap[label]
-                  const withValue = [...presentMeasurements]
-                    .filter((m) => m[field] != null)
-                    .sort((a, b) => b[field] - a[field])
-                  const withoutValue = presentMeasurements.filter((m) => m[field] == null)
-                  const allSorted = [...withValue, ...withoutValue]
-                  return (
-                    <div key={field} className="border border-gray-100 rounded-lg p-3">
-                      <div className="text-xs font-semibold text-gray-600 text-center border-b border-gray-100 pb-2 mb-2">
-                        {italianLabel}
-                      </div>
-                      <div className="max-h-[220px] overflow-y-auto space-y-1">
-                        {allSorted.map((m, i) => {
-                          const val = m[field]
-                          const hasValue = val != null
-                          return (
-                            <div
-                              key={m.player_id}
-                              className="flex items-center gap-1 text-xs"
-                            >
-                              <span className="text-gray-400 w-4 text-right shrink-0">
-                                {hasValue ? i + 1 : ''}
-                              </span>
-                              <span className="flex-1 truncate text-gray-700">
-                                {m.last_name}
-                              </span>
-                              <span
-                                className={`px-1.5 py-0.5 rounded font-medium ${
-                                  hasValue ? cellClass(val, t) : 'text-gray-300'
-                                }`}
-                              >
-                                {hasValue ? val.toFixed(1) : '—'}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
             </div>
           )}
 
           {/* SEZIONE 2 — Andamento squadra nel tempo */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 report-section">
             <h2 className="text-base font-semibold text-gray-800 mb-4">
               Andamento squadra nel tempo
             </h2>
@@ -445,7 +513,7 @@ export default function TeamReportPage() {
 
           {/* SEZIONE 3 — Commento squadra */}
           {comment && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="bg-white rounded-xl border border-gray-200 p-5 report-section">
               <h2 className="text-base font-semibold text-gray-800 mb-3">
                 Commento squadra
               </h2>
