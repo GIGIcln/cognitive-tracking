@@ -69,7 +69,11 @@ export default function SessionDetailPage() {
           getGroupTargets(s.group_id),
         ])
 
-        setPlayers(pRes.data)
+        const sorted = pRes.data.sort((a, b) =>
+          a.last_name.localeCompare(b.last_name, 'it') ||
+          a.first_name.localeCompare(b.first_name, 'it')
+        )
+        setPlayers(sorted)
 
         // Build targets map: { SR: { insufficient_max, ottimo_min }, ... }
         const tMap = {}
@@ -211,7 +215,7 @@ export default function SessionDetailPage() {
             >
               <div className="flex items-center justify-between mb-3">
                 <span className="font-semibold text-gray-900">
-                  {p.first_name} {p.last_name}
+                  {p.last_name} {p.first_name}
                 </span>
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <span className="text-sm text-gray-500">Assente</span>

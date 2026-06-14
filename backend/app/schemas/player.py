@@ -10,6 +10,7 @@ class PlayerCreate(BaseModel):
     last_name: str
     birth_year: int
     notes: str | None = None
+    group_id: uuid.UUID | None = None
 
 
 class PlayerUpdate(BaseModel):
@@ -27,6 +28,7 @@ class PlayerResponse(BaseModel):
     birth_year: int | None
     is_active: bool
     notes: str | None
+    current_group_name: str | None = None
 
     model_config = {"from_attributes": True}
 

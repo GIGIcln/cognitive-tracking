@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getGroup, updateGroupTargets } from '../api/groups'
-import { createPlayer } from '../api/players'
+import { deletePlayer } from '../api/players'
+import PlayerFormModal from '../components/PlayerFormModal'
 
 const LEVEL_COLORS = {
   alto: 'bg-green-100 text-green-700',
@@ -12,8 +13,6 @@ const LEVEL_COLORS = {
 }
 
 const PARAMS = ['SR', 'DQI', 'AI', 'TRS', 'VCI']
-
-const EMPTY_PLAYER = { first_name: '', last_name: '', birth_year: '', notes: '' }
 
 export default function GroupDetailPage() {
   const { id } = useParams()
@@ -26,16 +25,22 @@ export default function GroupDetailPage() {
   const [error, setError] = useState('')
   const [showAddPlayer, setShowAddPlayer] = useState(false)
   const [editingTargets, setEditingTargets] = useState(false)
-  const [newPlayer, setNewPlayer] = useState(EMPTY_PLAYER)
   const [targetEdits, setTargetEdits] = useState([])
   const [saving, setSaving] = useState(false)
+  const [editPlayer, setEditPlayer] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, player: null })
+  const [deleting, setDeleting] = useState(false)
 
   const load = () => {
     setLoading(true)
     getGroup(id)
       .then((res) => {
         setGroup(res.data)
-        setPlayers(res.data.players ?? [])
+        const sorted = (res.data.players ?? []).sort((a, b) =>
+          a.last_name.localeCompare(b.last_name, 'it') ||
+          a.first_name.localeCompare(b.first_name, 'it')
+        )
+        setPlayers(sorted)
         setTargets(res.data.targets ?? [])
         setTargetEdits(res.data.targets ?? [])
       })
@@ -44,21 +49,6 @@ export default function GroupDetailPage() {
   }
 
   useEffect(() => { load() }, [id])
-
-  const handleAddPlayer = async (e) => {
-    e.preventDefault()
-    setSaving(true)
-    try {
-      await createPlayer({ ...newPlayer, birth_year: parseInt(newPlayer.birth_year), group_id: id })
-      setShowAddPlayer(false)
-      setNewPlayer(EMPTY_PLAYER)
-      load()
-    } catch {
-      setError("Errore nell'aggiunta del giocatore")
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const handleSaveTargets = async () => {
     setSaving(true)
@@ -70,6 +60,19 @@ export default function GroupDetailPage() {
       setError('Errore nel salvataggio dei target')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDeletePlayer = async () => {
+    setDeleting(true)
+    try {
+      await deletePlayer(deleteConfirm.player.id)
+      setDeleteConfirm({ open: false, player: null })
+      load()
+    } catch {
+      setError('Errore durante la rimozione')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -142,11 +145,32 @@ export default function GroupDetailPage() {
 
           <div className="space-y-2">
             {players.map((p) => (
-              <div key={p.id} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
-                <div className="font-medium text-gray-900">{p.first_name} {p.last_name}</div>
-                {p.birth_year && (
-                  <div className="text-xs text-gray-500 mt-0.5">Anno: {p.birth_year}</div>
-                )}
+              <div
+                key={p.id}
+                className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between"
+              >
+                <div>
+                  <div className="font-medium text-gray-900">{p.last_name} {p.first_name}</div>
+                  {p.birth_year && (
+                    <div className="text-xs text-gray-500 mt-0.5">Anno: {p.birth_year}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setEditPlayer(p)}
+                    className="text-gray-400 hover:text-granata transition-colors text-lg leading-none"
+                    title="Modifica giocatore"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirm({ open: true, player: p })}
+                    className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none"
+                    title="Rimuovi giocatore"
+                  >
+                    🗑
+                  </button>
+                </div>
               </div>
             ))}
             {!players.length && (
@@ -156,58 +180,45 @@ export default function GroupDetailPage() {
             )}
           </div>
 
-          {/* Add player modal */}
-          {showAddPlayer && (
+          <PlayerFormModal
+            isOpen={showAddPlayer}
+            onClose={() => setShowAddPlayer(false)}
+            onSuccess={() => load()}
+            preselectedGroupId={id}
+            preselectedGroupName={group.name}
+          />
+
+          <PlayerFormModal
+            isOpen={!!editPlayer}
+            onClose={() => setEditPlayer(null)}
+            onSuccess={() => load()}
+            mode="edit"
+            player={editPlayer}
+          />
+
+          {deleteConfirm.open && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                <h3 className="text-lg font-semibold mb-4">Nuovo giocatore</h3>
-                <form onSubmit={handleAddPlayer} className="space-y-3">
-                  <input
-                    placeholder="Nome"
-                    value={newPlayer.first_name}
-                    onChange={(e) => setNewPlayer({ ...newPlayer, first_name: e.target.value })}
-                    required
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
-                  />
-                  <input
-                    placeholder="Cognome"
-                    value={newPlayer.last_name}
-                    onChange={(e) => setNewPlayer({ ...newPlayer, last_name: e.target.value })}
-                    required
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
-                  />
-                  <input
-                    placeholder="Anno di nascita"
-                    type="number"
-                    value={newPlayer.birth_year}
-                    onChange={(e) => setNewPlayer({ ...newPlayer, birth_year: e.target.value })}
-                    required
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
-                  />
-                  <textarea
-                    placeholder="Note (opzionale)"
-                    value={newPlayer.notes}
-                    onChange={(e) => setNewPlayer({ ...newPlayer, notes: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata resize-none"
-                    rows={2}
-                  />
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => { setShowAddPlayer(false); setNewPlayer(EMPTY_PLAYER) }}
-                      className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm hover:bg-gray-50"
-                    >
-                      Annulla
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="flex-1 bg-granata text-white py-2 rounded-lg text-sm hover:bg-granata-dark disabled:opacity-60"
-                    >
-                      {saving ? 'Salvataggio…' : 'Salva'}
-                    </button>
-                  </div>
-                </form>
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+                <p className="text-sm text-gray-700 mb-4">
+                  Sei sicuro di voler rimuovere{' '}
+                  <strong>{deleteConfirm.player.last_name} {deleteConfirm.player.first_name}</strong>?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDeleteConfirm({ open: false, player: null })}
+                    disabled={deleting}
+                    className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    onClick={handleDeletePlayer}
+                    disabled={deleting}
+                    className="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-60"
+                  >
+                    {deleting ? 'Rimozione…' : 'Rimuovi'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
