@@ -20,6 +20,8 @@ export default {
           900: '#681525',
           950: '#3b0912',
           DEFAULT: '#8B1A2E',
+          dark: '#6B1020',
+          light: '#A8223A',
         },
         oro: {
           50:  '#fdfaee',
@@ -34,6 +36,7 @@ export default {
           900: '#643e19',
           950: '#39200a',
           DEFAULT: '#C9A227',
+          light: '#E8BC30',
         },
       },
       fontFamily: {
