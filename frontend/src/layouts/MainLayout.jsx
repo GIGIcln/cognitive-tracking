@@ -6,6 +6,7 @@ const navItems = [
   { to: '/groups', label: 'Gruppi', icon: '👥' },
   { to: '/players', label: 'Giocatori', icon: '⚽' },
   { to: '/sessions', label: 'Sessioni', icon: '📋' },
+  { to: '/reports', label: 'Report', icon: '📊' },
 ]
 
 export default function MainLayout() {

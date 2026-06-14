@@ -9,3 +9,5 @@ export const saveMeasurements = (sessionId, measurements) =>
   api.post(`/sessions/${sessionId}/measurements`, { measurements })
 export const getMeasurements = (sessionId) =>
   api.get(`/sessions/${sessionId}/measurements`)
+export const getSessionAverages = (sessionId) =>
+  api.get(`/sessions/${sessionId}/averages`)

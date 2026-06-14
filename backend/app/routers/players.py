@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.assignment import PlayerGroupAssignment
 from app.models.group import Group
+from app.models.measurement import Measurement
 from app.models.player import Player
+from app.models.training_session import TrainingSession
 from app.models.user import User
 from app.schemas.player import AssignRequest, PlayerCreate, PlayerResponse, PlayerUpdate
 from app.services.auth_service import get_current_user
@@ -115,6 +117,41 @@ def update_player(
     db.commit()
     db.refresh(player)
     return PlayerResponse.model_validate(player)
+
+
+@router.get("/{player_id}/history")
+def get_player_history(
+    player_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    rows = (
+        db.query(Measurement, TrainingSession, Group)
+        .join(TrainingSession, TrainingSession.id == Measurement.session_id)
+        .join(Group, Group.id == TrainingSession.group_id)
+        .filter(
+            Measurement.player_id == player_id,
+            Measurement.is_absent.is_(False),
+        )
+        .order_by(TrainingSession.session_date.asc())
+        .all()
+    )
+    return [
+        {
+            "session_id": str(m.session_id),
+            "session_date": str(ts.session_date),
+            "session_type": ts.session_type,
+            "group_id": str(ts.group_id),
+            "group_name": g.name,
+            "scanning_rate": float(m.scanning_rate) if m.scanning_rate is not None else None,
+            "decision_quality": float(m.decision_quality) if m.decision_quality is not None else None,
+            "anticipation": float(m.anticipation) if m.anticipation is not None else None,
+            "transition_reset": float(m.transition_reset) if m.transition_reset is not None else None,
+            "verbal_comm": float(m.verbal_comm) if m.verbal_comm is not None else None,
+            "is_absent": m.is_absent,
+        }
+        for m, ts, g in rows
+    ]
 
 
 @router.post("/{player_id}/assign")

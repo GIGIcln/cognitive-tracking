@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -94,6 +95,42 @@ def get_session(
     data = SessionResponse.model_validate(session).model_dump()
     data["measurements"] = [m.model_dump() for m in measurements]
     return data
+
+
+@router.get("/{session_id}/averages")
+def get_session_averages(
+    session_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    session = db.get(TrainingSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Sessione non trovata")
+
+    row = (
+        db.query(
+            func.avg(Measurement.scanning_rate).label("avg_sr"),
+            func.avg(Measurement.decision_quality).label("avg_dqi"),
+            func.avg(Measurement.anticipation).label("avg_ai"),
+            func.avg(Measurement.transition_reset).label("avg_trs"),
+            func.avg(Measurement.verbal_comm).label("avg_vci"),
+            func.count(Measurement.id).label("player_count"),
+        )
+        .filter(
+            Measurement.session_id == session_id,
+            Measurement.is_absent.is_(False),
+        )
+        .first()
+    )
+
+    return {
+        "avg_sr": float(row.avg_sr) if row.avg_sr is not None else None,
+        "avg_dqi": float(row.avg_dqi) if row.avg_dqi is not None else None,
+        "avg_ai": float(row.avg_ai) if row.avg_ai is not None else None,
+        "avg_trs": float(row.avg_trs) if row.avg_trs is not None else None,
+        "avg_vci": float(row.avg_vci) if row.avg_vci is not None else None,
+        "player_count": row.player_count or 0,
+    }
 
 
 @router.post("/{session_id}/measurements", response_model=list[MeasurementResponse])

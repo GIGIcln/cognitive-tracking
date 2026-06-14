@@ -5,3 +5,4 @@ export const getGroup = (id) => api.get(`/groups/${id}`)
 export const getGroupTargets = (id) => api.get(`/groups/${id}/targets`)
 export const updateGroupTargets = (id, targets) =>
   api.put(`/groups/${id}/targets`, targets)
+export const getGroupHistory = (groupId) => api.get(`/groups/${groupId}/history`)
