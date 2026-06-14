@@ -217,23 +217,22 @@ export default function SessionDetailPage() {
                 <span className="font-semibold text-gray-900">
                   {p.last_name} {p.first_name}
                 </span>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div className="flex items-center gap-2 select-none">
                   <span className="text-sm text-gray-500">Assente</span>
                   <button
                     type="button"
                     onClick={() => toggleAbsent(p.id)}
-                    className={`w-10 h-6 rounded-full transition-colors relative flex-shrink-0 ${
-                      m.is_absent ? 'bg-gray-400' : 'bg-gray-200'
+                    className={`relative inline-flex items-center h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      m.is_absent ? 'bg-red-500' : 'bg-gray-200'
                     }`}
-                    aria-pressed={m.is_absent}
                   >
                     <span
-                      className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                        m.is_absent ? 'translate-x-5' : 'translate-x-1'
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+                        m.is_absent ? 'translate-x-5' : 'translate-x-0'
                       }`}
                     />
                   </button>
-                </label>
+                </div>
               </div>
 
               <div className="grid grid-cols-5 gap-2">
