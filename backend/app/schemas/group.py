@@ -1,0 +1,45 @@
+from __future__ import annotations
+
+import uuid
+
+from pydantic import BaseModel
+
+
+class TargetResponse(BaseModel):
+    parameter: str
+    insufficient_max: float
+    ottimo_min: float
+
+    model_config = {"from_attributes": True}
+
+
+class TargetUpdateItem(BaseModel):
+    parameter: str
+    insufficient_max: float
+    ottimo_min: float
+
+
+class PlayerInGroupResponse(BaseModel):
+    id: uuid.UUID
+    first_name: str
+    last_name: str
+    birth_year: int | None
+
+    model_config = {"from_attributes": True}
+
+
+class GroupResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    category: str
+    birth_year: int | None
+    level: str
+    sub_group: str | None
+    max_players: int
+
+    model_config = {"from_attributes": True}
+
+
+class GroupDetailResponse(GroupResponse):
+    players: list[PlayerInGroupResponse]
+    targets: list[TargetResponse]
