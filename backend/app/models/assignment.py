@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+import uuid
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy import UUID, Boolean, Date, DateTime, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -15,18 +16,20 @@ if TYPE_CHECKING:
 
 class PlayerGroupAssignment(Base):
     __tablename__ = "player_group_assignments"
-    __table_args__ = (
-        # un giocatore può essere attivo in un gruppo una volta sola alla volta
-        UniqueConstraint("player_id", "group_id", "removed_at", name="uq_player_group_active"),
-    )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), nullable=False)
-    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"), nullable=False)
-    assigned_at: Mapped[datetime] = mapped_column(
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("players.id"), nullable=False
+    )
+    group_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("groups.id"), nullable=False
+    )
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     player: Mapped[Player] = relationship("Player", back_populates="assignments")
     group: Mapped[Group] = relationship("Group", back_populates="assignments")

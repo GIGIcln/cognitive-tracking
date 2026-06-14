@@ -1,26 +1,35 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import UUID, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.assignment import PlayerGroupAssignment
+    from app.models.group_target import GroupTarget
+    from app.models.measurement import Measurement
     from app.models.season import Season
-    from app.models.session import Session
-    from app.models.target import GroupTarget
+    from app.models.training_session import TrainingSession
 
 
 class Group(Base):
     __tablename__ = "groups"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"), nullable=False)
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    season_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("seasons.id"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    category: Mapped[str] = mapped_column(String, nullable=False)
+    birth_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    level: Mapped[str] = mapped_column(String, nullable=False)
+    sub_group: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    max_players: Mapped[int] = mapped_column(Integer, default=18, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -29,5 +38,8 @@ class Group(Base):
     assignments: Mapped[list[PlayerGroupAssignment]] = relationship(
         "PlayerGroupAssignment", back_populates="group"
     )
-    sessions: Mapped[list[Session]] = relationship("Session", back_populates="group")
+    training_sessions: Mapped[list[TrainingSession]] = relationship(
+        "TrainingSession", back_populates="group"
+    )
+    measurements: Mapped[list[Measurement]] = relationship("Measurement", back_populates="group")
     targets: Mapped[list[GroupTarget]] = relationship("GroupTarget", back_populates="group")

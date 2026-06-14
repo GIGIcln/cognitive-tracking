@@ -1,4 +1,4 @@
-"""initial schema
+"""initial_schema
 
 Revision ID: 0001
 Revises:
@@ -7,8 +7,8 @@ Create Date: 2026-06-13 00:00:00.000000
 
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "0001"
 down_revision: str | None = None
@@ -18,46 +18,70 @@ depends_on: str | tuple[str, ...] | None = None
 
 def upgrade() -> None:
     op.create_table(
-        "seasons",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("name", sa.String(100), nullable=False),
-        sa.Column("start_date", sa.Date(), nullable=False),
-        sa.Column("end_date", sa.Date(), nullable=True),
+        "users",
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("email", sa.String(), nullable=False),
+        sa.Column("hashed_password", sa.String(), nullable=False),
+        sa.Column("full_name", sa.String(), nullable=True),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
             nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("email"),
+    )
+
+    op.create_table(
+        "seasons",
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("start_date", sa.Date(), nullable=True),
+        sa.Column("end_date", sa.Date(), nullable=True),
+        sa.Column("is_current", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.PrimaryKeyConstraint("id"),
     )
 
     op.create_table(
         "players",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("first_name", sa.String(100), nullable=False),
-        sa.Column("last_name", sa.String(100), nullable=False),
-        sa.Column("birth_date", sa.Date(), nullable=True),
-        sa.Column("role", sa.String(50), nullable=True),
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("first_name", sa.String(), nullable=False),
+        sa.Column("last_name", sa.String(), nullable=False),
+        sa.Column("birth_year", sa.Integer(), nullable=True),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column("notes", sa.Text(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
             nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.PrimaryKeyConstraint("id"),
     )
 
     op.create_table(
         "groups",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("season_id", sa.Integer(), nullable=False),
-        sa.Column("name", sa.String(100), nullable=False),
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("season_id", sa.UUID(), nullable=False),
+        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("category", sa.String(), nullable=False),
+        sa.Column("birth_year", sa.Integer(), nullable=True),
+        sa.Column("level", sa.String(), nullable=False),
+        sa.Column("sub_group", sa.String(1), nullable=True),
+        sa.Column("max_players", sa.Integer(), nullable=False, server_default=sa.text("18")),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
             nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.ForeignKeyConstraint(["season_id"], ["seasons.id"]),
         sa.PrimaryKeyConstraint("id"),
@@ -65,34 +89,37 @@ def upgrade() -> None:
 
     op.create_table(
         "player_group_assignments",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("player_id", sa.Integer(), nullable=False),
-        sa.Column("group_id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("player_id", sa.UUID(), nullable=False),
+        sa.Column("group_id", sa.UUID(), nullable=False),
+        sa.Column("start_date", sa.Date(), nullable=False),
+        sa.Column("end_date", sa.Date(), nullable=True),
+        sa.Column("is_current", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column(
-            "assigned_at",
+            "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
             nullable=False,
+            server_default=sa.text("now()"),
         ),
-        sa.Column("removed_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["group_id"], ["groups.id"]),
         sa.ForeignKeyConstraint(["player_id"], ["players.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("player_id", "group_id", "removed_at", name="uq_player_group_active"),
     )
 
     op.create_table(
-        "sessions",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("group_id", sa.Integer(), nullable=False),
-        sa.Column("season_id", sa.Integer(), nullable=False),
-        sa.Column("date", sa.Date(), nullable=False),
+        "training_sessions",
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("group_id", sa.UUID(), nullable=False),
+        sa.Column("season_id", sa.UUID(), nullable=False),
+        sa.Column("session_date", sa.Date(), nullable=False),
+        sa.Column("session_type", sa.String(), nullable=False),
+        sa.Column("duration_min", sa.Integer(), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
             nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.ForeignKeyConstraint(["group_id"], ["groups.id"]),
         sa.ForeignKeyConstraint(["season_id"], ["seasons.id"]),
@@ -101,64 +128,55 @@ def upgrade() -> None:
 
     op.create_table(
         "measurements",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("session_id", sa.Integer(), nullable=False),
-        sa.Column("player_id", sa.Integer(), nullable=False),
-        sa.Column("scanning_rate", sa.Numeric(5, 2), nullable=True),
-        sa.Column("decision_quality", sa.Numeric(5, 2), nullable=True),
-        sa.Column("anticipation", sa.Numeric(5, 2), nullable=True),
-        sa.Column("transition_reset", sa.Numeric(5, 2), nullable=True),
-        sa.Column("verbal_comm", sa.Numeric(5, 2), nullable=True),
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("session_id", sa.UUID(), nullable=False),
+        sa.Column("player_id", sa.UUID(), nullable=False),
+        sa.Column("group_id", sa.UUID(), nullable=False),
+        sa.Column("scanning_rate", sa.Numeric(3, 1), nullable=True),
+        sa.Column("decision_quality", sa.Numeric(3, 1), nullable=True),
+        sa.Column("anticipation", sa.Numeric(3, 1), nullable=True),
+        sa.Column("transition_reset", sa.Numeric(3, 1), nullable=True),
+        sa.Column("verbal_comm", sa.Numeric(3, 1), nullable=True),
+        sa.Column("is_absent", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("notes", sa.Text(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
             nullable=False,
+            server_default=sa.text("now()"),
         ),
+        sa.ForeignKeyConstraint(["group_id"], ["groups.id"]),
         sa.ForeignKeyConstraint(["player_id"], ["players.id"]),
-        sa.ForeignKeyConstraint(["session_id"], ["sessions.id"]),
+        sa.ForeignKeyConstraint(["session_id"], ["training_sessions.id"]),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("session_id", "player_id", name="uq_measurement_session_player"),
     )
 
     op.create_table(
         "group_targets",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("group_id", sa.Integer(), nullable=False),
-        sa.Column("season_id", sa.Integer(), nullable=False),
-        # scanning_rate
-        sa.Column("scanning_rate_insufficient_max", sa.Numeric(5, 2), nullable=True),
-        sa.Column("scanning_rate_ottimo_min", sa.Numeric(5, 2), nullable=True),
-        # decision_quality
-        sa.Column("decision_quality_insufficient_max", sa.Numeric(5, 2), nullable=True),
-        sa.Column("decision_quality_ottimo_min", sa.Numeric(5, 2), nullable=True),
-        # anticipation
-        sa.Column("anticipation_insufficient_max", sa.Numeric(5, 2), nullable=True),
-        sa.Column("anticipation_ottimo_min", sa.Numeric(5, 2), nullable=True),
-        # transition_reset
-        sa.Column("transition_reset_insufficient_max", sa.Numeric(5, 2), nullable=True),
-        sa.Column("transition_reset_ottimo_min", sa.Numeric(5, 2), nullable=True),
-        # verbal_comm
-        sa.Column("verbal_comm_insufficient_max", sa.Numeric(5, 2), nullable=True),
-        sa.Column("verbal_comm_ottimo_min", sa.Numeric(5, 2), nullable=True),
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("group_id", sa.UUID(), nullable=False),
+        sa.Column("parameter", sa.String(), nullable=False),
+        sa.Column("insufficient_max", sa.Numeric(3, 1), nullable=False),
+        sa.Column("ottimo_min", sa.Numeric(3, 1), nullable=False),
         sa.Column(
-            "created_at",
+            "updated_at",
             sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
             nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.ForeignKeyConstraint(["group_id"], ["groups.id"]),
-        sa.ForeignKeyConstraint(["season_id"], ["seasons.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("group_id", "season_id", name="uq_target_group_season"),
+        sa.UniqueConstraint("group_id", "parameter", name="uq_target_group_parameter"),
     )
 
 
 def downgrade() -> None:
     op.drop_table("group_targets")
     op.drop_table("measurements")
-    op.drop_table("sessions")
+    op.drop_table("training_sessions")
     op.drop_table("player_group_assignments")
     op.drop_table("groups")
     op.drop_table("players")
     op.drop_table("seasons")
+    op.drop_table("users")
