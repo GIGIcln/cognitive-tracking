@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from app.database import SessionLocal
 from app.models import Group, GroupTarget, Season
 
-SEASON_NAME = "2024-2025"
+SEASON_NAME = "2026-2027"
 
 GROUPS = [
     # (name, category, birth_year, level, sub_group, max_players)
@@ -48,8 +48,8 @@ def main() -> None:
         if season is None:
             season = Season(
                 name=SEASON_NAME,
-                start_date=date(2024, 9, 1),
-                end_date=date(2025, 6, 15),
+                start_date=date(2026, 9, 1),
+                end_date=date(2027, 6, 15),
                 is_current=True,
             )
             db.add(season)
