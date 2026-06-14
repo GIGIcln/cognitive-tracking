@@ -14,6 +14,7 @@ import {
   ReferenceLine,
 } from 'recharts'
 import { getGroup, getGroupHistory, getGroupTargets } from '../api/groups'
+import { getMeasurements } from '../api/sessions'
 
 const PARAMS = [
   { field: 'scanning_rate',    label: 'SR',  italianLabel: 'Scanning Rate',  avgKey: 'avg_sr'  },
@@ -39,8 +40,14 @@ function badge(val, target) {
   return '🟡'
 }
 
+function cellClass(val, target) {
+  if (val == null || !target) return ''
+  if (val >= target.ottimo_min) return 'bg-green-50 text-green-800'
+  if (val <= target.insufficient_max) return 'bg-red-50 text-red-800'
+  return 'bg-yellow-50 text-yellow-800'
+}
+
 function generateTeamComment(lastEntry, targets, history) {
-  const paramFields = ['scanning_rate', 'decision_quality', 'anticipation', 'transition_reset', 'verbal_comm']
   const avgKeys = ['avg_sr', 'avg_dqi', 'avg_ai', 'avg_trs', 'avg_vci']
   const labels = ['SR', 'DQI', 'AI', 'TRS', 'VCI']
   const italianLabels = [
@@ -84,19 +91,35 @@ export default function TeamReportPage() {
   const [groupName, setGroupName] = useState('')
   const [history, setHistory] = useState([])
   const [targets, setTargets] = useState([])
+  const [measurements, setMeasurements] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [hiddenLines, setHiddenLines] = useState({})
 
   useEffect(() => {
-    Promise.all([getGroup(groupId), getGroupHistory(groupId), getGroupTargets(groupId)])
-      .then(([gr, hist, tgt]) => {
+    const load = async () => {
+      try {
+        const [gr, hist, tgt] = await Promise.all([
+          getGroup(groupId),
+          getGroupHistory(groupId),
+          getGroupTargets(groupId),
+        ])
+        const histData = hist.data ?? []
         setGroupName(gr.data.name)
-        setHistory(hist.data ?? [])
+        setHistory(histData)
         setTargets(tgt.data ?? [])
-      })
-      .catch(() => setError('Errore nel caricamento del report'))
-      .finally(() => setLoading(false))
+        if (histData.length > 0) {
+          const lastSessionId = histData[histData.length - 1].session_id
+          const measRes = await getMeasurements(lastSessionId)
+          setMeasurements(measRes.data ?? [])
+        }
+      } catch {
+        setError('Errore nel caricamento del report')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
   }, [groupId])
 
   if (loading) {
@@ -114,7 +137,7 @@ export default function TeamReportPage() {
   const lastEntry = history.length > 0 ? history[history.length - 1] : null
   const targetsMap = Object.fromEntries(targets.map((t) => [t.parameter, t]))
 
-  const barData = PARAMS.map(({ label, italianLabel, avgKey }) => ({
+  const barData = PARAMS.map(({ label, avgKey }) => ({
     name: label,
     'Media squadra': lastEntry?.[avgKey],
     'Target ottimo': targetsMap[label]?.ottimo_min,
@@ -139,14 +162,30 @@ export default function TeamReportPage() {
       : null
 
   const handleLegendClick = (data) => {
-    const key = data.dataKey
-    setHiddenLines((prev) => ({ ...prev, [key]: !prev[key] }))
+    setHiddenLines((prev) => ({ ...prev, [data.dataKey]: !prev[data.dataKey] }))
   }
 
   const comment =
     lastEntry && targets.length
       ? generateTeamComment(lastEntry, targets, history)
       : null
+
+  // Classifica giocatori
+  const presentMeasurements = measurements.filter((m) => !m.is_absent)
+  const playerRankings = presentMeasurements
+    .map((m) => {
+      const values = PARAMS.map((p) => m[p.field]).filter((v) => v != null)
+      const avg = values.length > 0 ? values.reduce((s, v) => s + v, 0) / values.length : null
+      return { ...m, avg }
+    })
+    .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1))
+
+  function avgCellClass(val) {
+    if (val == null || avgInsufficient == null || avgOttimo == null) return ''
+    if (val >= avgOttimo) return 'bg-green-50 text-green-800'
+    if (val <= avgInsufficient) return 'bg-red-50 text-red-800'
+    return 'bg-yellow-50 text-yellow-800'
+  }
 
   return (
     <div className="space-y-6 pb-8">
@@ -237,6 +276,119 @@ export default function TeamReportPage() {
               </tbody>
             </table>
           </div>
+
+          {/* SEZIONE 1.5 — Classifica giocatori */}
+          {presentMeasurements.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="text-base font-semibold text-gray-800 mb-1">
+                Classifica giocatori — ultima sessione
+              </h2>
+              <div className="text-xs text-gray-400 mb-4">
+                {formatDate(lastEntry.session_date)} · {lastEntry.session_type}
+              </div>
+
+              {/* Tabella principale */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[520px]">
+                  <thead>
+                    <tr className="text-xs text-gray-500 border-b border-gray-100">
+                      <th className="pb-2 px-1 font-medium text-center w-6">#</th>
+                      <th className="pb-2 px-2 font-medium text-left">Giocatore</th>
+                      {PARAMS.map(({ label }) => (
+                        <th key={label} className="pb-2 px-1 font-medium text-center">
+                          {label}
+                        </th>
+                      ))}
+                      <th className="pb-2 px-1 font-medium text-center">Media</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {playerRankings.map((m, i) => (
+                      <tr
+                        key={m.player_id}
+                        className="border-b border-gray-50 last:border-0"
+                        style={i === 0 ? { backgroundColor: '#FEF9E7' } : {}}
+                      >
+                        <td className="py-2 px-1 text-center text-gray-400 text-xs">{i + 1}</td>
+                        <td className="py-2 px-2 font-medium text-gray-800 whitespace-nowrap">
+                          {m.last_name} {m.first_name}
+                        </td>
+                        {PARAMS.map(({ field, label }) => (
+                          <td
+                            key={field}
+                            className={`py-1.5 px-1 text-center text-xs rounded ${cellClass(m[field], targetsMap[label])}`}
+                          >
+                            {m[field] != null ? (
+                              m[field].toFixed(1)
+                            ) : (
+                              <span className="text-gray-300">—</span>
+                            )}
+                          </td>
+                        ))}
+                        <td
+                          className={`py-1.5 px-1 text-center text-xs font-bold rounded ${avgCellClass(m.avg)}`}
+                        >
+                          {m.avg != null ? (
+                            m.avg.toFixed(1)
+                          ) : (
+                            <span className="text-gray-300 font-normal">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mini-classifiche per parametro */}
+              <h3 className="text-sm font-semibold text-gray-700 mt-6 mb-3">
+                Dettaglio per parametro
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                {PARAMS.map(({ field, label, italianLabel }) => {
+                  const t = targetsMap[label]
+                  const withValue = [...presentMeasurements]
+                    .filter((m) => m[field] != null)
+                    .sort((a, b) => b[field] - a[field])
+                  const withoutValue = presentMeasurements.filter((m) => m[field] == null)
+                  const allSorted = [...withValue, ...withoutValue]
+                  return (
+                    <div key={field} className="border border-gray-100 rounded-lg p-3">
+                      <div className="text-xs font-semibold text-gray-600 text-center border-b border-gray-100 pb-2 mb-2">
+                        {italianLabel}
+                      </div>
+                      <div className="max-h-[220px] overflow-y-auto space-y-1">
+                        {allSorted.map((m, i) => {
+                          const val = m[field]
+                          const hasValue = val != null
+                          return (
+                            <div
+                              key={m.player_id}
+                              className="flex items-center gap-1 text-xs"
+                            >
+                              <span className="text-gray-400 w-4 text-right shrink-0">
+                                {hasValue ? i + 1 : ''}
+                              </span>
+                              <span className="flex-1 truncate text-gray-700">
+                                {m.last_name}
+                              </span>
+                              <span
+                                className={`px-1.5 py-0.5 rounded font-medium ${
+                                  hasValue ? cellClass(val, t) : 'text-gray-300'
+                                }`}
+                              >
+                                {hasValue ? val.toFixed(1) : '—'}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* SEZIONE 2 — Andamento squadra nel tempo */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
