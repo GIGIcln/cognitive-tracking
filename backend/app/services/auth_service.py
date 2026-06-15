@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
@@ -13,7 +14,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.models.user import User
 
-_bearer = HTTPBearer()
+_bearer = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -48,6 +49,8 @@ def get_current_user(
         detail="Token non valido o scaduto",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if credentials is None:
+        raise exc
     try:
         payload = jwt.decode(
             credentials.credentials, settings.secret_key, algorithms=[settings.algorithm]
@@ -58,7 +61,7 @@ def get_current_user(
     except JWTError:
         raise exc
 
-    user = db.get(User, user_id)
+    user = db.get(User, uuid.UUID(user_id))
     if user is None or not user.is_active:
         raise exc
     return user
