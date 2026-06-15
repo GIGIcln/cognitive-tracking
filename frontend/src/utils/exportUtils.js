@@ -42,6 +42,9 @@ export async function exportReportPDF(contentId, filename, title, subtitle) {
       scale: 2,
       backgroundColor: '#ffffff',
       useCORS: true,
+      windowWidth: 1200,
+      scrollX: 0,
+      scrollY: -window.scrollY,
     })
     const imgData = canvas.toDataURL('image/png')
     const imgH = (canvas.height * contentWidth) / canvas.width
