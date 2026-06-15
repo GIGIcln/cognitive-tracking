@@ -111,23 +111,26 @@ fi
 echo ""
 log_sys "Verifica disponibilità porte..."
 
-check_port() {
+free_port() {
   local port=$1 service=$2
   if lsof -ti:"$port" &>/dev/null; then
-    local pid
-    pid=$(lsof -ti:"$port")
-    log_err "Porta $port già in uso dal processo PID $pid ($service)"
-    echo -e "  ${YELLOW}Forza chiusura con:${RESET} ${BOLD}kill $pid${RESET}"
-    echo -e "  ${YELLOW}Oppure identifica con:${RESET} ${BOLD}lsof -i :$port${RESET}"
-    return 1
+    local pids
+    pids=$(lsof -ti:"$port")
+    log_sys "Porta $port occupata ($service) — termino processo/i: $pids"
+    echo "$pids" | xargs kill -9 2>/dev/null || true
+    sleep 1
+    if lsof -ti:"$port" &>/dev/null; then
+      log_err "Impossibile liberare la porta $port. Esegui manualmente: kill -9 $(lsof -ti:$port)"
+      exit 1
+    fi
+    log_ok "Porta $port liberata"
+  else
+    log_ok "Porta $port libera ($service)"
   fi
-  log_ok "Porta $port libera ($service)"
 }
 
-PORT_OK=1
-check_port 8000 "Backend/Uvicorn" || PORT_OK=0
-check_port 5173 "Frontend/Vite"   || PORT_OK=0
-[ "$PORT_OK" -eq 0 ] && { echo ""; log_err "Libera le porte occupate e riprova."; exit 1; }
+free_port 8000 "Backend/Uvicorn"
+free_port 5173 "Frontend/Vite"
 
 # =============================================================================
 #  4. CHECK CONNESSIONE DATABASE
