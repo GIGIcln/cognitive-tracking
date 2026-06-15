@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -21,8 +22,12 @@ def setup(body: SetupRequest, db: Session = Depends(get_db)):
         full_name=body.full_name,
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    try:
+        db.commit()
+        db.refresh(user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Setup già completato: esiste almeno un utente")
     return {"message": "Admin creato con successo", "user": UserResponse.model_validate(user)}
 
 
