@@ -1,5 +1,62 @@
 # Cognitive Tracking — Documentazione Tecnica
 
+## ⚡ Avvio Rapido
+
+### Prima volta (setup iniziale)
+
+```bash
+make setup      # crea venv, installa dipendenze, copia .env.example → .env
+# → modifica backend/.env con DATABASE_URL e SECRET_KEY
+make migrate    # crea le tabelle
+make seed       # popola stagione, gruppi e target
+make dev        # avvia tutto
+```
+
+### Avvio e spegnimento quotidiano
+
+```bash
+make dev      # avvia tutto (backend + frontend)
+```
+
+`make dev` esegue in sequenza: check prerequisiti → check .env → check porte →
+wait database → attiva venv → pip install → `alembic upgrade head` →
+avvio Uvicorn su `0.0.0.0:8000` → avvio Vite su `5173`.
+
+| Situazione | Comando |
+|------------|---------|
+| Avviare tutto | `make dev` |
+| Spegnere tutto (normale) | `Ctrl+C` nel terminale |
+| Spegnere tutto (terminale chiuso per errore) | `make stop` |
+| Verificare cosa è in esecuzione | `lsof -i :8000 -i :5173` |
+
+> **Accesso da altri device sulla rete locale:** il backend ascolta su `0.0.0.0`,
+> quindi è raggiungibile da qualsiasi device sulla stessa rete WiFi tramite
+> `http://<IP-del-mac>:8000`. Il frontend Vite è accessibile su `http://<IP-del-mac>:5173`.
+
+### Tutti i comandi
+
+| Comando | Descrizione |
+|---------|-------------|
+| `make dev` | Avvia frontend + backend |
+| `make stop` | Forza stop se i processi sono rimasti attivi |
+| `make setup` | Prima configurazione |
+| `make migrate` | Applica migrazioni DB |
+| `make seed` | Popola dati iniziali |
+| `make migration-new MSG="..."` | Crea nuova migrazione Alembic |
+| `make clean` | Rimuove cache Python |
+| `make clean-all` | Rimuove anche venv e node_modules |
+| `make help` | Mostra tutti i comandi |
+
+### Prerequisiti macOS
+
+```bash
+brew install python node postgresql@15
+brew services start postgresql@15
+createdb cognitive_tracking   # solo prima volta
+```
+
+---
+
 ## Panoramica
 
 Cognitive Tracking è una piattaforma full-stack per il monitoraggio cognitivo di giocatori di calcio giovanile. Permette agli staff tecnici di registrare, tracciare e analizzare cinque parametri cognitivi per ciascun giocatore durante le sessioni di allenamento, confrontandoli con target personalizzati per fascia d'età e livello.

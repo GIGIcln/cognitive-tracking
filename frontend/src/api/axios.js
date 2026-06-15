@@ -6,6 +6,7 @@ const api = axios.create({
 
 let isRedirecting = false
 
+// ── Interceptor 1: inietta JWT ────────────────────────────────────────────────
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('ct_token')
   if (token) {
@@ -14,10 +15,16 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// ── Interceptor 2: gestione 401 (sessione scaduta) ───────────────────────────
+// NON interviene sull'endpoint di login stesso: lì un 401 significa
+// "credenziali errate" e va gestito dal componente LoginPage.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const url = error.config?.url || ''
+    const isLoginEndpoint = url.includes('/auth/login')
+
+    if (error.response?.status === 401 && !isLoginEndpoint) {
       if (isRedirecting) return Promise.reject(error)
       isRedirecting = true
       localStorage.removeItem('ct_token')
@@ -28,54 +35,57 @@ api.interceptors.response.use(
   }
 )
 
-// Interceptor offline queue — aggiungere DOPO gli interceptor esistenti
+// ── Interceptor 3: offline queue + errori di rete ────────────────────────────
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    // Errore HTTP normale (4xx, 5xx): gestione standard
+    // Errore HTTP con risposta (4xx, 5xx): gestione standard dal componente
     if (error.response) {
-      return Promise.reject(error);
+      return Promise.reject(error)
     }
 
-    // Errore di rete (no risposta) su metodi in scrittura: accoda offline
-    const method = error.config?.method?.toUpperCase();
-    const url = error.config?.url || '';
-    const isAuthEndpoint = url.includes('/auth/') || url.includes('auth/login');
-    if (!error.response && error.config && ['POST', 'PUT', 'PATCH'].includes(method) && !isAuthEndpoint) {
+    const method = error.config?.method?.toUpperCase()
+    const url = error.config?.url || ''
+    const isAuthEndpoint = url.includes('/auth/')
+
+    // Metodi in scrittura non-auth: accoda offline per retry automatico
+    if (error.config && ['POST', 'PUT', 'PATCH'].includes(method) && !isAuthEndpoint) {
       try {
-        const { addToQueue } = await import('../utils/offlineQueue');
-        let body = {};
-        try {
-          body = JSON.parse(error.config.data || '{}');
-        } catch {}
+        const { addToQueue } = await import('../utils/offlineQueue')
+        let body = {}
+        try { body = JSON.parse(error.config.data || '{}') } catch {}
 
         await addToQueue({
           url: error.config.url,
           method,
           body,
-          label: `${method} ${error.config.url} — ${new Date().toLocaleTimeString('it-IT')}`,
-        });
+          label: `${method} ${url} — ${new Date().toLocaleTimeString('it-IT')}`,
+        })
 
         const offlineError = new Error(
           'Operazione salvata offline. Verrà sincronizzata al ripristino della connessione.'
-        );
-        offlineError.isOfflineQueued = true;
-        return Promise.reject(offlineError);
+        )
+        offlineError.isOfflineQueued = true
+        return Promise.reject(offlineError)
       } catch (queueError) {
-        console.error('[OfflineQueue] Errore durante l\'accodamento:', queueError);
+        console.error('[OfflineQueue] Errore durante l\'accodamento:', queueError)
       }
     }
 
-    if (!error.response && url.includes('/auth/login')) {
+    // Errore di rete sull'endpoint di login: messaggio contestuale
+    if (url.includes('/auth/login')) {
+      const isOnline = navigator.onLine
       const friendlyError = new Error(
-        'Sei offline. Connettiti a Internet per accedere.'
-      );
-      friendlyError.isOffline = true;
-      return Promise.reject(friendlyError);
+        isOnline
+          ? 'Impossibile raggiungere il server. Assicurati che il backend sia in esecuzione.'
+          : 'Sei offline. Connettiti a Internet per accedere.'
+      )
+      friendlyError.isOffline = true
+      return Promise.reject(friendlyError)
     }
 
-    return Promise.reject(error);
+    return Promise.reject(error)
   }
-);
+)
 
 export default api
