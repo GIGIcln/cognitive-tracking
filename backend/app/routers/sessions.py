@@ -144,39 +144,45 @@ def upsert_measurements(
     if not session:
         raise HTTPException(status_code=404, detail="Sessione non trovata")
 
-    for m in body.measurements:
-        player = db.get(Player, m.player_id)
-        if not player:
-            raise HTTPException(status_code=404, detail=f"Giocatore {m.player_id} non trovato")
+    player_ids = {m.player_id for m in body.measurements}
+    found_ids = {
+        row.id
+        for row in db.query(Player.id).filter(Player.id.in_(player_ids)).all()
+    }
+    missing = player_ids - found_ids
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Giocatori non trovati: {sorted(str(i) for i in missing)}")
 
-        stmt = (
-            insert(Measurement)
-            .values(
-                session_id=session_id,
-                player_id=m.player_id,
-                group_id=session.group_id,
-                scanning_rate=m.scanning_rate,
-                decision_quality=m.decision_quality,
-                anticipation=m.anticipation,
-                transition_reset=m.transition_reset,
-                verbal_comm=m.verbal_comm,
-                is_absent=m.is_absent,
-                notes=m.notes,
-            )
-            .on_conflict_do_update(
-                constraint="uq_measurement_session_player",
-                set_={
-                    "scanning_rate": m.scanning_rate,
-                    "decision_quality": m.decision_quality,
-                    "anticipation": m.anticipation,
-                    "transition_reset": m.transition_reset,
-                    "verbal_comm": m.verbal_comm,
-                    "is_absent": m.is_absent,
-                    "notes": m.notes,
-                },
-            )
-        )
-        db.execute(stmt)
+    values = [
+        {
+            "session_id": session_id,
+            "player_id": m.player_id,
+            "group_id": session.group_id,
+            "scanning_rate": m.scanning_rate,
+            "decision_quality": m.decision_quality,
+            "anticipation": m.anticipation,
+            "transition_reset": m.transition_reset,
+            "verbal_comm": m.verbal_comm,
+            "is_absent": m.is_absent,
+            "notes": m.notes,
+        }
+        for m in body.measurements
+    ]
+
+    ins = insert(Measurement)
+    stmt = ins.values(values).on_conflict_do_update(
+        constraint="uq_measurement_session_player",
+        set_={
+            "scanning_rate": ins.excluded.scanning_rate,
+            "decision_quality": ins.excluded.decision_quality,
+            "anticipation": ins.excluded.anticipation,
+            "transition_reset": ins.excluded.transition_reset,
+            "verbal_comm": ins.excluded.verbal_comm,
+            "is_absent": ins.excluded.is_absent,
+            "notes": ins.excluded.notes,
+        },
+    )
+    db.execute(stmt)
 
     db.commit()
     return get_measurements(session_id, db, _)
