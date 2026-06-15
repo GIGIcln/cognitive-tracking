@@ -61,30 +61,35 @@ export default function MainLayout() {
         </div>
       </aside>
 
-      {/* Content area */}
+      {/* Content area — pb-20 on mobile leaves room for the 64px bottom nav + safe area */}
       <div className="flex-1 md:ml-60 pb-20 md:pb-0">
         <main className="p-4 md:p-6 max-w-4xl mx-auto">
           <Outlet />
         </main>
       </div>
 
-      {/* Bottom nav mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex z-10">
-        {navItems.map(({ to, label, icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className={({ isActive }) =>
-              `flex-1 flex flex-col items-center py-2 text-xs transition-colors ${
-                isActive ? 'text-granata' : 'text-gray-500'
-              }`
-            }
-          >
-            <span className="text-xl mb-0.5">{icon}</span>
-            {label}
-          </NavLink>
-        ))}
+      {/* Bottom nav mobile — 64px tall + safe area padding */}
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="flex h-16">
+          {navItems.map(({ to, label, icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) =>
+                `flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors min-h-[48px] ${
+                  isActive ? 'text-granata' : 'text-gray-500'
+                }`
+              }
+            >
+              <span className="text-2xl leading-none">{icon}</span>
+              <span className="text-[10px] font-medium">{label}</span>
+            </NavLink>
+          ))}
+        </div>
       </nav>
     </div>
   )

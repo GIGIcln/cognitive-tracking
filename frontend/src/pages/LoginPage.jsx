@@ -17,8 +17,11 @@ export default function LoginPage() {
     try {
       await login(email, password)
       navigate('/', { replace: true })
-    } catch {
-      setError('Credenziali non valide. Riprova.')
+    } catch (error) {
+      const msg = error.response?.data?.detail
+        || error.message
+        || 'Errore sconosciuto'
+      setError(msg)
     } finally {
       setLoading(false)
     }
