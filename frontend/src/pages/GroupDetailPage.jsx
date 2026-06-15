@@ -3,14 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getGroup, updateGroupTargets } from '../api/groups'
 import { deletePlayer } from '../api/players'
 import PlayerFormModal from '../components/PlayerFormModal'
-
-const LEVEL_COLORS = {
-  alto: 'bg-green-100 text-green-700',
-  medio: 'bg-yellow-100 text-yellow-700',
-  basso: 'bg-red-100 text-red-700',
-  'medio/alto': 'bg-green-50 text-green-600',
-  'medio/basso': 'bg-orange-100 text-orange-700',
-}
+import { LEVEL_COLORS } from '../constants/domain'
 
 const PARAMS = ['SR', 'DQI', 'AI', 'TRS', 'VCI']
 

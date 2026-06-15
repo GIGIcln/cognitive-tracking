@@ -1,16 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getGroups } from '../api/groups'
-
-const LEVEL_COLORS = {
-  alto: 'bg-green-100 text-green-700',
-  medio: 'bg-yellow-100 text-yellow-700',
-  basso: 'bg-red-100 text-red-700',
-  'medio/alto': 'bg-green-50 text-green-600',
-  'medio/basso': 'bg-orange-100 text-orange-700',
-}
-
-const CATEGORIES = ['Esordienti', 'Pulcini', 'Primi Calci']
+import { LEVEL_COLORS, GROUP_CATEGORIES } from '../constants/domain'
 
 export default function GroupsPage() {
   const [groups, setGroups] = useState([])
@@ -26,7 +17,7 @@ export default function GroupsPage() {
   }, [])
 
   const byCategory = (cat) => groups.filter((g) => g.category === cat)
-  const uncategorized = groups.filter((g) => !CATEGORIES.includes(g.category))
+  const uncategorized = groups.filter((g) => !GROUP_CATEGORIES.includes(g.category))
 
   const GroupCard = ({ g }) => (
     <button
@@ -53,7 +44,7 @@ export default function GroupsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {CATEGORIES.map((cat) => {
+          {GROUP_CATEGORIES.map((cat) => {
             const list = byCategory(cat)
             if (!list.length) return null
             return (

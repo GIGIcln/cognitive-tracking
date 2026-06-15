@@ -22,23 +22,12 @@ import {
 import { getPlayers, getPlayerHistory } from '../api/players'
 import { getGroupTargets } from '../api/groups'
 import { getSessionAverages } from '../api/sessions'
+import { COGNITIVE_PARAMS } from '../constants/domain'
+import { formatDateShort } from '../utils/dateUtils'
 
-const PARAMS = [
-  { field: 'scanning_rate',    label: 'SR',  italianLabel: 'Scanning Rate',      avgKey: 'avg_sr'  },
-  { field: 'decision_quality', label: 'DQI', italianLabel: 'Dec. Quality',        avgKey: 'avg_dqi' },
-  { field: 'anticipation',     label: 'AI',  italianLabel: 'Anticipazione',       avgKey: 'avg_ai'  },
-  { field: 'transition_reset', label: 'TRS', italianLabel: 'Trans. Reset',        avgKey: 'avg_trs' },
-  { field: 'verbal_comm',      label: 'VCI', italianLabel: 'Comunicazione',       avgKey: 'avg_vci' },
-]
+const PARAMS = COGNITIVE_PARAMS
 
 const LINE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899']
-
-const formatDate = (d) =>
-  new Date(d).toLocaleDateString('it-IT', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-  })
 
 function badge(val, target) {
   if (val == null || !target) return null
@@ -227,7 +216,7 @@ export default function PlayerReportPage() {
               Ultima sessione vs Target
             </h2>
             <div className="text-xs text-gray-400 mb-4">
-              {formatDate(lastSession.session_date)} · {lastSession.session_type}
+              {formatDateShort(lastSession.session_date)} · {lastSession.session_type}
             </div>
 
             <ResponsiveContainer width="100%" height={300}>
@@ -300,7 +289,7 @@ export default function PlayerReportPage() {
                 {PARAMS.map(({ field, label, italianLabel }, i) => {
                   const t = targetsMap[label]
                   const data = history.map((h) => ({
-                    date: formatDate(h.session_date),
+                    date: formatDateShort(h.session_date),
                     Valore: h[field],
                   }))
                   return (

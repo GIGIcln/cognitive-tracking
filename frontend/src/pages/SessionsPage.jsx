@@ -2,15 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSessions, createSession } from '../api/sessions'
 import { getGroups } from '../api/groups'
-
-const SESSION_TYPES = ['SSG', 'Partita a tema', 'Partita']
-
-const formatDate = (d) =>
-  new Date(d).toLocaleDateString('it-IT', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
+import { SESSION_TYPES } from '../constants/domain'
+import { formatDateLong } from '../utils/dateUtils'
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState([])
@@ -113,7 +106,7 @@ export default function SessionsPage() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="font-medium text-gray-900">{formatDate(s.session_date)}</div>
+                  <div className="font-medium text-gray-900">{formatDateLong(s.session_date)}</div>
                   <div className="text-xs text-gray-500 mt-0.5">
                     {s.session_type} · {groupName(s.group_id)}
                     {s.duration_min && ` · ${s.duration_min} min`}

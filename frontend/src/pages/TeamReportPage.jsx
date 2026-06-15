@@ -16,23 +16,12 @@ import {
 } from 'recharts'
 import { getGroup, getGroupHistory, getGroupTargets } from '../api/groups'
 import { getMeasurements } from '../api/sessions'
+import { COGNITIVE_PARAMS } from '../constants/domain'
+import { formatDateShort } from '../utils/dateUtils'
 
-const PARAMS = [
-  { field: 'scanning_rate',    label: 'SR',  italianLabel: 'Scanning Rate',  avgKey: 'avg_sr'  },
-  { field: 'decision_quality', label: 'DQI', italianLabel: 'Dec. Quality',   avgKey: 'avg_dqi' },
-  { field: 'anticipation',     label: 'AI',  italianLabel: 'Anticipazione',  avgKey: 'avg_ai'  },
-  { field: 'transition_reset', label: 'TRS', italianLabel: 'Trans. Reset',   avgKey: 'avg_trs' },
-  { field: 'verbal_comm',      label: 'VCI', italianLabel: 'Comunicazione',  avgKey: 'avg_vci' },
-]
+const PARAMS = COGNITIVE_PARAMS
 
 const LINE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899']
-
-const formatDate = (d) =>
-  new Date(d).toLocaleDateString('it-IT', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-  })
 
 function badge(val, target) {
   if (val == null || !target) return null
@@ -146,7 +135,7 @@ export default function TeamReportPage() {
   }))
 
   const lineData = history.map((h) => ({
-    date: formatDate(h.session_date),
+    date: formatDateShort(h.session_date),
     SR: h.avg_sr,
     DQI: h.avg_dqi,
     AI: h.avg_ai,
@@ -247,7 +236,7 @@ export default function TeamReportPage() {
               Ultima sessione — Media squadra vs Target
             </h2>
             <div className="text-xs text-gray-400 mb-4">
-              {formatDate(lastEntry.session_date)} · {lastEntry.session_type} ·{' '}
+              {formatDateShort(lastEntry.session_date)} · {lastEntry.session_type} ·{' '}
               {lastEntry.player_count} giocatori
             </div>
 
@@ -300,7 +289,7 @@ export default function TeamReportPage() {
                 Dettaglio per parametro
               </h2>
               <div className="text-xs text-gray-400 mb-4">
-                {formatDate(lastEntry.session_date)} · {lastEntry.session_type}
+                {formatDateShort(lastEntry.session_date)} · {lastEntry.session_type}
               </div>
               <div className="space-y-3">
                 {/* Riga 1: SR, DQI, AI */}
@@ -403,7 +392,7 @@ export default function TeamReportPage() {
                 Classifica giocatori — ultima sessione
               </h2>
               <div className="text-xs text-gray-400 mb-4">
-                {formatDate(lastEntry.session_date)} · {lastEntry.session_type}
+                {formatDateShort(lastEntry.session_date)} · {lastEntry.session_type}
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm min-w-[520px] rankings-table">

@@ -3,14 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getSession, saveMeasurements } from '../api/sessions'
 import { getPlayers } from '../api/players'
 import { getGroupTargets } from '../api/groups'
+import { COGNITIVE_PARAMS } from '../constants/domain'
+import { formatDateLong } from '../utils/dateUtils'
 
-const PARAMS = [
-  { label: 'SR',  fullLabel: 'Scanning Rate',    field: 'scanning_rate' },
-  { label: 'DQI', fullLabel: 'Decision Quality', field: 'decision_quality' },
-  { label: 'AI',  fullLabel: 'Anticipazione',    field: 'anticipation' },
-  { label: 'TRS', fullLabel: 'Trans. Reset',     field: 'transition_reset' },
-  { label: 'VCI', fullLabel: 'Verbal Comm.',     field: 'verbal_comm' },
-]
+const PARAMS = COGNITIVE_PARAMS
 
 const FIELD_TO_PARAM = {
   scanning_rate:    'SR',
@@ -40,13 +36,6 @@ function getMobileBtnClass(n, selectedValue, targetsMap, field) {
   if (n >= t.ottimo_min)       return 'bg-granata text-white scale-105 ring-2 ring-green-400 ring-offset-1'
   return 'bg-granata text-white scale-105 ring-2 ring-yellow-400 ring-offset-1'
 }
-
-const formatDate = (d) =>
-  d
-    ? new Date(d).toLocaleDateString('it-IT', {
-        day: '2-digit', month: 'long', year: 'numeric',
-      })
-    : ''
 
 const emptyMeasurement = () =>
   PARAMS.reduce((acc, { field }) => ({ ...acc, [field]: '' }), { is_absent: false })
@@ -192,7 +181,7 @@ export default function SessionDetailPage() {
                 {session.session_type}
                 {session.duration_min && ` · ${session.duration_min} min`}
               </h1>
-              <div className="text-xs text-gray-500">{formatDate(session.session_date)}</div>
+              <div className="text-xs text-gray-500">{formatDateLong(session.session_date)}</div>
             </div>
           </div>
           {/* Progress bar */}
@@ -257,12 +246,12 @@ export default function SessionDetailPage() {
               </div>
             ) : (
               <div>
-                {PARAMS.map(({ fullLabel, field }) => {
+                {PARAMS.map(({ italianLabel, field }) => {
                   const selectedValue = currentM[field]
                   return (
                     <div className="mb-5" key={field}>
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium text-gray-600">{fullLabel}</span>
+                        <span className="text-sm font-medium text-gray-600">{italianLabel}</span>
                         <span className="text-sm font-bold text-granata">
                           {selectedValue !== '' && selectedValue != null ? selectedValue : '—'}
                         </span>
@@ -345,7 +334,7 @@ export default function SessionDetailPage() {
             ←
           </button>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">{formatDate(session.session_date)}</h1>
+            <h1 className="text-xl font-bold text-gray-900">{formatDateLong(session.session_date)}</h1>
             <div className="text-sm text-gray-500 mt-0.5">
               {session.session_type}
               {session.duration_min && ` · ${session.duration_min} min`}
@@ -416,9 +405,24 @@ export default function SessionDetailPage() {
                         type="number"
                         min="1"
                         max="10"
-                        step="0.5"
-                        value={m[field]}
-                        onChange={(e) => handleChange(p.id, field, e.target.value)}
+                        step="1"
+                        value={m[field] !== '' && m[field] != null ? Math.round(Number(m[field])) : ''}
+                        onChange={(e) => {
+                          const raw = e.target.value
+                          if (raw === '') {
+                            handleChange(p.id, field, null)
+                            return
+                          }
+                          const num = parseInt(raw, 10)
+                          if (!isNaN(num) && num >= 1 && num <= 10) {
+                            handleChange(p.id, field, num)
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === '.' || e.key === ',') {
+                            e.preventDefault()
+                          }
+                        }}
                         disabled={m.is_absent}
                         className={`w-full text-center border rounded-lg text-sm font-semibold min-h-12 focus:outline-none focus:ring-2 focus:ring-granata disabled:cursor-not-allowed transition-colors ${
                           m.is_absent
