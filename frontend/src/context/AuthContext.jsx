@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { login as apiLogin, getMe, logout as apiLogout } from '../api/auth'
 
 const AuthContext = createContext(null)
@@ -6,6 +7,9 @@ const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const navigateRef = useRef(null)
+  const navigate = useNavigate()
+  navigateRef.current = navigate
 
   useEffect(() => {
     const token = localStorage.getItem('ct_token')
@@ -29,7 +33,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     apiLogout()
     setUser(null)
-    window.location.href = '/login'
+    navigateRef.current('/login', { replace: true })
   }
 
   return (
