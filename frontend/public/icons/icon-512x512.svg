@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#0f172a"/>
+  <rect x="40" y="40" width="432" height="432" rx="60" fill="#1e293b"/>
+  <text x="256" y="310" font-family="system-ui,-apple-system,sans-serif" font-size="192" font-weight="700" text-anchor="middle" fill="#3b82f6">CT</text>
+  <line x1="128" y1="370" x2="384" y2="370" stroke="#3b82f6" stroke-width="10" stroke-linecap="round" opacity="0.4"/>
+</svg>

@@ -1,5 +1,6 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import OfflineBanner from '../components/OfflineBanner'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '🏠', end: true },
@@ -28,6 +29,7 @@ export default function MainLayout() {
           </div>
         </div>
 
+        <OfflineBanner />
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map(({ to, label, icon, end }) => (
             <NavLink
