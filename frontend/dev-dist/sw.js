@@ -78,7 +78,7 @@ define(['./workbox-25ee6505'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "index.html",
-    "revision": "0.nammitm9794"
+    "revision": "0.2t6gu7ks8s4"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
@@ -86,7 +86,7 @@ define(['./workbox-25ee6505'], (function (workbox) { 'use strict';
   }));
   workbox.registerRoute(({
     url
-  }) => url.pathname.startsWith("/api/auth"), new workbox.NetworkOnly(), 'GET');
+  }) => url.pathname === "/api/auth/login" || url.pathname === "/api/auth/setup", new workbox.NetworkOnly(), 'GET');
   workbox.registerRoute(({
     url
   }) => url.pathname.startsWith("/api/"), new workbox.NetworkFirst({
