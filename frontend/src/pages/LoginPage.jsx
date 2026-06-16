@@ -31,9 +31,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-granata flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-oro rounded-2xl flex items-center justify-center text-granata font-bold text-2xl mx-auto mb-4">
-            CT
-          </div>
+          <img src="/logo.png" alt="Logo" className="w-16 h-16 mx-auto mb-4 object-contain" />
           <h1 className="text-2xl font-bold text-gray-900">Cognitive Tracking</h1>
           <p className="text-sm text-gray-500 mt-1">ASC.D Torino Club Gallarate</p>
         </div>

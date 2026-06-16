@@ -19,9 +19,7 @@ export default function MainLayout() {
       <aside className="hidden md:flex flex-col w-60 bg-white border-r border-gray-200 fixed top-0 bottom-0 left-0 z-10">
         <div className="bg-granata px-4 py-5">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-oro flex items-center justify-center text-granata font-bold text-lg shrink-0">
-              CT
-            </div>
+            <img src="/logo.png" alt="Logo" className="w-10 h-10 object-contain shrink-0" />
             <div>
               <div className="text-white font-bold text-sm leading-tight">Cognitive Tracking</div>
               <div className="text-white/70 text-xs mt-0.5">ASC.D Torino Club</div>
