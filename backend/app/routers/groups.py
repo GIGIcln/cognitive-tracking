@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models.assignment import PlayerGroupAssignment
@@ -55,12 +55,18 @@ def get_group(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    group = db.get(Group, group_id)
+    group = (
+        db.query(Group)
+        .options(joinedload(Group.targets))
+        .filter(Group.id == group_id)
+        .first()
+    )
     if not group:
         raise HTTPException(status_code=404, detail="Gruppo non trovato")
 
     assignments = (
         db.query(PlayerGroupAssignment)
+        .options(joinedload(PlayerGroupAssignment.player))
         .filter(
             PlayerGroupAssignment.group_id == group_id,
             PlayerGroupAssignment.is_current.is_(True),

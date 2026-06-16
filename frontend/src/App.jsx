@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -8,10 +9,19 @@ import GroupsPage from './pages/GroupsPage'
 import GroupDetailPage from './pages/GroupDetailPage'
 import PlayersPage from './pages/PlayersPage'
 import SessionsPage from './pages/SessionsPage'
-import SessionDetailPage from './pages/SessionDetailPage'
-import ReportsPage from './pages/ReportsPage'
-import PlayerReportPage from './pages/PlayerReportPage'
-import TeamReportPage from './pages/TeamReportPage'
+
+const SessionDetailPage = lazy(() => import('./pages/SessionDetailPage'))
+const ReportsPage = lazy(() => import('./pages/ReportsPage'))
+const PlayerReportPage = lazy(() => import('./pages/PlayerReportPage'))
+const TeamReportPage = lazy(() => import('./pages/TeamReportPage'))
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+    </div>
+  )
+}
 
 function App() {
   return (
@@ -25,10 +35,22 @@ function App() {
             <Route path="/groups/:id" element={<GroupDetailPage />} />
             <Route path="/players" element={<PlayersPage />} />
             <Route path="/sessions" element={<SessionsPage />} />
-            <Route path="/sessions/:id" element={<SessionDetailPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/reports/player/:playerId" element={<PlayerReportPage />} />
-            <Route path="/reports/group/:groupId" element={<TeamReportPage />} />
+            <Route
+              path="/sessions/:id"
+              element={<Suspense fallback={<PageLoader />}><SessionDetailPage /></Suspense>}
+            />
+            <Route
+              path="/reports"
+              element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>}
+            />
+            <Route
+              path="/reports/player/:playerId"
+              element={<Suspense fallback={<PageLoader />}><PlayerReportPage /></Suspense>}
+            />
+            <Route
+              path="/reports/group/:groupId"
+              element={<Suspense fallback={<PageLoader />}><TeamReportPage /></Suspense>}
+            />
           </Route>
         </Route>
       </Routes>

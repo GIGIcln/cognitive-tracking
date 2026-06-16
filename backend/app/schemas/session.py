@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SessionCreate(BaseModel):
@@ -26,13 +26,16 @@ class SessionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+_SCORE = Field(default=None, ge=0.0, le=10.0)
+
+
 class MeasurementInput(BaseModel):
     player_id: uuid.UUID
-    scanning_rate: float | None = None
-    decision_quality: float | None = None
-    anticipation: float | None = None
-    transition_reset: float | None = None
-    verbal_comm: float | None = None
+    scanning_rate: float | None = _SCORE
+    decision_quality: float | None = _SCORE
+    anticipation: float | None = _SCORE
+    transition_reset: float | None = _SCORE
+    verbal_comm: float | None = _SCORE
     is_absent: bool = False
     notes: str | None = None
 

@@ -2,17 +2,11 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
-from sqlalchemy.dialects.postgresql import insert
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.group import Group
 from app.models.measurement import Measurement
-from app.models.player import Player
-from app.models.season import Season
-from app.models.training_session import TrainingSession
 from app.models.user import User
 from app.schemas.session import (
     MeasurementResponse,
@@ -21,6 +15,7 @@ from app.schemas.session import (
     SessionResponse,
 )
 from app.services.auth_service import get_current_user
+from app.services.session_service import SessionService
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -44,13 +39,12 @@ def _measurement_to_response(m: Measurement) -> MeasurementResponse:
 @router.get("", response_model=list[SessionResponse])
 def list_sessions(
     group_id: uuid.UUID | None = None,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    q = db.query(TrainingSession)
-    if group_id:
-        q = q.filter(TrainingSession.group_id == group_id)
-    sessions = q.order_by(TrainingSession.session_date.desc()).all()
+    sessions = SessionService(db).list(group_id, skip, limit)
     return [SessionResponse.model_validate(s) for s in sessions]
 
 
@@ -60,25 +54,9 @@ def create_session(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    season = db.query(Season).filter(Season.is_current.is_(True)).first()
-    if not season:
-        raise HTTPException(status_code=404, detail="Nessuna stagione corrente trovata")
-
-    group = db.get(Group, body.group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail="Gruppo non trovato")
-
-    session = TrainingSession(
-        group_id=body.group_id,
-        season_id=season.id,
-        session_date=body.session_date,
-        session_type=body.session_type,
-        duration_min=body.duration_min,
-        notes=body.notes,
-    )
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    session = SessionService(db).create(body)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Stagione corrente o gruppo non trovato")
     return SessionResponse.model_validate(session)
 
 
@@ -88,8 +66,8 @@ def get_session(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    session = db.get(TrainingSession, session_id)
-    if not session:
+    session = SessionService(db).get(session_id)
+    if session is None:
         raise HTTPException(status_code=404, detail="Sessione non trovata")
     measurements = [_measurement_to_response(m) for m in session.measurements]
     data = SessionResponse.model_validate(session).model_dump()
@@ -103,34 +81,10 @@ def get_session_averages(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    session = db.get(TrainingSession, session_id)
-    if not session:
+    result = SessionService(db).get_averages(session_id)
+    if result is None:
         raise HTTPException(status_code=404, detail="Sessione non trovata")
-
-    row = (
-        db.query(
-            func.avg(Measurement.scanning_rate).label("avg_sr"),
-            func.avg(Measurement.decision_quality).label("avg_dqi"),
-            func.avg(Measurement.anticipation).label("avg_ai"),
-            func.avg(Measurement.transition_reset).label("avg_trs"),
-            func.avg(Measurement.verbal_comm).label("avg_vci"),
-            func.count(Measurement.id).label("player_count"),
-        )
-        .filter(
-            Measurement.session_id == session_id,
-            Measurement.is_absent.is_(False),
-        )
-        .first()
-    )
-
-    return {
-        "avg_sr": float(row.avg_sr) if row.avg_sr is not None else None,
-        "avg_dqi": float(row.avg_dqi) if row.avg_dqi is not None else None,
-        "avg_ai": float(row.avg_ai) if row.avg_ai is not None else None,
-        "avg_trs": float(row.avg_trs) if row.avg_trs is not None else None,
-        "avg_vci": float(row.avg_vci) if row.avg_vci is not None else None,
-        "player_count": row.player_count or 0,
-    }
+    return result
 
 
 @router.post("/{session_id}/measurements", response_model=list[MeasurementResponse])
@@ -140,52 +94,13 @@ def upsert_measurements(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    session = db.get(TrainingSession, session_id)
-    if not session:
+    try:
+        measurements = SessionService(db).upsert_measurements(session_id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    if measurements is None:
         raise HTTPException(status_code=404, detail="Sessione non trovata")
-
-    player_ids = {m.player_id for m in body.measurements}
-    found_ids = {
-        row.id
-        for row in db.query(Player.id).filter(Player.id.in_(player_ids)).all()
-    }
-    missing = player_ids - found_ids
-    if missing:
-        raise HTTPException(status_code=404, detail=f"Giocatori non trovati: {sorted(str(i) for i in missing)}")
-
-    values = [
-        {
-            "session_id": session_id,
-            "player_id": m.player_id,
-            "group_id": session.group_id,
-            "scanning_rate": m.scanning_rate,
-            "decision_quality": m.decision_quality,
-            "anticipation": m.anticipation,
-            "transition_reset": m.transition_reset,
-            "verbal_comm": m.verbal_comm,
-            "is_absent": m.is_absent,
-            "notes": m.notes,
-        }
-        for m in body.measurements
-    ]
-
-    ins = insert(Measurement)
-    stmt = ins.values(values).on_conflict_do_update(
-        constraint="uq_measurement_session_player",
-        set_={
-            "scanning_rate": ins.excluded.scanning_rate,
-            "decision_quality": ins.excluded.decision_quality,
-            "anticipation": ins.excluded.anticipation,
-            "transition_reset": ins.excluded.transition_reset,
-            "verbal_comm": ins.excluded.verbal_comm,
-            "is_absent": ins.excluded.is_absent,
-            "notes": ins.excluded.notes,
-        },
-    )
-    db.execute(stmt)
-
-    db.commit()
-    return get_measurements(session_id, db, _)
+    return [_measurement_to_response(m) for m in measurements]
 
 
 @router.get("/{session_id}/measurements", response_model=list[MeasurementResponse])
@@ -194,7 +109,7 @@ def get_measurements(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    session = db.get(TrainingSession, session_id)
-    if not session:
+    measurements = SessionService(db).get_measurements(session_id)
+    if measurements is None:
         raise HTTPException(status_code=404, detail="Sessione non trovata")
-    return [_measurement_to_response(m) for m in session.measurements]
+    return [_measurement_to_response(m) for m in measurements]

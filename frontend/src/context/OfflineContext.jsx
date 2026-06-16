@@ -66,10 +66,12 @@ export function OfflineContextProvider({ children }) {
     }
 
     try {
-      const items = await getAllItems();
+      const now = Date.now();
+      const items = (await getAllItems()).filter((i) => (i.nextRetryAt ?? 0) <= now);
       for (const item of items) {
-        // Piccolo delay tra le richieste per non sovraccaricare il server
-        await new Promise((r) => setTimeout(r, 300));
+        // Delay inter-request con piccolo jitter per evitare burst sincronizzati
+        const delay = 500 + Math.random() * 300
+        await new Promise((r) => setTimeout(r, delay));
         try {
           const res = await fetch(item.url, {
             method: item.method,
