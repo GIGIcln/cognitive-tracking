@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+import ErrorBoundary from './components/ErrorBoundary'
 import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './layouts/MainLayout'
 import LoginPage from './pages/LoginPage'
@@ -25,6 +26,7 @@ function PageLoader() {
 
 function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
@@ -55,6 +57,7 @@ function App() {
         </Route>
       </Routes>
     </AuthProvider>
+    </ErrorBoundary>
   )
 }
 

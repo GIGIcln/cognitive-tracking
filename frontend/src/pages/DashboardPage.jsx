@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getGroups } from '../api/groups'
 import { LEVEL_COLORS } from '../constants/domain'
-
 export default function DashboardPage() {
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
