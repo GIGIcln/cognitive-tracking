@@ -69,8 +69,8 @@ app.add_middleware(
     # In production qualsiasi origine deve essere elencata esplicitamente in ALLOWED_ORIGINS.
     allow_origin_regex=r"https://.*\.trycloudflare\.com" if settings.app_env == "development" else None,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(auth.router, prefix="/api")
