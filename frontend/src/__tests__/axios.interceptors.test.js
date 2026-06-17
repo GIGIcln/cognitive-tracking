@@ -17,7 +17,6 @@ describe('axios interceptors', () => {
   let mock
 
   beforeEach(() => {
-    // Rimuove baseURL per URL matching semplice con MockAdapter
     api.defaults.baseURL = ''
     mock = new MockAdapter(api)
     localStorage.clear()
@@ -28,23 +27,10 @@ describe('axios interceptors', () => {
     api.defaults.baseURL = '/api'
   })
 
-  // ── Interceptor 1: JWT injection ──────────────────────────────────────────
+  // ── Request interceptor ───────────────────────────────────────────────────
 
-  describe('Request interceptor — JWT injection', () => {
-    it('aggiunge Authorization header quando il token è presente', async () => {
-      localStorage.setItem('ct_token', 'my-jwt-token')
-      let capturedHeaders
-
-      mock.onGet('/groups').reply((config) => {
-        capturedHeaders = config.headers
-        return [200, []]
-      })
-
-      await api.get('/groups')
-      expect(capturedHeaders.Authorization).toBe('Bearer my-jwt-token')
-    })
-
-    it('non aggiunge Authorization header se nessun token', async () => {
+  describe('Request interceptor', () => {
+    it('non aggiunge Authorization header — auth avviene via cookie HttpOnly', async () => {
       let capturedHeaders
 
       mock.onGet('/groups').reply((config) => {
@@ -57,31 +43,46 @@ describe('axios interceptors', () => {
     })
   })
 
-  // ── Interceptor 2: gestione 401 ───────────────────────────────────────────
+  // ── Interceptor 401 ───────────────────────────────────────────────────────
 
   describe('Response interceptor — gestione 401', () => {
-    it('401 su endpoint non-auth → rimuove token dal localStorage', async () => {
-      localStorage.setItem('ct_token', 'valid-token')
+    it('401 su endpoint non-auth → redirect a /login', async () => {
       mock.onGet('/sessions').reply(401)
 
       await api.get('/sessions').catch(() => {})
 
-      expect(localStorage.getItem('ct_token')).toBeNull()
       expect(window.location.replace).toHaveBeenCalledWith('/login')
     })
 
-    it('401 su /auth/login → token rimane (errore credenziali, non di sessione)', async () => {
-      localStorage.setItem('ct_token', 'valid-token')
+    it('401 su /auth/me → NON fa redirect (check sessione iniziale al caricamento)', async () => {
+      mock.onGet('/auth/me').reply(401)
+      const replaceSpy = vi.spyOn(window.location, 'replace')
+
+      await api.get('/auth/me').catch(() => {})
+
+      expect(replaceSpy).not.toHaveBeenCalled()
+    })
+
+    it('401 su /auth/login → NON fa redirect (credenziali errate, gestito dal componente)', async () => {
       mock.onPost('/auth/login').reply(401)
+      const replaceSpy = vi.spyOn(window.location, 'replace')
 
       await api.post('/auth/login', {}).catch(() => {})
 
-      // Il token NON deve essere rimosso: è un errore di credenziali
-      expect(localStorage.getItem('ct_token')).toBe('valid-token')
+      expect(replaceSpy).not.toHaveBeenCalled()
+    })
+
+    it('401 su endpoint non-auth → non modifica localStorage (token gestito via cookie)', async () => {
+      localStorage.setItem('ct_token', 'residual-value')
+      mock.onGet('/players').reply(401)
+
+      await api.get('/players').catch(() => {})
+
+      expect(localStorage.getItem('ct_token')).toBe('residual-value')
     })
   })
 
-  // ── Interceptor 3: offline queue ──────────────────────────────────────────
+  // ── Interceptor offline queue ─────────────────────────────────────────────
 
   describe('Response interceptor — offline queue', () => {
     it('POST con errore di rete → operazione accodata offline', async () => {

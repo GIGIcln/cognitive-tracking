@@ -17,50 +17,48 @@ const wrapper = ({ children }) => (
   </MemoryRouter>
 )
 
+const TEST_USER = { id: '1', email: 'a@b.it', full_name: 'Admin', is_active: true }
+
 describe('AuthContext', () => {
   beforeEach(() => {
-    localStorage.clear()
+    vi.resetAllMocks()
+    // Default: nessuna sessione attiva (cookie assente o scaduto)
+    authApi.getMe.mockRejectedValue(new Error('Unauthorized'))
   })
 
   describe('inizializzazione al mount', () => {
-    it('senza token → isLoading=false, user=null, getMe non chiamato', async () => {
-      const { result } = renderHook(() => useAuth(), { wrapper })
-      await waitFor(() => expect(result.current.isLoading).toBe(false))
-      expect(result.current.user).toBeNull()
-      expect(authApi.getMe).not.toHaveBeenCalled()
-    })
-
-    it('con token valido → user popolato', async () => {
-      localStorage.setItem('ct_token', 'valid-token')
-      authApi.getMe.mockResolvedValue({
-        data: { id: '1', email: 'a@b.it', full_name: 'Admin', is_active: true },
-      })
-
-      const { result } = renderHook(() => useAuth(), { wrapper })
-      await waitFor(() => expect(result.current.isLoading).toBe(false))
-
-      expect(result.current.user).toEqual({
-        id: '1', email: 'a@b.it', full_name: 'Admin', is_active: true,
-      })
-    })
-
-    it('con token scaduto (getMe fallisce) → token rimosso, user=null', async () => {
-      localStorage.setItem('ct_token', 'expired-token')
-      authApi.getMe.mockRejectedValue(new Error('Unauthorized'))
-
+    it('getMe fallisce (nessuna sessione) → isLoading=false, user=null', async () => {
       const { result } = renderHook(() => useAuth(), { wrapper })
       await waitFor(() => expect(result.current.isLoading).toBe(false))
 
       expect(result.current.user).toBeNull()
+      expect(authApi.getMe).toHaveBeenCalledOnce()
+    })
+
+    it('cookie valido → getMe ha successo → user popolato', async () => {
+      authApi.getMe.mockResolvedValue({ data: TEST_USER })
+
+      const { result } = renderHook(() => useAuth(), { wrapper })
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+      expect(result.current.user).toEqual(TEST_USER)
+      expect(authApi.getMe).toHaveBeenCalledOnce()
+    })
+
+    it('cookie scaduto (getMe fallisce) → user=null, localStorage non toccato', async () => {
+      const { result } = renderHook(() => useAuth(), { wrapper })
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+      expect(result.current.user).toBeNull()
+      // Auth è gestita dal cookie HttpOnly: localStorage non viene mai scritto
       expect(localStorage.getItem('ct_token')).toBeNull()
     })
   })
 
   describe('login()', () => {
-    it('setta token in localStorage e popola user', async () => {
-      authApi.login.mockResolvedValue({ data: { access_token: 'new-token' } })
-      authApi.getMe.mockResolvedValue({
-        data: { id: '1', email: 'a@b.it', full_name: 'Admin', is_active: true },
+    it('login ok → user popolato dalla risposta, nessun token in localStorage', async () => {
+      authApi.login.mockResolvedValue({
+        data: { access_token: 'jwt-token', user: TEST_USER },
       })
 
       const { result } = renderHook(() => useAuth(), { wrapper })
@@ -70,14 +68,12 @@ describe('AuthContext', () => {
         await result.current.login('a@b.it', 'Password1!')
       })
 
-      expect(localStorage.getItem('ct_token')).toBe('new-token')
-      expect(result.current.user).toEqual({
-        id: '1', email: 'a@b.it', full_name: 'Admin', is_active: true,
-      })
+      expect(result.current.user).toEqual(TEST_USER)
       expect(authApi.login).toHaveBeenCalledWith('a@b.it', 'Password1!')
+      expect(localStorage.getItem('ct_token')).toBeNull()
     })
 
-    it('credenziali errate → rilancia errore senza modificare lo state', async () => {
+    it('credenziali errate → rilancia errore, user resta null', async () => {
       authApi.login.mockRejectedValue(new Error('Credenziali non valide'))
 
       const { result } = renderHook(() => useAuth(), { wrapper })
@@ -88,24 +84,18 @@ describe('AuthContext', () => {
       ).rejects.toThrow('Credenziali non valide')
 
       expect(result.current.user).toBeNull()
-      expect(localStorage.getItem('ct_token')).toBeNull()
     })
   })
 
   describe('logout()', () => {
     it('azzera user e chiama apiLogout', async () => {
-      localStorage.setItem('ct_token', 'valid-token')
-      authApi.getMe.mockResolvedValue({
-        data: { id: '1', email: 'a@b.it', full_name: 'Admin', is_active: true },
-      })
-      authApi.logout.mockImplementation(() => {
-        localStorage.removeItem('ct_token')
-      })
+      authApi.getMe.mockResolvedValue({ data: TEST_USER })
+      authApi.logout.mockResolvedValue({})
 
       const { result } = renderHook(() => useAuth(), { wrapper })
       await waitFor(() => expect(result.current.user).not.toBeNull())
 
-      act(() => { result.current.logout() })
+      await act(async () => { await result.current.logout() })
 
       expect(result.current.user).toBeNull()
       expect(authApi.logout).toHaveBeenCalledOnce()
