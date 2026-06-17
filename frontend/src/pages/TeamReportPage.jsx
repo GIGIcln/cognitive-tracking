@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { exportReportPDF, exportTeamCSV } from '../utils/exportUtils'
 import {
@@ -14,13 +14,12 @@ import {
   Line,
   ReferenceLine,
 } from 'recharts'
-import { getGroup, getGroupHistory, getGroupTargets } from '../api/groups'
 import ParamCard from '../components/ParamCard'
 import { ChartErrorBoundary } from '../components/ErrorBoundary'
-import { getMeasurements } from '../api/sessions'
 import { COGNITIVE_PARAMS } from '../constants/domain'
 import { formatDateShort } from '../utils/dateUtils'
 import { LINE_COLORS, badge, generateComment } from '../utils/reportUtils'
+import { useTeamReport } from '../hooks/useTeamReport'
 
 const PARAMS = COGNITIVE_PARAMS
 
@@ -36,40 +35,9 @@ function cellClass(val, target) {
 export default function TeamReportPage() {
   const { groupId } = useParams()
   const navigate = useNavigate()
-  const [groupName, setGroupName] = useState('')
-  const [history, setHistory] = useState([])
-  const [targets, setTargets] = useState([])
-  const [measurements, setMeasurements] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { groupName, history, targets, measurements, loading, error } = useTeamReport(groupId)
   const [hiddenLines, setHiddenLines] = useState({})
   const [pdfLoading, setPdfLoading] = useState(false)
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [gr, hist, tgt] = await Promise.all([
-          getGroup(groupId),
-          getGroupHistory(groupId),
-          getGroupTargets(groupId),
-        ])
-        const histData = hist.data ?? []
-        setGroupName(gr.data.name)
-        setHistory(histData)
-        setTargets(tgt.data ?? [])
-        if (histData.length > 0) {
-          const lastSessionId = histData[histData.length - 1].session_id
-          const measRes = await getMeasurements(lastSessionId)
-          setMeasurements(measRes.data ?? [])
-        }
-      } catch {
-        setError('Errore nel caricamento del report')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [groupId])
 
   if (loading) {
     return (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { exportReportPDF, exportPlayerCSV } from '../utils/exportUtils'
 import {
@@ -20,12 +20,10 @@ import {
   Bar,
 } from 'recharts'
 import { ChartErrorBoundary } from '../components/ErrorBoundary'
-import { getPlayer, getPlayerHistory } from '../api/players'
-import { getGroupTargets } from '../api/groups'
-import { getSessionAverages, getSessionRankings } from '../api/sessions'
 import { COGNITIVE_PARAMS } from '../constants/domain'
 import { formatDateShort } from '../utils/dateUtils'
 import { LINE_COLORS, badge, generateComment, linearRegression } from '../utils/reportUtils'
+import { usePlayerReport } from '../hooks/usePlayerReport'
 
 const PARAMS = COGNITIVE_PARAMS
 
@@ -59,59 +57,22 @@ function deltaBadge(pct) {
 export default function PlayerReportPage() {
   const { playerId } = useParams()
   const navigate = useNavigate()
-  const [playerName, setPlayerName] = useState('')
-  const [playerFirstName, setPlayerFirstName] = useState('')
-  const [playerLastName, setPlayerLastName] = useState('')
-  const [playerPosition, setPlayerPosition] = useState(null)
-  const [history, setHistory] = useState([])
-  const [targets, setTargets] = useState([])
-  const [sessionAverages, setSessionAverages] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const {
+    playerName,
+    playerFirstName,
+    playerLastName,
+    playerPosition,
+    history,
+    targets,
+    sessionAverages,
+    playerRanking,
+    loading,
+    error,
+  } = usePlayerReport(playerId)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [hiddenLines, setHiddenLines] = useState({})
   const [sessionLimit, setSessionLimit] = useState('all')
   const [sessionTypeFilter, setSessionTypeFilter] = useState('all')
-  const [playerRanking, setPlayerRanking] = useState(null)
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [playerRes, historyRes] = await Promise.all([
-          getPlayer(playerId),
-          getPlayerHistory(playerId),
-        ])
-
-        const hist = historyRes.data
-        setHistory(hist)
-
-        const { first_name, last_name, position } = playerRes.data
-        setPlayerName(`${first_name} ${last_name}`)
-        setPlayerFirstName(first_name)
-        setPlayerLastName(last_name)
-        setPlayerPosition(position ?? null)
-
-        if (hist.length > 0) {
-          const last = hist[hist.length - 1]
-          const [targetsRes, avgRes, rankingsRes] = await Promise.all([
-            getGroupTargets(last.group_id),
-            getSessionAverages(last.session_id),
-            getSessionRankings(last.session_id).catch(() => ({ data: [] })),
-          ])
-          setTargets(targetsRes.data ?? [])
-          setSessionAverages(avgRes.data)
-          const rankings = rankingsRes.data ?? []
-          const mine = rankings.find((r) => r.player_id === playerId)
-          setPlayerRanking(mine ?? null)
-        }
-      } catch {
-        setError('Errore nel caricamento del report')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [playerId])
 
   const lastSession = history.length > 0 ? history[history.length - 1] : null
 

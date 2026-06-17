@@ -10,15 +10,6 @@ import {
 
 const OfflineContext = createContext(null);
 
-function isTokenValid(token) {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.exp > Date.now() / 1000;
-  } catch {
-    return false;
-  }
-}
-
 export function OfflineContextProvider({ children }) {
   const { isOnline } = useOnlineStatus();
   const [pendingCount, setPendingCount] = useState(0);
@@ -55,16 +46,6 @@ export function OfflineContextProvider({ children }) {
     setIsSyncing(true);
     setSyncError(null);
 
-    const token = localStorage.getItem('ct_token');
-
-    if (!token || !isTokenValid(token)) {
-      setSyncError(
-        'Sessione scaduta: accedi di nuovo per completare la sincronizzazione.'
-      );
-      setIsSyncing(false);
-      return;
-    }
-
     try {
       const now = Date.now();
       const items = (await getAllItems()).filter((i) => (i.nextRetryAt ?? 0) <= now);
@@ -75,10 +56,8 @@ export function OfflineContextProvider({ children }) {
         try {
           const res = await fetch(item.url, {
             method: item.method,
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify(item.body),
           });
 
