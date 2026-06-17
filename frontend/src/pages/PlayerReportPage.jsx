@@ -86,6 +86,7 @@ export default function PlayerReportPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [hiddenLines, setHiddenLines] = useState({})
 
   useEffect(() => {
     const load = async () => {
@@ -155,6 +156,22 @@ export default function PlayerReportPage() {
       : null
 
   const sessionDate = lastSession?.session_date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
+
+  const lineData = history.map((h) => ({
+    date: formatDateShort(h.session_date),
+    ...Object.fromEntries(PARAMS.map(({ field, label }) => [label, h[field]])),
+  }))
+
+  const avgInsufficient = targets.length
+    ? targets.reduce((s, t) => s + t.insufficient_max, 0) / targets.length
+    : null
+  const avgOttimo = targets.length
+    ? targets.reduce((s, t) => s + t.ottimo_min, 0) / targets.length
+    : null
+
+  const handleLegendClick = (data) => {
+    setHiddenLines((prev) => ({ ...prev, [data.dataKey]: !prev[data.dataKey] }))
+  }
 
   return (
     <div id="report-content" className="space-y-6 pb-8">
@@ -283,54 +300,43 @@ export default function PlayerReportPage() {
                 Servono almeno 2 sessioni per visualizzare il trend.
               </p>
             ) : (
-              <div className="space-y-5">
-                {PARAMS.map(({ field, label, italianLabel }, i) => {
-                  const t = targetsMap[label]
-                  const data = history.map((h) => ({
-                    date: formatDateShort(h.session_date),
-                    Valore: h[field],
-                  }))
-                  return (
-                    <div key={field}>
-                      <div className="text-xs font-medium text-gray-600 mb-1">
-                        {italianLabel}
-                      </div>
-                      <ResponsiveContainer width="100%" height={150}>
-                        <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                          <YAxis domain={[0, 10]} tick={{ fontSize: 10 }} />
-                          <Tooltip />
-                          {t && (
-                            <ReferenceLine
-                              y={t.insufficient_max}
-                              stroke="#EF4444"
-                              strokeDasharray="4 4"
-                              strokeWidth={1.5}
-                            />
-                          )}
-                          {t && (
-                            <ReferenceLine
-                              y={t.ottimo_min}
-                              stroke="#10B981"
-                              strokeDasharray="4 4"
-                              strokeWidth={1.5}
-                            />
-                          )}
-                          <Line
-                            type="monotone"
-                            dataKey="Valore"
-                            stroke={LINE_COLORS[i]}
-                            strokeWidth={2}
-                            dot={{ r: 3 }}
-                            activeDot={{ r: 5 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )
-                })}
-              </div>
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={lineData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 10]} tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Legend onClick={handleLegendClick} style={{ cursor: 'pointer' }} />
+                  {avgInsufficient != null && (
+                    <ReferenceLine
+                      y={avgInsufficient}
+                      stroke="#EF4444"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                    />
+                  )}
+                  {avgOttimo != null && (
+                    <ReferenceLine
+                      y={avgOttimo}
+                      stroke="#10B981"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                    />
+                  )}
+                  {PARAMS.map(({ label }, i) => (
+                    <Line
+                      key={label}
+                      type="monotone"
+                      dataKey={label}
+                      stroke={LINE_COLORS[i]}
+                      strokeWidth={2}
+                      dot={lineData.length > 20 ? false : { r: 3 }}
+                      activeDot={{ r: 5 }}
+                      hide={!!hiddenLines[label]}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
             )}
           </div>
 
