@@ -25,11 +25,21 @@ import { getGroupTargets } from '../api/groups'
 import { getSessionAverages } from '../api/sessions'
 import { COGNITIVE_PARAMS } from '../constants/domain'
 import { formatDateShort } from '../utils/dateUtils'
-import { LINE_COLORS, badge, generateComment } from '../utils/reportUtils'
+import { LINE_COLORS, badge, generateComment, linearRegression } from '../utils/reportUtils'
 
 const PARAMS = COGNITIVE_PARAMS
 
 const PLAYER_FIELD_KEYS = ['scanning_rate', 'decision_quality', 'anticipation', 'transition_reset', 'verbal_comm']
+
+function deltaBadge(pct) {
+  if (pct == null) return <span className="text-gray-400 text-xs">—</span>
+  const color = pct > 0 ? 'text-green-600' : pct < 0 ? 'text-red-600' : 'text-gray-500'
+  return (
+    <span className={`text-xs font-medium ${color}`}>
+      {pct > 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(0)}%
+    </span>
+  )
+}
 
 export default function PlayerReportPage() {
   const { playerId } = useParams()
@@ -44,6 +54,8 @@ export default function PlayerReportPage() {
   const [error, setError] = useState('')
   const [pdfLoading, setPdfLoading] = useState(false)
   const [hiddenLines, setHiddenLines] = useState({})
+  const [sessionLimit, setSessionLimit] = useState('all')
+  const [sessionTypeFilter, setSessionTypeFilter] = useState('all')
 
   useEffect(() => {
     const load = async () => {
@@ -124,13 +136,47 @@ export default function PlayerReportPage() {
 
   const sessionDate = lastSession?.session_date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
 
-  const lineData = useMemo(
-    () => history.map((h) => ({
-      date: formatDateShort(h.session_date),
-      ...Object.fromEntries(PARAMS.map(({ field, label }) => [label, h[field]])),
-    })),
+  const availableTypes = useMemo(
+    () => [...new Set(history.map((h) => h.session_type))],
     [history]
   )
+
+  const filteredHistory = useMemo(() => {
+    let h = sessionTypeFilter === 'all' ? history : history.filter((s) => s.session_type === sessionTypeFilter)
+    if (sessionLimit !== 'all') h = h.slice(-parseInt(sessionLimit))
+    return h
+  }, [history, sessionLimit, sessionTypeFilter])
+
+  const deltaMap = useMemo(() => {
+    if (filteredHistory.length < 2) return {}
+    const first = filteredHistory[0]
+    const last = filteredHistory[filteredHistory.length - 1]
+    return Object.fromEntries(
+      PARAMS.map(({ field }) => {
+        const a = first[field]
+        const b = last[field]
+        if (a == null || b == null || a === 0) return [field, null]
+        return [field, ((b - a) / a) * 100]
+      })
+    )
+  }, [filteredHistory])
+
+  const { lineData, hasRegression } = useMemo(() => {
+    const xs = filteredHistory.map((_, i) => i)
+    const avgValues = filteredHistory.map((h) => {
+      const vals = PARAMS.map(({ field }) => h[field]).filter((v) => v != null)
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+    })
+    const validXs = xs.filter((_, i) => avgValues[i] != null)
+    const validYs = avgValues.filter((v) => v != null)
+    const reg = linearRegression(validXs, validYs)
+    const data = filteredHistory.map((h, i) => ({
+      date: formatDateShort(h.session_date),
+      ...Object.fromEntries(PARAMS.map(({ field, label }) => [label, h[field]])),
+      ...(reg ? { Trend: parseFloat((reg.slope * i + reg.intercept).toFixed(2)) } : {}),
+    }))
+    return { lineData: data, hasRegression: reg !== null }
+  }, [filteredHistory])
 
   const avgInsufficient = useMemo(
     () => targets.length ? targets.reduce((s, t) => s + t.insufficient_max, 0) / targets.length : null,
@@ -240,6 +286,7 @@ export default function PlayerReportPage() {
                   <th className="pb-2 font-medium">Parametro</th>
                   <th className="pb-2 font-medium text-right">Valore</th>
                   <th className="pb-2 font-medium text-right">Target ottimo</th>
+                  <th className="pb-2 font-medium text-right">Δ periodo</th>
                   <th className="pb-2 text-right" />
                 </tr>
               </thead>
@@ -256,6 +303,7 @@ export default function PlayerReportPage() {
                       <td className="py-2 text-right text-gray-500">
                         {t ? t.ottimo_min.toFixed(1) : '—'}
                       </td>
+                      <td className="py-2 text-right">{deltaBadge(deltaMap[field])}</td>
                       <td className="py-2 text-right">{badge(val, t)}</td>
                     </tr>
                   )
@@ -266,10 +314,36 @@ export default function PlayerReportPage() {
 
           {/* SEZIONE 2 — Andamento nel tempo */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 report-section">
-            <h2 className="text-base font-semibold text-gray-800 mb-4">
-              Andamento nel tempo
-            </h2>
-            {history.length < 2 ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <h2 className="text-base font-semibold text-gray-800">Andamento nel tempo</h2>
+              <div className="flex flex-wrap gap-2">
+                <div className="flex gap-1">
+                  {['all', '5', '10'].map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setSessionLimit(v)}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${sessionLimit === v ? 'bg-granata text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      {v === 'all' ? 'Tutte' : `Ultime ${v}`}
+                    </button>
+                  ))}
+                </div>
+                {availableTypes.length > 1 && (
+                  <div className="flex gap-1">
+                    {['all', ...availableTypes].map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => setSessionTypeFilter(type)}
+                        className={`px-2 py-1 rounded text-xs font-medium transition-colors ${sessionTypeFilter === type ? 'bg-granata text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      >
+                        {type === 'all' ? 'Tutti' : type}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            {filteredHistory.length < 2 ? (
               <p className="text-sm text-gray-400 text-center py-4">
                 Servono almeno 2 sessioni per visualizzare il trend.
               </p>
@@ -310,6 +384,17 @@ export default function PlayerReportPage() {
                       hide={!!hiddenLines[label]}
                     />
                   ))}
+                  {hasRegression && (
+                    <Line
+                      type="linear"
+                      dataKey="Trend"
+                      stroke="#9CA3AF"
+                      strokeWidth={1.5}
+                      strokeDasharray="6 3"
+                      dot={false}
+                      activeDot={false}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
               </ChartErrorBoundary>

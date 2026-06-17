@@ -1,5 +1,19 @@
 export const LINE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899']
 
+export function linearRegression(xs, ys) {
+  const n = xs.length
+  if (n < 2) return null
+  const sumX = xs.reduce((a, b) => a + b, 0)
+  const sumY = ys.reduce((a, b) => a + b, 0)
+  const sumXY = xs.reduce((s, x, i) => s + x * ys[i], 0)
+  const sumX2 = xs.reduce((s, x) => s + x * x, 0)
+  const denom = n * sumX2 - sumX * sumX
+  if (denom === 0) return null
+  const slope = (n * sumXY - sumX * sumY) / denom
+  const intercept = (sumY - slope * sumX) / n
+  return { slope, intercept }
+}
+
 export function badge(val, target) {
   if (val == null || !target) return null
   if (val >= target.ottimo_min) return '🟢'
