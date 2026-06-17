@@ -91,8 +91,13 @@ export default function PlayerFormModal({
       }
       onSuccess()
       onClose()
-    } catch {
-      setError('Errore nel salvataggio')
+    } catch (err) {
+      if (err?.isOfflineQueued) {
+        setError('Connessione assente — operazione accodata. Sincronizzazione automatica al ripristino.')
+      } else {
+        const detail = err?.response?.data?.detail
+        setError(typeof detail === 'string' ? detail : 'Errore nel salvataggio. Controlla la connessione.')
+      }
     } finally {
       setLoading(false)
     }

@@ -23,6 +23,7 @@ def _to_response(player: Player, group_name: str | None) -> PlayerResponse:
         first_name=player.first_name,
         last_name=player.last_name,
         birth_year=player.birth_year,
+        position=player.position,
         is_active=player.is_active,
         notes=player.notes,
         current_group_name=group_name,

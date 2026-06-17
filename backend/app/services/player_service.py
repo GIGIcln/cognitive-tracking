@@ -156,7 +156,7 @@ class PlayerService:
         player = self.db.get(Player, player_id)
         if player is None:
             return None
-        for field, value in body.model_dump(exclude_none=True).items():
+        for field, value in body.model_dump(exclude_unset=True).items():
             setattr(player, field, value)
         self.db.commit()
         self.db.refresh(player)
