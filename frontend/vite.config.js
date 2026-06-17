@@ -71,6 +71,16 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-charts': ['recharts'],
+          'vendor-export': ['jspdf', 'html2canvas'],
+        },
+      },
+    },
+  },
   server: {
     host: true,
     port: 5173,
