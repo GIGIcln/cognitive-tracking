@@ -12,3 +12,5 @@ export const getMeasurements = (sessionId) =>
   api.get(`/sessions/${sessionId}/measurements`)
 export const getSessionAverages = (sessionId) =>
   api.get(`/sessions/${sessionId}/averages`)
+export const getSessionRankings = (sessionId) =>
+  api.get(`/sessions/${sessionId}/rankings`)

@@ -22,7 +22,7 @@ import {
 import { ChartErrorBoundary } from '../components/ErrorBoundary'
 import { getPlayer, getPlayerHistory } from '../api/players'
 import { getGroupTargets } from '../api/groups'
-import { getSessionAverages } from '../api/sessions'
+import { getSessionAverages, getSessionRankings } from '../api/sessions'
 import { COGNITIVE_PARAMS } from '../constants/domain'
 import { formatDateShort } from '../utils/dateUtils'
 import { LINE_COLORS, badge, generateComment, linearRegression } from '../utils/reportUtils'
@@ -30,6 +30,21 @@ import { LINE_COLORS, badge, generateComment, linearRegression } from '../utils/
 const PARAMS = COGNITIVE_PARAMS
 
 const PLAYER_FIELD_KEYS = ['scanning_rate', 'decision_quality', 'anticipation', 'transition_reset', 'verbal_comm']
+
+function rankBadge(ranking) {
+  if (!ranking || ranking.total < 2) return null
+  const { rank, total, percentile } = ranking
+  const colorClass =
+    percentile >= 75 ? 'bg-green-100 text-green-700' :
+    percentile >= 50 ? 'bg-blue-100 text-blue-700' :
+    percentile >= 25 ? 'bg-yellow-100 text-yellow-700' :
+    'bg-red-100 text-red-700'
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${colorClass}`}>
+      {rank}° su {total}
+    </span>
+  )
+}
 
 function deltaBadge(pct) {
   if (pct == null) return <span className="text-gray-400 text-xs">—</span>
@@ -57,6 +72,7 @@ export default function PlayerReportPage() {
   const [hiddenLines, setHiddenLines] = useState({})
   const [sessionLimit, setSessionLimit] = useState('all')
   const [sessionTypeFilter, setSessionTypeFilter] = useState('all')
+  const [playerRanking, setPlayerRanking] = useState(null)
 
   useEffect(() => {
     const load = async () => {
@@ -77,12 +93,16 @@ export default function PlayerReportPage() {
 
         if (hist.length > 0) {
           const last = hist[hist.length - 1]
-          const [targetsRes, avgRes] = await Promise.all([
+          const [targetsRes, avgRes, rankingsRes] = await Promise.all([
             getGroupTargets(last.group_id),
             getSessionAverages(last.session_id),
+            getSessionRankings(last.session_id).catch(() => ({ data: [] })),
           ])
           setTargets(targetsRes.data ?? [])
           setSessionAverages(avgRes.data)
+          const rankings = rankingsRes.data ?? []
+          const mine = rankings.find((r) => r.player_id === playerId)
+          setPlayerRanking(mine ?? null)
         }
       } catch {
         setError('Errore nel caricamento del report')
@@ -254,9 +274,12 @@ export default function PlayerReportPage() {
         <>
           {/* SEZIONE 1 — Ultima sessione vs Target */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 report-section">
-            <h2 className="text-base font-semibold text-gray-800 mb-1">
-              Ultima sessione vs Target
-            </h2>
+            <div className="flex items-start justify-between mb-1">
+              <h2 className="text-base font-semibold text-gray-800">
+                Ultima sessione vs Target
+              </h2>
+              {rankBadge(playerRanking)}
+            </div>
             <div className="text-xs text-gray-400 mb-4">
               {formatDateShort(lastSession.session_date)} · {lastSession.session_type}
             </div>
