@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { exportReportPDF, exportPlayerCSV } from '../utils/exportUtils'
 import {
@@ -135,20 +135,30 @@ export default function PlayerReportPage() {
   }
 
   const lastSession = history.length > 0 ? history[history.length - 1] : null
-  const targetsMap = Object.fromEntries(targets.map((t) => [t.parameter, t]))
 
-  const radarData = PARAMS.map(({ field, label, italianLabel }) => ({
-    subject: italianLabel,
-    Giocatore: lastSession?.[field] ?? 0,
-    'Target ottimo': targetsMap[label]?.ottimo_min ?? 0,
-    fullMark: 10,
-  }))
+  const targetsMap = useMemo(
+    () => Object.fromEntries(targets.map((t) => [t.parameter, t])),
+    [targets]
+  )
 
-  const compData = PARAMS.map(({ field, label, avgKey }) => ({
-    name: label,
-    Giocatore: lastSession?.[field],
-    'Media squadra': sessionAverages?.[avgKey],
-  }))
+  const radarData = useMemo(
+    () => PARAMS.map(({ field, label, italianLabel }) => ({
+      subject: italianLabel,
+      Giocatore: lastSession?.[field] ?? 0,
+      'Target ottimo': targetsMap[label]?.ottimo_min ?? 0,
+      fullMark: 10,
+    })),
+    [lastSession, targetsMap]
+  )
+
+  const compData = useMemo(
+    () => PARAMS.map(({ field, label, avgKey }) => ({
+      name: label,
+      Giocatore: lastSession?.[field],
+      'Media squadra': sessionAverages?.[avgKey],
+    })),
+    [lastSession, sessionAverages]
+  )
 
   const comment =
     lastSession && targets.length
@@ -157,17 +167,22 @@ export default function PlayerReportPage() {
 
   const sessionDate = lastSession?.session_date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
 
-  const lineData = history.map((h) => ({
-    date: formatDateShort(h.session_date),
-    ...Object.fromEntries(PARAMS.map(({ field, label }) => [label, h[field]])),
-  }))
+  const lineData = useMemo(
+    () => history.map((h) => ({
+      date: formatDateShort(h.session_date),
+      ...Object.fromEntries(PARAMS.map(({ field, label }) => [label, h[field]])),
+    })),
+    [history]
+  )
 
-  const avgInsufficient = targets.length
-    ? targets.reduce((s, t) => s + t.insufficient_max, 0) / targets.length
-    : null
-  const avgOttimo = targets.length
-    ? targets.reduce((s, t) => s + t.ottimo_min, 0) / targets.length
-    : null
+  const avgInsufficient = useMemo(
+    () => targets.length ? targets.reduce((s, t) => s + t.insufficient_max, 0) / targets.length : null,
+    [targets]
+  )
+  const avgOttimo = useMemo(
+    () => targets.length ? targets.reduce((s, t) => s + t.ottimo_min, 0) / targets.length : null,
+    [targets]
+  )
 
   const handleLegendClick = (data) => {
     setHiddenLines((prev) => ({ ...prev, [data.dataKey]: !prev[data.dataKey] }))

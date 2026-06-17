@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { exportReportPDF, exportTeamCSV } from '../utils/exportUtils'
 import {
@@ -127,31 +127,41 @@ export default function TeamReportPage() {
   }
 
   const lastEntry = history.length > 0 ? history[history.length - 1] : null
-  const targetsMap = Object.fromEntries(targets.map((t) => [t.parameter, t]))
 
-  const barData = PARAMS.map(({ label, avgKey }) => ({
-    name: label,
-    'Media squadra': lastEntry?.[avgKey],
-    'Target ottimo': targetsMap[label]?.ottimo_min,
-  }))
+  const targetsMap = useMemo(
+    () => Object.fromEntries(targets.map((t) => [t.parameter, t])),
+    [targets]
+  )
 
-  const lineData = history.map((h) => ({
-    date: formatDateShort(h.session_date),
-    SR: h.avg_sr,
-    DQI: h.avg_dqi,
-    AI: h.avg_ai,
-    TRS: h.avg_trs,
-    VCI: h.avg_vci,
-  }))
+  const barData = useMemo(
+    () => PARAMS.map(({ label, avgKey }) => ({
+      name: label,
+      'Media squadra': lastEntry?.[avgKey],
+      'Target ottimo': targetsMap[label]?.ottimo_min,
+    })),
+    [lastEntry, targetsMap]
+  )
 
-  const avgInsufficient =
-    targets.length
-      ? targets.reduce((s, t) => s + t.insufficient_max, 0) / targets.length
-      : null
-  const avgOttimo =
-    targets.length
-      ? targets.reduce((s, t) => s + t.ottimo_min, 0) / targets.length
-      : null
+  const lineData = useMemo(
+    () => history.map((h) => ({
+      date: formatDateShort(h.session_date),
+      SR: h.avg_sr,
+      DQI: h.avg_dqi,
+      AI: h.avg_ai,
+      TRS: h.avg_trs,
+      VCI: h.avg_vci,
+    })),
+    [history]
+  )
+
+  const avgInsufficient = useMemo(
+    () => targets.length ? targets.reduce((s, t) => s + t.insufficient_max, 0) / targets.length : null,
+    [targets]
+  )
+  const avgOttimo = useMemo(
+    () => targets.length ? targets.reduce((s, t) => s + t.ottimo_min, 0) / targets.length : null,
+    [targets]
+  )
 
   const handleLegendClick = (data) => {
     setHiddenLines((prev) => ({ ...prev, [data.dataKey]: !prev[data.dataKey] }))
@@ -162,15 +172,21 @@ export default function TeamReportPage() {
       ? generateTeamComment(lastEntry, targets, history)
       : null
 
-  // Classifica giocatori
-  const presentMeasurements = measurements.filter((m) => !m.is_absent)
-  const playerRankings = presentMeasurements
-    .map((m) => {
-      const values = PARAMS.map((p) => m[p.field]).filter((v) => v != null)
-      const avg = values.length > 0 ? values.reduce((s, v) => s + v, 0) / values.length : null
-      return { ...m, avg }
-    })
-    .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1))
+  const presentMeasurements = useMemo(
+    () => measurements.filter((m) => !m.is_absent),
+    [measurements]
+  )
+
+  const playerRankings = useMemo(
+    () => presentMeasurements
+      .map((m) => {
+        const values = PARAMS.map((p) => m[p.field]).filter((v) => v != null)
+        const avg = values.length > 0 ? values.reduce((s, v) => s + v, 0) / values.length : null
+        return { ...m, avg }
+      })
+      .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1)),
+    [presentMeasurements]
+  )
 
   function avgCellClass(val) {
     if (val == null || avgInsufficient == null || avgOttimo == null) return ''
