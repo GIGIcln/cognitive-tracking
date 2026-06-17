@@ -19,61 +19,17 @@ import ParamCard from '../components/ParamCard'
 import { getMeasurements } from '../api/sessions'
 import { COGNITIVE_PARAMS } from '../constants/domain'
 import { formatDateShort } from '../utils/dateUtils'
+import { LINE_COLORS, badge, generateComment } from '../utils/reportUtils'
 
 const PARAMS = COGNITIVE_PARAMS
 
-const LINE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899']
-
-function badge(val, target) {
-  if (val == null || !target) return null
-  if (val >= target.ottimo_min) return '🟢'
-  if (val <= target.insufficient_max) return '🔴'
-  return '🟡'
-}
+const TEAM_FIELD_KEYS = ['avg_sr', 'avg_dqi', 'avg_ai', 'avg_trs', 'avg_vci']
 
 function cellClass(val, target) {
   if (val == null || !target) return ''
   if (val >= target.ottimo_min) return 'bg-green-50 text-green-800'
   if (val <= target.insufficient_max) return 'bg-red-50 text-red-800'
   return 'bg-yellow-50 text-yellow-800'
-}
-
-function generateTeamComment(lastEntry, targets, history) {
-  const avgKeys = ['avg_sr', 'avg_dqi', 'avg_ai', 'avg_trs', 'avg_vci']
-  const labels = ['SR', 'DQI', 'AI', 'TRS', 'VCI']
-  const italianLabels = [
-    'Scanning Rate', 'Decision Quality', 'Anticipazione',
-    'Transition Reset', 'Comunicazione Verbale',
-  ]
-
-  const strong = [], weak = [], sufficient = []
-  avgKeys.forEach((ak, i) => {
-    const val = lastEntry[ak]
-    const t = targets.find((t) => t.parameter === labels[i])
-    if (!val || !t) return
-    if (val >= t.ottimo_min) strong.push(italianLabels[i])
-    else if (val <= t.insufficient_max) weak.push(italianLabels[i])
-    else sufficient.push(italianLabels[i])
-  })
-
-  let trendText = ''
-  if (history.length >= 2) {
-    const prev = history[history.length - 2]
-    const curr = history[history.length - 1]
-    const avgPrev = avgKeys.reduce((s, k) => s + (prev[k] || 0), 0) / avgKeys.length
-    const avgCurr = avgKeys.reduce((s, k) => s + (curr[k] || 0), 0) / avgKeys.length
-    const diff = (avgCurr - avgPrev).toFixed(1)
-    if (diff > 0) trendText = `Trend generale in miglioramento (+${diff} punti medi).`
-    else if (diff < 0) trendText = `Trend generale in calo (${diff} punti medi).`
-    else trendText = `Trend generale stabile.`
-  }
-
-  let comment = `La squadra: `
-  if (strong.length) comment += `Ottimo su ${strong.join(', ')}. `
-  if (sufficient.length) comment += `Sufficiente su ${sufficient.join(', ')}. `
-  if (weak.length) comment += `Insufficiente su ${weak.join(', ')} — area prioritaria. `
-  if (trendText) comment += trendText
-  return comment
 }
 
 export default function TeamReportPage() {
@@ -169,7 +125,7 @@ export default function TeamReportPage() {
 
   const comment =
     lastEntry && targets.length
-      ? generateTeamComment(lastEntry, targets, history)
+      ? generateComment('La squadra', lastEntry, targets, history, TEAM_FIELD_KEYS)
       : null
 
   const presentMeasurements = useMemo(
