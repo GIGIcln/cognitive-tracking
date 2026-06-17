@@ -74,9 +74,39 @@ L'app è installabile come **PWA** su qualsiasi dispositivo (iOS, Android, deskt
 | PWA | vite-plugin-pwa · Workbox (NetworkFirst / CacheFirst) · idb |
 | Backend | FastAPI · SQLAlchemy 2 · Alembic · Pydantic v2 · slowapi |
 | Database | PostgreSQL 15+ |
-| Auth | JWT (python-jose) · bcrypt |
+| Auth | JWT (python-jose) · bcrypt · HttpOnly cookie |
 | Export | jsPDF · html2canvas · PapaParse |
 | Test | pytest · FastAPI TestClient · SQLite (test DB) |
+
+---
+
+## Autenticazione e Controllo Accessi (RBAC)
+
+L'app usa un sistema di autorizzazione **basato su ruoli (RBAC)** senza tabella utenti nel database. Gli utenti sono definiti in un file locale `backend/users.json` (escluso da git) con password hashate in bcrypt. I ruoli e i gruppi assegnati vengono embeddati nel JWT al momento del login, rendendo ogni richiesta autenticata **O(1)** senza query aggiuntive.
+
+### Ruoli
+
+| Ruolo | CRUD globale | Lettura globale | Scrittura sessioni/misurazioni | Gruppi visibili |
+|---|:---:|:---:|:---:|---|
+| `admin` | ✓ | ✓ | ✓ | Tutti |
+| `responsabile_tecnico` | | ✓ | | Tutti (sola lettura) |
+| `allenatore` | | | ✓ | Solo `assigned_group_ids` |
+
+I ruoli sono **cumulativi**: un utente può avere `["responsabile_tecnico", "allenatore"]` per combinare lettura globale e scrittura sui propri gruppi.
+
+### Data scoping
+
+Gli allenatori vedono automaticamente solo i gruppi in `assigned_group_ids`. Il filtraggio avviene a livello di query DB tramite `current_user.read_scope()` (restituisce `None` per chi vede tutto, `set[UUID]` per chi è scoped).
+
+### Guards FastAPI
+
+```python
+Depends(require_admin)       # solo admin
+Depends(require_staff)       # admin + responsabile_tecnico
+Depends(require_auth)        # qualsiasi utente autenticato
+assert_group_access(user, group_id)   # 403 se fuori scope lettura
+assert_write_access(user, group_id)   # 403 se fuori scope scrittura
+```
 
 ---
 
@@ -90,6 +120,8 @@ cognitivetracking/
 │   │   ├── database.py          # Engine SQLAlchemy + SessionLocal + get_db
 │   │   ├── limiter.py           # slowapi Limiter (rate limiting per IP)
 │   │   ├── main.py              # Entry point FastAPI, CORS, GZip, handler globali
+│   │   ├── rbac.py              # Guards FastAPI: require_admin/staff/auth + assert_*_access
+│   │   ├── user_store.py        # Carica users.json a startup, dict in-memory per email
 │   │   ├── models/
 │   │   │   ├── base.py          # DeclarativeBase
 │   │   │   ├── user.py          # Utenti admin
@@ -101,7 +133,8 @@ cognitivetracking/
 │   │   │   ├── measurement.py   # Misurazioni cognitive per sessione/giocatore
 │   │   │   └── group_target.py  # Target cognitivi per gruppo/parametro
 │   │   ├── routers/
-│   │   │   ├── auth.py          # /api/auth/* (setup, login, me)
+│   │   │   ├── auth.py          # /api/auth/* (login, logout, me)
+│   │   │   ├── seasons.py       # /api/seasons/* (lista, corrente, crea, archivia)
 │   │   │   ├── groups.py        # /api/groups/* (lista, dettaglio, target, history)
 │   │   │   ├── players.py       # /api/players/* (CRUD, assign, history)
 │   │   │   └── sessions.py      # /api/sessions/* (CRUD, measurements upsert)
@@ -109,12 +142,16 @@ cognitivetracking/
 │   │   └── services/
 │   │       ├── auth_service.py     # hash/verify password, JWT, get_current_user
 │   │       ├── player_service.py   # logica di business per giocatori e assignment
+│   │       ├── season_service.py   # logica di business per stagioni
 │   │       └── session_service.py  # logica di business per sessioni e misurazioni
 │   ├── alembic/
 │   │   └── versions/
 │   │       ├── 0001_initial_schema.py
 │   │       ├── 0002_add_performance_indexes.py
 │   │       └── 0003_add_missing_indexes.py
+│   ├── users.example.json       # Template per users.json (committato; users.json è gitignored)
+│   ├── scripts/
+│   │   └── hash_password.py     # Genera hash bcrypt da inserire in users.json
 │   ├── seed.py                  # Seed idempotente: stagione + gruppi + target
 │   ├── requirements.txt
 │   └── .env.example
@@ -166,7 +203,46 @@ uvicorn app.main:app --reload --port 8000
 
 API interattiva disponibile su `http://localhost:8000/docs`
 
-> **Primo accesso:** visitare `POST /api/auth/setup` per creare il primo utente admin. L'endpoint si disabilita automaticamente dopo la prima chiamata andata a buon fine.
+### Configurazione utenti (users.json)
+
+Gli utenti **non** sono salvati nel database: vengono letti da `backend/users.json` a startup. Questo file è in `.gitignore` e non deve mai essere committato.
+
+**Passo 1 — Genera gli hash bcrypt** per ogni password:
+
+```bash
+cd backend
+python scripts/hash_password.py MyPassword123!
+# Output: $2b$12$xxxx...   ← copia nel campo hashed_password
+```
+
+**Passo 2 — Crea `backend/users.json`** partendo dal template `users.example.json`:
+
+```json
+{
+  "users": [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "email": "admin@club.example.com",
+      "full_name": "Admin",
+      "hashed_password": "$2b$12$...",
+      "is_active": true,
+      "roles": ["admin"],
+      "assigned_group_ids": []
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "email": "coach@club.example.com",
+      "full_name": "Allenatore Under 15",
+      "hashed_password": "$2b$12$...",
+      "is_active": true,
+      "roles": ["allenatore"],
+      "assigned_group_ids": ["<UUID-del-gruppo>"]
+    }
+  ]
+}
+```
+
+> **Note:** gli UUID degli utenti possono essere qualsiasi UUID v4 valido (es. generato con `python -c "import uuid; print(uuid.uuid4())"`). Il campo `assigned_group_ids` è obbligatorio solo per il ruolo `allenatore`; admin e responsabile_tecnico lo lasciano come array vuoto. Verificare che `users.json` sia elencato nel `.gitignore` prima di procedere.
 
 ### 2 — Frontend
 
@@ -259,9 +335,18 @@ I giocatori non vengono cancellati fisicamente: il campo `is_active` viene porta
 
 | Metodo | Path | Descrizione |
 |---|---|---|
-| POST | `/api/auth/setup` | Crea primo admin (una sola volta) |
-| POST | `/api/auth/login` | Login → `{ access_token, token_type, user }` |
-| GET | `/api/auth/me` | Utente corrente (richiede Bearer token) |
+| POST | `/api/auth/login` | Login → imposta cookie `ct_token` (HttpOnly) e ritorna `{ access_token, user }` |
+| POST | `/api/auth/logout` | Logout → cancella il cookie `ct_token` |
+| GET | `/api/auth/me` | Utente corrente (ruoli inclusi) |
+
+### Seasons
+
+| Metodo | Path | Descrizione | Ruolo minimo |
+|---|---|---|---|
+| GET | `/api/seasons/current` | Stagione con `is_current = true` | Qualsiasi |
+| GET | `/api/seasons` | Lista tutte le stagioni | admin |
+| POST | `/api/seasons` | Crea nuova stagione | admin |
+| PUT | `/api/seasons/{id}/archive` | Archivia stagione (non è più corrente) | admin |
 
 ### Groups
 
@@ -295,10 +380,7 @@ I giocatori non vengono cancellati fisicamente: il campo `is_active` viene porta
 | POST | `/api/sessions/{id}/measurements` | Upsert batch misurazioni |
 | GET | `/api/sessions/{id}/measurements` | Lista misurazioni della sessione |
 
-Tutti gli endpoint (escluso `/api/auth/setup` e `/api/auth/login`) richiedono il token JWT nell'header:
-```
-Authorization: Bearer <access_token>
-```
+Tutti gli endpoint (escluso `/api/auth/login`) richiedono autenticazione. Il token JWT viene trasmesso automaticamente dal browser tramite il cookie `ct_token` (HttpOnly, Secure, SameSite=None) impostato al login — nessun header `Authorization` da gestire manualmente.
 
 ---
 
@@ -319,11 +401,11 @@ Authorization: Bearer <access_token>
 
 ### Protezione route
 
-`ProtectedRoute` legge lo stato da `AuthContext`. Se non c'è utente autenticato, redirige a `/login`. Il token JWT è salvato in `localStorage` con chiave `ct_token`.
+`ProtectedRoute` legge lo stato da `AuthContext`. Se non c'è utente autenticato, redirige a `/login`. Il token JWT è conservato in un cookie **HttpOnly** impostato dal server al login — non è accessibile a JavaScript e non viene mai scritto in `localStorage`.
 
 ### Interceptor Axios
 
-`frontend/src/api/axios.js` aggiunge automaticamente il Bearer token a ogni request e, in caso di risposta 401, rimuove il token e redirige al login (con flag anti-loop per evitare redirect multipli). In modalità offline, i POST/PUT vengono accodati invece di fallire (vedi sezione PWA).
+`frontend/src/api/axios.js` configura Axios con `withCredentials: true` in modo che il browser alleghi automaticamente il cookie `ct_token` a ogni request. In caso di risposta 401, redirige al login (con flag anti-loop per evitare redirect multipli). In modalità offline, i POST/PUT vengono accodati invece di fallire (vedi sezione PWA).
 
 ---
 
@@ -408,10 +490,11 @@ pytest tests/ -v
 
 Il file `tests/conftest.py` crea un database SQLite in-memory per i test, sovrascrive la dipendenza `get_db` e ripulisce tutto dopo ogni test. I test coprono:
 
-- `test_auth_setup.py` — primo setup, secondo setup bloccato, race condition, password debole
+- `test_auth_setup.py` — guards RBAC (require_admin/staff/auth), endpoint `/auth/setup` rimosso, data scoping per allenatore
 - `test_auth_login.py` — login valido, password errata, email inesistente, token `/me`
 - `test_groups.py` — lista gruppi, dettaglio, target e history
 - `test_players.py` — CRUD giocatori, assegnazione gruppi, soft delete
+- `test_seasons.py` — creazione stagioni, archiviazione, stagione corrente
 - `test_sessions.py` — creazione sessioni, upsert misurazioni, medie di gruppo
 
 ---
@@ -502,8 +585,16 @@ Passi chiave:
 
 ## Changelog
 
+### 2026-06-17 — RBAC, Sicurezza Auth & Stagioni
+- Sistema RBAC file-based: ruoli `admin`, `responsabile_tecnico`, `allenatore` con data scoping a livello query DB.
+- JWT ora memorizzato in cookie **HttpOnly/Secure** (eliminato da `localStorage`) per prevenire attacchi XSS.
+- Nuovi endpoint `/api/seasons/*` e pagina admin per la gestione delle stagioni.
+- Tutti gli endpoint di lista wrappati in envelope paginato `{ items, total }`.
+- Vincolo data sessione: la data è limitata all'intervallo della stagione corrente.
+- Constraint CORS: metodi e header ora esplicitamente dichiarati.
+
 ### 2026-06-17 — Service Layer & Middleware
-- Estratta logica di business da `routers/` in `services/player_service.py` e `services/session_service.py`.
+- Estratta logica di business da `routers/` in `services/player_service.py`, `services/session_service.py` e `services/season_service.py`.
 - Aggiunti handler globali FastAPI: `IntegrityError` → 409, eccezioni non gestite → 500.
 - Aggiunto `GZipMiddleware` e rate limiting via `slowapi`.
 - Nuova migrazione `0003_add_missing_indexes.py` e suite di test per groups, players e sessions.
