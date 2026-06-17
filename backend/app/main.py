@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import user_store
 from app.config import get_settings
 from app.database import get_db
 from app.limiter import limiter
@@ -19,12 +21,20 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    user_store._load()  # fail fast se users.json è mancante o malformato
+    yield
+
+
 app = FastAPI(
     title="Cognitive Tracking API",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter

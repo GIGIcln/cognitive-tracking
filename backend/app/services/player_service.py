@@ -22,20 +22,13 @@ class PlayerService:
         group_id: uuid.UUID | None,
         skip: int,
         limit: int,
+        allowed_group_ids: set[uuid.UUID] | None = None,
     ) -> list[tuple[Player, str | None]]:
-        if group_id is None:
-            q = (
-                self.db.query(Player, Group.name)
-                .outerjoin(
-                    PlayerGroupAssignment,
-                    (PlayerGroupAssignment.player_id == Player.id)
-                    & PlayerGroupAssignment.is_current.is_(True),
-                )
-                .outerjoin(Group, Group.id == PlayerGroupAssignment.group_id)
-                .filter(Player.is_active.is_(True))
-                .order_by(Player.last_name.asc(), Player.first_name.asc())
-            )
-        else:
+        """
+        allowed_group_ids=None → nessun filtro (admin/responsabile).
+        allowed_group_ids=set  → restringe ai gruppi dell'allenatore.
+        """
+        if group_id is not None:
             q = (
                 self.db.query(Player, Group.name)
                 .join(
@@ -45,6 +38,33 @@ class PlayerService:
                     & PlayerGroupAssignment.is_current.is_(True),
                 )
                 .join(Group, Group.id == PlayerGroupAssignment.group_id)
+                .order_by(Player.last_name.asc(), Player.first_name.asc())
+            )
+        elif allowed_group_ids is not None:
+            q = (
+                self.db.query(Player, Group.name)
+                .join(
+                    PlayerGroupAssignment,
+                    (PlayerGroupAssignment.player_id == Player.id)
+                    & PlayerGroupAssignment.is_current.is_(True),
+                )
+                .join(Group, Group.id == PlayerGroupAssignment.group_id)
+                .filter(
+                    Player.is_active.is_(True),
+                    PlayerGroupAssignment.group_id.in_(allowed_group_ids),
+                )
+                .order_by(Player.last_name.asc(), Player.first_name.asc())
+            )
+        else:
+            q = (
+                self.db.query(Player, Group.name)
+                .outerjoin(
+                    PlayerGroupAssignment,
+                    (PlayerGroupAssignment.player_id == Player.id)
+                    & PlayerGroupAssignment.is_current.is_(True),
+                )
+                .outerjoin(Group, Group.id == PlayerGroupAssignment.group_id)
+                .filter(Player.is_active.is_(True))
                 .order_by(Player.last_name.asc(), Player.first_name.asc())
             )
         return q.offset(skip).limit(limit).all()
@@ -88,8 +108,17 @@ class PlayerService:
         self.db.commit()
         return True
 
-    def get_history(self, player_id: uuid.UUID) -> list[dict]:
-        rows = (
+    def get_history(
+        self,
+        player_id: uuid.UUID,
+        allowed_group_ids: set[uuid.UUID] | None = None,
+    ) -> list[dict]:
+        """
+        allowed_group_ids=None → storia completa (admin/responsabile).
+        allowed_group_ids=set  → solo sessioni nei gruppi dell'allenatore.
+        Filtro applicato a livello DB, non in Python.
+        """
+        q = (
             self.db.query(Measurement, TrainingSession, Group)
             .join(TrainingSession, TrainingSession.id == Measurement.session_id)
             .join(Group, Group.id == TrainingSession.group_id)
@@ -97,9 +126,11 @@ class PlayerService:
                 Measurement.player_id == player_id,
                 Measurement.is_absent.is_(False),
             )
-            .order_by(TrainingSession.session_date.asc())
-            .all()
         )
+        if allowed_group_ids is not None:
+            q = q.filter(TrainingSession.group_id.in_(allowed_group_ids))
+
+        rows = q.order_by(TrainingSession.session_date.asc()).all()
         return [
             {
                 "session_id": str(m.session_id),

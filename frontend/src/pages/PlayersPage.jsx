@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { getPlayers, deletePlayer } from '../api/players'
 import { getGroups } from '../api/groups'
 import PlayerFormModal from '../components/PlayerFormModal'
+import { useAuth } from '../context/AuthContext'
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState([])
@@ -13,6 +14,7 @@ export default function PlayersPage() {
   const [editPlayer, setEditPlayer] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, player: null })
   const [deleting, setDeleting] = useState(false)
+  const { isAdmin } = useAuth()
 
   const loadPlayers = (groupId) => {
     setLoading(true)
@@ -55,12 +57,14 @@ export default function PlayersPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Giocatori</h1>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="bg-granata text-white text-sm px-4 py-2 rounded-lg hover:bg-granata-dark transition-colors"
-        >
-          + Nuovo giocatore
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="bg-granata text-white text-sm px-4 py-2 rounded-lg hover:bg-granata-dark transition-colors"
+          >
+            + Nuovo giocatore
+          </button>
+        )}
       </div>
 
       <div className="mb-5">
@@ -97,22 +101,24 @@ export default function PlayersPage() {
                   {p.current_group_name || '—'}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setEditPlayer(p)}
-                  className="text-gray-400 hover:text-granata transition-colors text-lg leading-none"
-                  title="Modifica giocatore"
-                >
-                  ✏️
-                </button>
-                <button
-                  onClick={() => setDeleteConfirm({ open: true, player: p })}
-                  className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none"
-                  title="Rimuovi giocatore"
-                >
-                  🗑
-                </button>
-              </div>
+              {isAdmin && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setEditPlayer(p)}
+                    className="text-gray-400 hover:text-granata transition-colors text-lg leading-none"
+                    title="Modifica giocatore"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirm({ open: true, player: p })}
+                    className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none"
+                    title="Rimuovi giocatore"
+                  >
+                    🗑
+                  </button>
+                </div>
+              )}
             </div>
           ))}
           {!players.length && (

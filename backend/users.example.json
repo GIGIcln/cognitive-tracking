@@ -1,0 +1,46 @@
+{
+  "_comment": "Template per users.json — NON committare users.json (è in .gitignore). Genera gli hash con: python scripts/hash_password.py <password>",
+  "users": [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "email": "admin@club.example.com",
+      "full_name": "Admin Esempio",
+      "hashed_password": "SOSTITUISCI_CON_OUTPUT_DI_hash_password.py",
+      "is_active": true,
+      "roles": ["admin"],
+      "assigned_group_ids": []
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "email": "direttore@club.example.com",
+      "full_name": "Direttore Tecnico Esempio",
+      "hashed_password": "SOSTITUISCI_CON_OUTPUT_DI_hash_password.py",
+      "is_active": true,
+      "roles": ["responsabile_tecnico"],
+      "assigned_group_ids": []
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000003",
+      "email": "coach@club.example.com",
+      "full_name": "Allenatore Esempio",
+      "hashed_password": "SOSTITUISCI_CON_OUTPUT_DI_hash_password.py",
+      "is_active": true,
+      "roles": ["allenatore"],
+      "assigned_group_ids": [
+        "INSERISCI-UUID-DEL-GRUPPO-1",
+        "INSERISCI-UUID-DEL-GRUPPO-2"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000004",
+      "email": "capo-allenatore@club.example.com",
+      "full_name": "Capo Allenatore Esempio",
+      "hashed_password": "SOSTITUISCI_CON_OUTPUT_DI_hash_password.py",
+      "is_active": true,
+      "roles": ["responsabile_tecnico", "allenatore"],
+      "assigned_group_ids": [
+        "INSERISCI-UUID-DEL-GRUPPO-1"
+      ]
+    }
+  ]
+}

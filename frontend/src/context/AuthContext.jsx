@@ -36,8 +36,10 @@ export function AuthProvider({ children }) {
     navigateRef.current('/login', { replace: true })
   }
 
+  const isAdmin = user?.roles?.includes('admin') ?? false
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, isAdmin }}>
       {children}
     </AuthContext.Provider>
   )

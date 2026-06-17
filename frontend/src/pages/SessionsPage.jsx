@@ -4,6 +4,7 @@ import { getSessions, createSession, deleteSession } from '../api/sessions'
 import { getGroups } from '../api/groups'
 import { SESSION_TYPES } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
+import { useAuth } from '../context/AuthContext'
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState([])
@@ -22,6 +23,7 @@ export default function SessionsPage() {
     notes: '',
   })
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
 
   const loadSessions = (groupId) => {
     setLoading(true)
@@ -84,12 +86,14 @@ export default function SessionsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Sessioni</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-granata text-white text-sm px-4 py-2 rounded-lg hover:bg-granata-dark transition-colors"
-        >
-          + Nuova sessione
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-granata text-white text-sm px-4 py-2 rounded-lg hover:bg-granata-dark transition-colors"
+          >
+            + Nuova sessione
+          </button>
+        )}
       </div>
 
       <div className="mb-5">
@@ -132,21 +136,23 @@ export default function SessionsPage() {
                     <span className="text-gray-400">›</span>
                   </div>
                 </button>
-                <button
-                  onClick={(e) => handleDelete(e, s.id, label)}
-                  disabled={deletingId === s.id}
-                  className="absolute top-1/2 -translate-y-1/2 right-3 p-1.5 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-40"
-                  title="Elimina sessione"
-                >
-                  {deletingId === s.id ? (
-                    <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  )}
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={(e) => handleDelete(e, s.id, label)}
+                    disabled={deletingId === s.id}
+                    className="absolute top-1/2 -translate-y-1/2 right-3 p-1.5 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-40"
+                    title="Elimina sessione"
+                  >
+                    {deletingId === s.id ? (
+                      <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    )}
+                  </button>
+                )}
               </div>
             )
           })}
@@ -158,7 +164,7 @@ export default function SessionsPage() {
         </div>
       )}
 
-      {showModal && (
+      {isAdmin && showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-lg font-semibold mb-4">Nuova sessione</h3>

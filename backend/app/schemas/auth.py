@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr
 
 
 class LoginRequest(BaseModel):
@@ -10,42 +10,12 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class SetupRequest(BaseModel):
-    email: EmailStr
-    password: str
-    full_name: str
-
-    @field_validator("email", mode="after")
-    @classmethod
-    def email_not_empty(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("L'email non può essere vuota")
-        return v
-
-    @field_validator("full_name", mode="after")
-    @classmethod
-    def full_name_min_length(cls, v: str) -> str:
-        if len(v.strip()) < 2:
-            raise ValueError("Il nome completo deve avere almeno 2 caratteri")
-        return v
-
-    @field_validator("password", mode="after")
-    @classmethod
-    def password_strength(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("La password deve avere almeno 8 caratteri")
-        if not any(c.isupper() for c in v):
-            raise ValueError("La password deve contenere almeno una lettera maiuscola")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("La password deve contenere almeno un numero")
-        return v
-
-
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     full_name: str | None
     is_active: bool
+    roles: list[str] = []
 
     model_config = {"from_attributes": True}
 
@@ -54,3 +24,37 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+class UserContext(BaseModel):
+    """
+    Contesto utente estratto dal JWT — non tocca mai il DB dopo il login.
+    roles e group_ids sono embedded nel token, verificati ad ogni richiesta
+    con un semplice dict lookup in-memory sull'user_store.
+    """
+
+    id: str
+    email: str
+    full_name: str | None
+    roles: list[str]
+    group_ids: list[str]
+    is_active: bool
+
+    @property
+    def is_admin(self) -> bool:
+        return "admin" in self.roles
+
+    @property
+    def is_staff(self) -> bool:
+        """True per admin e responsabile_tecnico (lettura globale)."""
+        return bool({"admin", "responsabile_tecnico"} & set(self.roles))
+
+    def read_scope(self) -> set[uuid.UUID] | None:
+        """
+        Scope di lettura per le query.
+        None  → nessun filtro (vede tutto).
+        set   → filtro ai soli UUID presenti.
+        """
+        if self.is_staff:
+            return None
+        return {uuid.UUID(gid) for gid in self.group_ids}

@@ -11,10 +11,10 @@ from app.models.assignment import PlayerGroupAssignment
 from app.models.group import Group
 from app.models.group_target import GroupTarget
 from app.models.measurement import Measurement
-from app.models.player import Player
-from app.models.season import Season
 from app.models.training_session import TrainingSession
-from app.models.user import User
+from app.models.season import Season
+from app.rbac import assert_group_access, require_admin, require_auth
+from app.schemas.auth import UserContext
 from app.schemas.group import (
     GroupCreate,
     GroupDetailResponse,
@@ -23,7 +23,6 @@ from app.schemas.group import (
     TargetResponse,
     TargetUpdateItem,
 )
-from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
@@ -35,62 +34,33 @@ def _current_season(db: Session) -> Season:
     return season
 
 
+# ── READ: admin + responsabile (tutto) + allenatore (scoped) ──────────────────
+
 @router.get("", response_model=list[GroupResponse])
 def list_groups(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: UserContext = Depends(require_auth),
 ):
     season = _current_season(db)
-    groups = (
+    q = (
         db.query(Group)
         .filter(Group.season_id == season.id, Group.is_active.is_(True))
         .order_by(Group.birth_year.desc(), Group.sub_group.asc())
-        .all()
     )
-    return [GroupResponse.model_validate(g) for g in groups]
-
-
-@router.post("", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
-def create_group(
-    body: GroupCreate,
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
-):
-    season = _current_season(db)
-    group = Group(
-        season_id=season.id,
-        name=body.name,
-        category=body.category,
-        birth_year=body.birth_year,
-        level=body.level,
-        sub_group=body.sub_group,
-        max_players=body.max_players,
-    )
-    db.add(group)
-    db.commit()
-    db.refresh(group)
-    return GroupResponse.model_validate(group)
-
-
-@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_group(
-    group_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
-):
-    group = db.get(Group, group_id)
-    if not group or not group.is_active:
-        raise HTTPException(status_code=404, detail="Gruppo non trovato")
-    group.is_active = False
-    db.commit()
+    scope = current_user.read_scope()
+    if scope is not None:
+        q = q.filter(Group.id.in_(scope))
+    return [GroupResponse.model_validate(g) for g in q.all()]
 
 
 @router.get("/{group_id}", response_model=GroupDetailResponse)
 def get_group(
     group_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: UserContext = Depends(require_auth),
 ):
+    assert_group_access(current_user, group_id)
+
     group = (
         db.query(Group)
         .options(joinedload(Group.targets))
@@ -123,9 +93,11 @@ def get_group(
 def get_group_history(
     group_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: UserContext = Depends(require_auth),
     limit: int = Query(default=60, ge=1, le=200),
 ):
+    assert_group_access(current_user, group_id)
+
     rows = (
         db.query(
             TrainingSession.id.label("session_id"),
@@ -153,7 +125,6 @@ def get_group_history(
         .limit(limit)
         .all()
     )
-    # reversed() riporta in ordine ascendente per i grafici senza subquery
     return [
         {
             "session_id": str(r.session_id),
@@ -174,12 +145,50 @@ def get_group_history(
 def get_targets(
     group_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: UserContext = Depends(require_auth),
 ):
+    assert_group_access(current_user, group_id)
     group = db.get(Group, group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Gruppo non trovato")
     return [TargetResponse.model_validate(t) for t in group.targets]
+
+
+# ── WRITE: solo admin ─────────────────────────────────────────────────────────
+
+@router.post("", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
+def create_group(
+    body: GroupCreate,
+    db: Session = Depends(get_db),
+    _: UserContext = Depends(require_admin),
+):
+    season = _current_season(db)
+    group = Group(
+        season_id=season.id,
+        name=body.name,
+        category=body.category,
+        birth_year=body.birth_year,
+        level=body.level,
+        sub_group=body.sub_group,
+        max_players=body.max_players,
+    )
+    db.add(group)
+    db.commit()
+    db.refresh(group)
+    return GroupResponse.model_validate(group)
+
+
+@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_group(
+    group_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: UserContext = Depends(require_admin),
+):
+    group = db.get(Group, group_id)
+    if not group or not group.is_active:
+        raise HTTPException(status_code=404, detail="Gruppo non trovato")
+    group.is_active = False
+    db.commit()
 
 
 @router.put("/{group_id}/targets", response_model=list[TargetResponse])
@@ -187,7 +196,7 @@ def update_targets(
     group_id: uuid.UUID,
     body: list[TargetUpdateItem],
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: UserContext = Depends(require_admin),
 ):
     group = db.get(Group, group_id)
     if not group:

@@ -23,10 +23,18 @@ class SessionService:
         group_id: uuid.UUID | None,
         skip: int,
         limit: int,
+        allowed_group_ids: set[uuid.UUID] | None = None,
     ) -> list[TrainingSession]:
+        """
+        allowed_group_ids=None → nessun filtro (admin/responsabile).
+        allowed_group_ids=set  → restringe ai gruppi dell'allenatore.
+        Se group_id è specificato ha la precedenza (già validato al livello router).
+        """
         q = self.db.query(TrainingSession).filter(TrainingSession.is_active.is_(True))
         if group_id:
             q = q.filter(TrainingSession.group_id == group_id)
+        elif allowed_group_ids is not None:
+            q = q.filter(TrainingSession.group_id.in_(allowed_group_ids))
         return q.order_by(TrainingSession.session_date.desc()).offset(skip).limit(limit).all()
 
     def deactivate(self, session_id: uuid.UUID) -> bool:

@@ -1,48 +1,46 @@
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timedelta, timezone
 
+import bcrypt as _bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-import bcrypt as _bcrypt_lib
-
 from jose import JWTError, jwt
-from sqlalchemy.orm import Session
 
+from app import user_store
 from app.config import get_settings
-from app.database import get_db
-from app.models.user import User
+from app.schemas.auth import UserContext
 
 _bearer = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
-    return _bcrypt_lib.hashpw(
-        password.encode("utf-8"),
-        _bcrypt_lib.gensalt()
-    ).decode("utf-8")
+    return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _bcrypt_lib.checkpw(
-        plain.encode("utf-8"),
-        hashed.encode("utf-8")
-    )
+    return _bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def create_access_token(data: dict) -> str:
+def create_access_token(record: dict) -> str:
+    """Genera un JWT con ruoli e group_ids embedded, evitando DB hit futuri."""
     settings = get_settings()
-    payload = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
-    payload["exp"] = expire
+    payload = {
+        "sub": record["id"],
+        "roles": record.get("roles", []),
+        "group_ids": record.get("assigned_group_ids", []),
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes),
+    }
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
-    db: Session = Depends(get_db),
-) -> User:
+) -> UserContext:
+    """
+    Verifica il JWT e restituisce lo UserContext.
+    Unico I/O: dict lookup in-memory su user_store (O(1), nessuna query DB).
+    """
     settings = get_settings()
     exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -53,7 +51,9 @@ def get_current_user(
         raise exc
     try:
         payload = jwt.decode(
-            credentials.credentials, settings.secret_key, algorithms=[settings.algorithm]
+            credentials.credentials,
+            settings.secret_key,
+            algorithms=[settings.algorithm],
         )
         user_id: str | None = payload.get("sub")
         if user_id is None:
@@ -61,7 +61,15 @@ def get_current_user(
     except JWTError:
         raise exc
 
-    user = db.get(User, uuid.UUID(user_id))
-    if user is None or not user.is_active:
+    record = user_store.get_by_id(user_id)
+    if record is None or not record.get("is_active", True):
         raise exc
-    return user
+
+    return UserContext(
+        id=user_id,
+        email=record["email"],
+        full_name=record.get("full_name"),
+        roles=payload.get("roles", []),
+        group_ids=payload.get("group_ids", []),
+        is_active=record.get("is_active", True),
+    )

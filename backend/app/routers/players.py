@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.player import Player
-from app.models.user import User
+from app.rbac import assert_group_access, require_admin, require_auth
+from app.schemas.auth import UserContext
 from app.schemas.player import AssignRequest, PlayerCreate, PlayerResponse, PlayerUpdate
-from app.services.auth_service import get_current_user
 from app.services.player_service import PlayerService
 
 router = APIRouter(prefix="/players", tags=["players"])
@@ -27,23 +27,42 @@ def _to_response(player: Player, group_name: str | None) -> PlayerResponse:
     )
 
 
+# ── READ: admin + responsabile (tutto) + allenatore (scoped) ──────────────────
+
 @router.get("", response_model=list[PlayerResponse])
 def list_players(
     group_id: uuid.UUID | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=200, ge=1, le=500),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: UserContext = Depends(require_auth),
 ):
-    rows = PlayerService(db).list(group_id, skip, limit)
+    scope = current_user.read_scope()
+    if group_id is not None:
+        assert_group_access(current_user, group_id)
+        rows = PlayerService(db).list(group_id, skip, limit)
+    else:
+        rows = PlayerService(db).list(None, skip, limit, allowed_group_ids=scope)
     return [_to_response(player, group_name) for player, group_name in rows]
 
+
+@router.get("/{player_id}/history")
+def get_player_history(
+    player_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    scope = current_user.read_scope()
+    return PlayerService(db).get_history(player_id, allowed_group_ids=scope)
+
+
+# ── WRITE: solo admin ─────────────────────────────────────────────────────────
 
 @router.post("", response_model=PlayerResponse, status_code=status.HTTP_201_CREATED)
 def create_player(
     body: PlayerCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: UserContext = Depends(require_admin),
 ):
     player = PlayerService(db).create(body)
     return PlayerResponse.model_validate(player)
@@ -53,7 +72,7 @@ def create_player(
 def delete_player(
     player_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: UserContext = Depends(require_admin),
 ):
     if not PlayerService(db).deactivate(player_id):
         raise HTTPException(status_code=404, detail="Giocatore non trovato")
@@ -65,7 +84,7 @@ def update_player(
     player_id: uuid.UUID,
     body: PlayerUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: UserContext = Depends(require_admin),
 ):
     player = PlayerService(db).update(player_id, body)
     if player is None:
@@ -73,21 +92,12 @@ def update_player(
     return PlayerResponse.model_validate(player)
 
 
-@router.get("/{player_id}/history")
-def get_player_history(
-    player_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
-):
-    return PlayerService(db).get_history(player_id)
-
-
 @router.post("/{player_id}/assign")
 def assign_player(
     player_id: uuid.UUID,
     body: AssignRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: UserContext = Depends(require_admin),
 ):
     if not PlayerService(db).assign_to_group(player_id, body.group_id):
         raise HTTPException(status_code=404, detail="Giocatore non trovato")

@@ -4,6 +4,7 @@ import { getGroup, updateGroupTargets } from '../api/groups'
 import { deletePlayer } from '../api/players'
 import PlayerFormModal from '../components/PlayerFormModal'
 import { LEVEL_COLORS } from '../constants/domain'
+import { useAuth } from '../context/AuthContext'
 
 const PARAMS = ['SR', 'DQI', 'AI', 'TRS', 'VCI']
 
@@ -23,6 +24,7 @@ export default function GroupDetailPage() {
   const [editPlayer, setEditPlayer] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, player: null })
   const [deleting, setDeleting] = useState(false)
+  const { isAdmin } = useAuth()
 
   const load = () => {
     setLoading(true)
@@ -128,12 +130,14 @@ export default function GroupDetailPage() {
         <div>
           <div className="flex justify-between items-center mb-4">
             <span className="text-sm text-gray-500">{players.length} giocatori</span>
-            <button
-              onClick={() => setShowAddPlayer(true)}
-              className="bg-granata text-white text-sm px-4 py-2 rounded-lg hover:bg-granata-dark transition-colors"
-            >
-              + Aggiungi giocatore
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setShowAddPlayer(true)}
+                className="bg-granata text-white text-sm px-4 py-2 rounded-lg hover:bg-granata-dark transition-colors"
+              >
+                + Aggiungi giocatore
+              </button>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -148,22 +152,24 @@ export default function GroupDetailPage() {
                     <div className="text-xs text-gray-500 mt-0.5">Anno: {p.birth_year}</div>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setEditPlayer(p)}
-                    className="text-gray-400 hover:text-granata transition-colors text-lg leading-none"
-                    title="Modifica giocatore"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => setDeleteConfirm({ open: true, player: p })}
-                    className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none"
-                    title="Rimuovi giocatore"
-                  >
-                    🗑
-                  </button>
-                </div>
+                {isAdmin && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setEditPlayer(p)}
+                      className="text-gray-400 hover:text-granata transition-colors text-lg leading-none"
+                      title="Modifica giocatore"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm({ open: true, player: p })}
+                      className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none"
+                      title="Rimuovi giocatore"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
             {!players.length && (
@@ -221,32 +227,34 @@ export default function GroupDetailPage() {
       {/* Targets tab */}
       {activeTab === 'targets' && (
         <div>
-          <div className="flex justify-end mb-4">
-            {editingTargets ? (
-              <div className="flex gap-2">
+          {isAdmin && (
+            <div className="flex justify-end mb-4">
+              {editingTargets ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setEditingTargets(false); setTargetEdits(targets) }}
+                    className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    onClick={handleSaveTargets}
+                    disabled={saving}
+                    className="bg-granata text-white px-4 py-2 rounded-lg text-sm hover:bg-granata-dark disabled:opacity-60"
+                  >
+                    {saving ? 'Salvataggio…' : 'Salva target'}
+                  </button>
+                </div>
+              ) : (
                 <button
-                  onClick={() => { setEditingTargets(false); setTargetEdits(targets) }}
-                  className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
+                  onClick={() => setEditingTargets(true)}
+                  className="bg-granata text-white text-sm px-4 py-2 rounded-lg hover:bg-granata-dark"
                 >
-                  Annulla
+                  Modifica target
                 </button>
-                <button
-                  onClick={handleSaveTargets}
-                  disabled={saving}
-                  className="bg-granata text-white px-4 py-2 rounded-lg text-sm hover:bg-granata-dark disabled:opacity-60"
-                >
-                  {saving ? 'Salvataggio…' : 'Salva target'}
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setEditingTargets(true)}
-                className="bg-granata text-white text-sm px-4 py-2 rounded-lg hover:bg-granata-dark"
-              >
-                Modifica target
-              </button>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <table className="w-full text-sm">

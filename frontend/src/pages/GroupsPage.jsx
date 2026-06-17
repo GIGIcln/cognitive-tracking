@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getGroups, createGroup, deleteGroup } from '../api/groups'
 import { LEVEL_COLORS, GROUP_CATEGORIES } from '../constants/domain'
+import { useAuth } from '../context/AuthContext'
 
 const LEVELS = Object.keys(LEVEL_COLORS)
 
@@ -23,6 +24,7 @@ export default function GroupsPage() {
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
   const navigate = useNavigate()
+  const { isAdmin } = useAuth()
 
   const load = () => {
     setLoading(true)
@@ -86,21 +88,23 @@ export default function GroupsPage() {
         </div>
         <div className="text-xs text-gray-500">Max {g.max_players} giocatori</div>
       </button>
-      <button
-        onClick={(e) => handleDelete(e, g.id, g.name)}
-        disabled={deletingId === g.id}
-        className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-40"
-        title="Elimina gruppo"
-      >
-        {deletingId === g.id ? (
-          <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-        ) : (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        )}
-      </button>
+      {isAdmin && (
+        <button
+          onClick={(e) => handleDelete(e, g.id, g.name)}
+          disabled={deletingId === g.id}
+          className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-40"
+          title="Elimina gruppo"
+        >
+          {deletingId === g.id ? (
+            <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          )}
+        </button>
+      )}
     </div>
   )
 
@@ -108,12 +112,14 @@ export default function GroupsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Gruppi</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-granata text-white text-sm px-4 py-2 rounded-lg hover:bg-granata-dark transition-colors"
-        >
-          + Nuovo gruppo
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-granata text-white text-sm px-4 py-2 rounded-lg hover:bg-granata-dark transition-colors"
+          >
+            + Nuovo gruppo
+          </button>
+        )}
       </div>
 
       {error && <div className="text-red-600 text-sm mb-4">{error}</div>}
@@ -150,7 +156,7 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {showModal && (
+      {isAdmin && showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-lg font-semibold mb-4">Nuovo gruppo</h3>
