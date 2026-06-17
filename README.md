@@ -18,9 +18,10 @@ make dev        # avvia tutto
 make dev      # avvia tutto (backend + frontend)
 ```
 
-`make dev` esegue in sequenza: check prerequisiti → check .env → check porte →
-wait database → attiva venv → pip install → `alembic upgrade head` →
+`make dev` esegue in sequenza: check prerequisiti → check .env → **libera automaticamente le porte** 8000/5173 se occupate → wait database → attiva venv → pip install → `alembic upgrade head` →
 avvio Uvicorn su `0.0.0.0:8000` → avvio Vite su `5173`.
+
+> **Porte occupate:** `make dev` non blocca più — termina automaticamente il processo che occupa la porta e prosegue. `make stop` resta disponibile per uno shutdown esplicito.
 
 | Situazione | Comando |
 |------------|---------|
@@ -61,6 +62,8 @@ createdb cognitive_tracking   # solo prima volta
 
 Cognitive Tracking è una piattaforma full-stack per il monitoraggio cognitivo di giocatori di calcio giovanile. Permette agli staff tecnici di registrare, tracciare e analizzare cinque parametri cognitivi per ciascun giocatore durante le sessioni di allenamento, confrontandoli con target personalizzati per fascia d'età e livello.
 
+L'app è installabile come **PWA** su qualsiasi dispositivo (iOS, Android, desktop) e supporta la **modalità offline**: le misurazioni vengono salvate localmente e sincronizzate automaticamente al ripristino della connessione.
+
 ---
 
 ## Stack tecnologico
@@ -68,7 +71,8 @@ Cognitive Tracking è una piattaforma full-stack per il monitoraggio cognitivo d
 | Layer | Tecnologie |
 |---|---|
 | Frontend | React 18 · Vite 5 · Tailwind CSS 3 · Recharts 2 · React Router 6 |
-| Backend | FastAPI · SQLAlchemy 2 · Alembic · Pydantic v2 |
+| PWA | vite-plugin-pwa · Workbox (NetworkFirst / CacheFirst) · idb |
+| Backend | FastAPI · SQLAlchemy 2 · Alembic · Pydantic v2 · slowapi |
 | Database | PostgreSQL 15+ |
 | Auth | JWT (python-jose) · bcrypt |
 | Export | jsPDF · html2canvas · PapaParse |
@@ -84,7 +88,8 @@ cognitivetracking/
 │   ├── app/
 │   │   ├── config.py            # Settings via pydantic-settings + .env
 │   │   ├── database.py          # Engine SQLAlchemy + SessionLocal + get_db
-│   │   ├── main.py              # Entry point FastAPI, CORS, router include
+│   │   ├── limiter.py           # slowapi Limiter (rate limiting per IP)
+│   │   ├── main.py              # Entry point FastAPI, CORS, GZip, handler globali
 │   │   ├── models/
 │   │   │   ├── base.py          # DeclarativeBase
 │   │   │   ├── user.py          # Utenti admin
@@ -102,11 +107,14 @@ cognitivetracking/
 │   │   │   └── sessions.py      # /api/sessions/* (CRUD, measurements upsert)
 │   │   ├── schemas/             # Schemi Pydantic per request/response
 │   │   └── services/
-│   │       └── auth_service.py  # hash/verify password, JWT, get_current_user
+│   │       ├── auth_service.py     # hash/verify password, JWT, get_current_user
+│   │       ├── player_service.py   # logica di business per giocatori e assignment
+│   │       └── session_service.py  # logica di business per sessioni e misurazioni
 │   ├── alembic/
 │   │   └── versions/
-│   │       ├── 0001_initial_schema.py   # Tutte le tabelle base
-│   │       └── 0002_add_performance_indexes.py
+│   │       ├── 0001_initial_schema.py
+│   │       ├── 0002_add_performance_indexes.py
+│   │       └── 0003_add_missing_indexes.py
 │   ├── seed.py                  # Seed idempotente: stagione + gruppi + target
 │   ├── requirements.txt
 │   └── .env.example
@@ -114,12 +122,16 @@ cognitivetracking/
 └── frontend/
     └── src/
         ├── api/                 # Client Axios per ogni dominio (auth, groups, players, sessions)
-        ├── components/          # PlayerFormModal, ProtectedRoute
+        ├── components/          # PlayerFormModal, OfflineBanner, ProtectedRoute
         ├── constants/domain.js  # COGNITIVE_PARAMS, SESSION_TYPES, LEVEL_COLORS
-        ├── context/AuthContext.jsx  # Auth state globale + login/logout
+        ├── context/
+        │   ├── AuthContext.jsx      # Auth state globale + login/logout
+        │   └── OfflineContext.jsx   # Stato online/offline globale + coda sync
+        ├── hooks/
+        │   └── useOnlineStatus.js   # Hook per rilevare connettività
         ├── layouts/MainLayout.jsx   # Sidebar desktop + bottom nav mobile
         ├── pages/               # Una pagina per route
-        └── utils/               # dateUtils, exportUtils (PDF + CSV)
+        └── utils/               # dateUtils, exportUtils (PDF + CSV), offlineQueue
 ```
 
 ---
@@ -172,7 +184,7 @@ Il proxy Vite redirige `/api/*` → `http://localhost:8000` (vedi `vite.config.j
 
 ## Variabili d'ambiente
 
-File: `backend/.env` (partire da `.env.example`)
+### Backend — `backend/.env` (partire da `.env.example`)
 
 | Variabile | Descrizione | Esempio |
 |---|---|---|
@@ -182,6 +194,12 @@ File: `backend/.env` (partire da `.env.example`)
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Durata token | `60` (default) |
 | `APP_ENV` | Ambiente | `development` / `production` |
 | `ALLOWED_ORIGINS` | CORS origins (comma-separated) | `http://localhost:5173` |
+
+### Frontend — `frontend/.env.local` (partire da `frontend/.env.example`)
+
+| Variabile | Descrizione | Esempio |
+|---|---|---|
+| `VITE_API_URL` | Base URL del backend | `http://localhost:8000` (dev) · `https://api.example.com` (prod) |
 
 ---
 
@@ -305,7 +323,7 @@ Authorization: Bearer <access_token>
 
 ### Interceptor Axios
 
-`frontend/src/api/axios.js` aggiunge automaticamente il Bearer token a ogni request e, in caso di risposta 401, rimuove il token e redirige al login (con flag anti-loop per evitare redirect multipli).
+`frontend/src/api/axios.js` aggiunge automaticamente il Bearer token a ogni request e, in caso di risposta 401, rimuove il token e redirige al login (con flag anti-loop per evitare redirect multipli). In modalità offline, i POST/PUT vengono accodati invece di fallire (vedi sezione PWA).
 
 ---
 
@@ -330,6 +348,53 @@ I target sono definiti per coppia `(group_id, parameter)`. Ogni gruppo ha cinque
 
 Le medie di gruppo per sessione escludono i giocatori con `is_absent = true`. Vengono calcolate server-side tramite `func.avg()` di SQLAlchemy con `outerjoin` su `measurements`.
 
+### Rate Limiting & Error Handling
+
+`slowapi` applica un limite di richieste per IP sugli endpoint di autenticazione per prevenire attacchi brute-force.
+
+Il middleware globale in `main.py` gestisce in modo uniforme:
+- `IntegrityError` (PostgreSQL) → **409 Conflict** con messaggio JSON strutturato
+- Eccezioni non gestite → **500 Internal Server Error** con log server-side
+- **GZipMiddleware** comprime automaticamente le risposte > 1 KB
+
+---
+
+## PWA & Modalità Offline
+
+L'app è una **Progressive Web App** installabile su qualsiasi dispositivo tramite il browser (iOS, Android, Chrome desktop).
+
+### Installazione
+
+Aprire l'app nel browser e usare "Aggiungi alla schermata Home" (iOS/Android) o l'icona di installazione nella barra degli indirizzi (Chrome). Il manifest (`frontend/public/manifest.json`) definisce nome, icone e colori dell'app.
+
+### Offline Queue
+
+Quando il device perde la connessione, l'interceptor Axios intercetta le richieste `POST`/`PUT` verso `/api/sessions` e `/api/measurements` e le salva in **IndexedDB** tramite `offlineQueue.js`. Le richieste verso `/api/auth` non vengono mai accodate.
+
+### Sincronizzazione automatica
+
+`OfflineContext` monitora lo stato della connessione tramite `useOnlineStatus`. Al ripristino della rete:
+1. Legge la coda da IndexedDB
+2. Invia le richieste in ordine (FIFO)
+3. Rimuove ogni voce solo dopo conferma del server
+4. Ritenta ogni **60 secondi** in caso di errore parziale
+
+### Banner visivo
+
+`OfflineBanner` mostra un indicatore persistente con quattro stati:
+- **Offline** — nessuna connessione, le misurazioni vengono salvate localmente
+- **Sincronizzazione in corso** — invio della coda al server
+- **In attesa** — coda presente ma sync fallita, prossimo retry tra X secondi
+- **Online** — tutto sincronizzato (banner scompare dopo 3 s)
+
+### Caching Workbox
+
+| Risorsa | Strategia |
+|---|---|
+| Asset statici (JS, CSS, font) | CacheFirst |
+| `GET /api/auth/me` | NetworkFirst (mantiene sessione offline) |
+| Altre chiamate API | NetworkOnly (dati sempre freschi quando online) |
+
 ---
 
 ## Test
@@ -345,6 +410,9 @@ Il file `tests/conftest.py` crea un database SQLite in-memory per i test, sovras
 
 - `test_auth_setup.py` — primo setup, secondo setup bloccato, race condition, password debole
 - `test_auth_login.py` — login valido, password errata, email inesistente, token `/me`
+- `test_groups.py` — lista gruppi, dettaglio, target e history
+- `test_players.py` — CRUD giocatori, assegnazione gruppi, soft delete
+- `test_sessions.py` — creazione sessioni, upsert misurazioni, medie di gruppo
 
 ---
 
@@ -352,14 +420,14 @@ Il file `tests/conftest.py` crea un database SQLite in-memory per i test, sovras
 
 ### PDF
 
-`exportReportPDF()` in `exportUtils.js` usa `html2canvas` per catturare ogni sezione `.report-section` e le assembla in un documento A4 con `jsPDF`. I pulsanti di esport vengono nascosti durante la cattura e ripristinati al termine.
+`exportReportPDF()` in `exportUtils.js` usa `html2canvas` per catturare ogni sezione `.report-section` e le assembla in un documento A4 con `jsPDF`. I pulsanti di export vengono nascosti durante la cattura e ripristinati al termine.
 
 ### CSV
 
 - `exportPlayerCSV()` — storico sessioni del giocatore con valori e target affiancati
 - `exportTeamCSV()` — tre sezioni: storico medie squadra, classifica giocatori, target
 
-Entrambi usano BOM UTF-8 (`\uFEFF`) per compatibilità con Excel italiano.
+Entrambi usano BOM UTF-8 (`﻿`) per compatibilità con Excel italiano.
 
 ---
 
@@ -380,9 +448,49 @@ L'URL del database viene letto da `os.environ["DATABASE_URL"]` in `alembic/env.p
 
 ---
 
-## Deployment — Note
+## Deployment
+
+### Locale / LAN
+
+Impostazione predefinita: backend su `0.0.0.0:8000`, frontend su `:5173`. Accessibile da qualsiasi device sulla stessa rete WiFi.
+
+### Cloud (Render + Vercel + Neon)
+
+| Servizio | Componente |
+|---|---|
+| [Render](https://render.com) | Backend FastAPI (Web Service) |
+| [Vercel](https://vercel.com) | Frontend React (Static) |
+| [Neon](https://neon.tech) | PostgreSQL serverless |
+
+Passi chiave:
+1. Su Neon: creare un database e copiare la `DATABASE_URL`.
+2. Su Render: creare un Web Service dal repo, impostare le variabili d'ambiente (`DATABASE_URL`, `SECRET_KEY`, `ALLOWED_ORIGINS` con il dominio Vercel).
+3. Su Vercel: importare il repo, impostare `VITE_API_URL` con l'URL del servizio Render.
+
+### Note generali
 
 - In produzione impostare `APP_ENV=production` e aggiornare `ALLOWED_ORIGINS` con il dominio reale.
 - Generare `SECRET_KEY` con `openssl rand -hex 32`.
 - Il build frontend (`npm run build`) produce una cartella `dist/` da servire come static files (es. via Nginx o integrazione FastAPI `StaticFiles`).
-- Il proxy Vite è solo per sviluppo; in produzione configurare Nginx per proxy-passare `/api` all'istanza uvicorn.
+- Il proxy Vite è solo per sviluppo; in produzione configurare Nginx (o Vercel rewrites) per proxy-passare `/api` all'istanza uvicorn.
+
+---
+
+## Changelog
+
+### 2026-06-17 — Service Layer & Middleware
+- Estratta logica di business da `routers/` in `services/player_service.py` e `services/session_service.py`.
+- Aggiunti handler globali FastAPI: `IntegrityError` → 409, eccezioni non gestite → 500.
+- Aggiunto `GZipMiddleware` e rate limiting via `slowapi`.
+- Nuova migrazione `0003_add_missing_indexes.py` e suite di test per groups, players e sessions.
+
+### 2026-06-15 — PWA & Offline Support
+- Implementazione completa PWA: manifest, icone, Service Worker Workbox.
+- Coda offline su IndexedDB per misurazioni POST/PUT senza connessione.
+- Sincronizzazione automatica al ripristino rete con retry ogni 60 s.
+- `OfflineBanner` per feedback visivo dello stato di connessione.
+
+### 2026-06-15 — Automazione avvio sviluppo
+- Aggiunto `Makefile` e `scripts/dev.sh` con check prerequisiti, wait-for-DB e log colorati.
+- `make dev` libera automaticamente le porte 8000/5173 se occupate (non richiede più `make stop` preventivo).
+- Uvicorn avviato su `0.0.0.0` per accesso da device in rete locale.
