@@ -1,17 +1,26 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getGroups } from '../api/groups'
+import { getCurrentSeason } from '../api/seasons'
 import { LEVEL_COLORS } from '../constants/domain'
+
 export default function DashboardPage() {
   const [groups, setGroups] = useState([])
+  const [season, setSeason] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
   useEffect(() => {
-    getGroups()
-      .then((res) => setGroups(res.data))
-      .catch(() => setError('Errore nel caricamento dei gruppi'))
+    Promise.all([
+      getGroups().catch(() => ({ data: [] })),
+      getCurrentSeason().catch(() => ({ data: null })),
+    ])
+      .then(([gr, se]) => {
+        setGroups(gr.data)
+        setSeason(se.data)
+      })
+      .catch(() => setError('Errore nel caricamento'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -35,7 +44,9 @@ export default function DashboardPage() {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="text-sm text-gray-500 mb-1">Stagione</div>
-          <div className="text-3xl font-bold text-gray-900">2026-2027</div>
+          <div className="text-3xl font-bold text-gray-900">
+            {loading ? '–' : (season?.name ?? '—')}
+          </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="text-sm text-gray-500 mb-1">Ultimo accesso</div>

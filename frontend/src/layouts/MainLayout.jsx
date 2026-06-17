@@ -2,7 +2,7 @@ import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import OfflineBanner from '../components/OfflineBanner'
 
-const navItems = [
+const baseNavItems = [
   { to: '/', label: 'Dashboard', icon: '🏠', end: true },
   { to: '/groups', label: 'Gruppi', icon: '👥' },
   { to: '/players', label: 'Giocatori', icon: '⚽' },
@@ -10,8 +10,13 @@ const navItems = [
   { to: '/reports', label: 'Report', icon: '📊' },
 ]
 
+const adminNavItems = [
+  { to: '/seasons', label: 'Stagioni', icon: '🗓️' },
+]
+
 export default function MainLayout() {
-  const { user, logout } = useAuth()
+  const { user, logout, isAdmin } = useAuth()
+  const navItems = isAdmin ? [...baseNavItems, ...adminNavItems] : baseNavItems
 
   return (
     <div className="min-h-screen flex bg-gray-50">

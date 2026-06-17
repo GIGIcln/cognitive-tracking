@@ -15,7 +15,7 @@ from app import user_store
 from app.config import get_settings
 from app.database import get_db
 from app.limiter import limiter
-from app.routers import auth, groups, players, sessions
+from app.routers import auth, groups, players, seasons, sessions
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +74,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api")
+app.include_router(seasons.router, prefix="/api")
 app.include_router(groups.router, prefix="/api")
 app.include_router(players.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
