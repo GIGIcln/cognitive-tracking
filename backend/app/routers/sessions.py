@@ -122,7 +122,10 @@ def create_session(
     current_user: UserContext = Depends(require_auth),
 ):
     assert_write_access(current_user, body.group_id)
-    session = SessionService(db).create(body)
+    try:
+        session = SessionService(db).create(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     if session is None:
         raise HTTPException(status_code=404, detail="Stagione corrente o gruppo non trovato")
     return SessionResponse.model_validate(session)

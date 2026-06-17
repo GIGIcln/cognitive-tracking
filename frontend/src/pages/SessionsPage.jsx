@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSessions, createSession, deleteSession } from '../api/sessions'
 import { getGroups } from '../api/groups'
+import { getCurrentSeason } from '../api/seasons'
 import { SESSION_TYPES } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
 import { useAuth } from '../context/AuthContext'
@@ -22,8 +23,26 @@ export default function SessionsPage() {
     duration_min: '',
     notes: '',
   })
+  const [seasonRange, setSeasonRange] = useState({ min: '', max: '' })
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
+
+  useEffect(() => {
+    if (!showModal) return
+    getCurrentSeason()
+      .then((res) => {
+        const { start_date, end_date } = res.data
+        const min = start_date ?? ''
+        const max = end_date ?? ''
+        setSeasonRange({ min, max })
+        const today = new Date().toISOString().split('T')[0]
+        let defaultDate = today
+        if (min && today < min) defaultDate = min
+        if (max && today > max) defaultDate = max
+        setForm((f) => ({ ...f, session_date: defaultDate }))
+      })
+      .catch(() => {})
+  }, [showModal])
 
   const loadSessions = (groupId) => {
     setLoading(true)
@@ -189,6 +208,8 @@ export default function SessionsPage() {
                   type="date"
                   value={form.session_date}
                   onChange={(e) => setForm({ ...form, session_date: e.target.value })}
+                  min={seasonRange.min || undefined}
+                  max={seasonRange.max || undefined}
                   required
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
                 />

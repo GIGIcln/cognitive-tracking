@@ -58,7 +58,7 @@ class SessionService:
         return True
 
     def create(self, body: SessionCreate) -> TrainingSession | None:
-        """Returns None if no current season or group is found."""
+        """Returns None if no current season or group is found. Raises ValueError if date is outside season range."""
         season = self.db.query(Season).filter(Season.is_current.is_(True)).first()
         if not season:
             return None
@@ -66,6 +66,11 @@ class SessionService:
         group = self.db.get(Group, body.group_id)
         if not group:
             return None
+
+        if season.start_date and body.session_date < season.start_date:
+            raise ValueError(f"La data è precedente all'inizio della stagione ({season.start_date})")
+        if season.end_date and body.session_date > season.end_date:
+            raise ValueError(f"La data è successiva alla fine della stagione ({season.end_date})")
 
         session = TrainingSession(
             group_id=body.group_id,
