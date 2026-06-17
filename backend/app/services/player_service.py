@@ -90,6 +90,25 @@ class PlayerService:
     def get(self, player_id: uuid.UUID) -> Player | None:
         return self.db.get(Player, player_id)
 
+    def get_with_group(
+        self,
+        player_id: uuid.UUID,
+        allowed_group_ids: set[uuid.UUID] | None = None,
+    ) -> tuple[Player, str | None] | None:
+        q = (
+            self.db.query(Player, Group.name)
+            .outerjoin(
+                PlayerGroupAssignment,
+                (PlayerGroupAssignment.player_id == Player.id)
+                & PlayerGroupAssignment.is_current.is_(True),
+            )
+            .outerjoin(Group, Group.id == PlayerGroupAssignment.group_id)
+            .filter(Player.id == player_id, Player.is_active.is_(True))
+        )
+        if allowed_group_ids is not None:
+            q = q.filter(PlayerGroupAssignment.group_id.in_(allowed_group_ids))
+        return q.first()
+
     def update(self, player_id: uuid.UUID, body: PlayerUpdate) -> Player | None:
         player = self.db.get(Player, player_id)
         if player is None:

@@ -46,6 +46,20 @@ def list_players(
     return [_to_response(player, group_name) for player, group_name in rows]
 
 
+@router.get("/{player_id}", response_model=PlayerResponse)
+def get_player(
+    player_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    scope = current_user.read_scope()
+    row = PlayerService(db).get_with_group(player_id, allowed_group_ids=scope)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Giocatore non trovato")
+    player, group_name = row
+    return _to_response(player, group_name)
+
+
 @router.get("/{player_id}/history")
 def get_player_history(
     player_id: uuid.UUID,
@@ -53,7 +67,10 @@ def get_player_history(
     current_user: UserContext = Depends(require_auth),
 ):
     scope = current_user.read_scope()
-    return PlayerService(db).get_history(player_id, allowed_group_ids=scope)
+    svc = PlayerService(db)
+    if scope is not None and svc.get_with_group(player_id, allowed_group_ids=scope) is None:
+        raise HTTPException(status_code=404, detail="Giocatore non trovato")
+    return svc.get_history(player_id, allowed_group_ids=scope)
 
 
 # ── WRITE: solo admin ─────────────────────────────────────────────────────────

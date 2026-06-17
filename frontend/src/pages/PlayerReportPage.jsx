@@ -19,7 +19,7 @@ import {
   BarChart,
   Bar,
 } from 'recharts'
-import { getPlayers, getPlayerHistory } from '../api/players'
+import { getPlayer, getPlayerHistory } from '../api/players'
 import { getGroupTargets } from '../api/groups'
 import { getSessionAverages } from '../api/sessions'
 import { COGNITIVE_PARAMS } from '../constants/domain'
@@ -90,20 +90,18 @@ export default function PlayerReportPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [playersRes, historyRes] = await Promise.all([
-          getPlayers(),
+        const [playerRes, historyRes] = await Promise.all([
+          getPlayer(playerId),
           getPlayerHistory(playerId),
         ])
 
         const hist = historyRes.data
         setHistory(hist)
 
-        const found = playersRes.data.find((p) => p.id === playerId)
-        if (found) {
-          setPlayerName(`${found.first_name} ${found.last_name}`)
-          setPlayerFirstName(found.first_name)
-          setPlayerLastName(found.last_name)
-        }
+        const { first_name, last_name } = playerRes.data
+        setPlayerName(`${first_name} ${last_name}`)
+        setPlayerFirstName(first_name)
+        setPlayerLastName(last_name)
 
         if (hist.length > 0) {
           const last = hist[hist.length - 1]
