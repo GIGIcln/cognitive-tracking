@@ -4,7 +4,7 @@ import uuid
 from datetime import date
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.assignment import PlayerGroupAssignment
 from app.models.group import Group
@@ -12,6 +12,8 @@ from app.models.measurement import Measurement
 from app.models.player import Player
 from app.models.training_session import TrainingSession
 from app.schemas.player import PlayerCreate, PlayerUpdate
+
+_PARAM_FIELDS = ('scanning_rate', 'decision_quality', 'anticipation', 'transition_reset', 'verbal_comm')
 
 
 class PlayerService:
@@ -207,6 +209,90 @@ class PlayerService:
             }
             for m, ts, g in rows
         ]
+
+    def get_at_risk_players(
+        self,
+        min_sessions: int = 3,
+        allowed_group_ids: set[uuid.UUID] | None = None,
+    ) -> list[dict]:
+        """
+        Returns players whose last `min_sessions` non-absent measurements
+        all have an average score below the group's avg insufficient_max.
+        Groups without targets are excluded.
+        """
+        group_q = (
+            self.db.query(Group)
+            .options(joinedload(Group.targets))
+            .filter(Group.is_active.is_(True))
+        )
+        if allowed_group_ids is not None:
+            group_q = group_q.filter(Group.id.in_(allowed_group_ids))
+
+        thresholds: dict[uuid.UUID, float] = {}
+        group_names: dict[uuid.UUID, str] = {}
+        for g in group_q.all():
+            group_names[g.id] = g.name
+            if g.targets:
+                thresholds[g.id] = sum(float(t.insufficient_max) for t in g.targets) / len(g.targets)
+
+        if not thresholds:
+            return []
+
+        player_rows = (
+            self.db.query(Player, PlayerGroupAssignment.group_id)
+            .join(
+                PlayerGroupAssignment,
+                (PlayerGroupAssignment.player_id == Player.id)
+                & PlayerGroupAssignment.is_current.is_(True),
+            )
+            .filter(
+                Player.is_active.is_(True),
+                PlayerGroupAssignment.group_id.in_(thresholds.keys()),
+            )
+            .all()
+        )
+
+        result = []
+        for player, group_id in player_rows:
+            threshold = thresholds[group_id]
+
+            measurements = (
+                self.db.query(Measurement)
+                .join(TrainingSession, TrainingSession.id == Measurement.session_id)
+                .filter(
+                    Measurement.player_id == player.id,
+                    Measurement.is_absent.is_(False),
+                    TrainingSession.group_id == group_id,
+                )
+                .order_by(TrainingSession.session_date.desc())
+                .limit(min_sessions)
+                .all()
+            )
+
+            if len(measurements) < min_sessions:
+                continue
+
+            scores = []
+            for m in measurements:
+                vals = [float(getattr(m, f)) for f in _PARAM_FIELDS if getattr(m, f) is not None]
+                if vals:
+                    scores.append(sum(vals) / len(vals))
+
+            if len(scores) < min_sessions or not all(s < threshold for s in scores):
+                continue
+
+            result.append({
+                "player_id": str(player.id),
+                "first_name": player.first_name,
+                "last_name": player.last_name,
+                "group_id": str(group_id),
+                "group_name": group_names[group_id],
+                "consecutive_low_sessions": min_sessions,
+                "avg_score_last_session": round(scores[0], 2),
+                "threshold": round(threshold, 2),
+            })
+
+        return result
 
     def assign_to_group(self, player_id: uuid.UUID, group_id: uuid.UUID) -> bool:
         """Returns False if player not found."""

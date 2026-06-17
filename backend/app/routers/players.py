@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import Any
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -48,6 +49,16 @@ def list_players(
         rows = svc.list(None, skip, limit, allowed_group_ids=scope)
         total = svc.count(allowed_group_ids=scope)
     return Page(items=[_to_response(p, g) for p, g in rows], total=total, limit=limit, skip=skip)
+
+
+@router.get("/at-risk", response_model=list[dict[str, Any]])
+def get_at_risk_players(
+    min_sessions: int = Query(default=3, ge=2, le=10),
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    scope = current_user.read_scope()
+    return PlayerService(db).get_at_risk_players(min_sessions, allowed_group_ids=scope)
 
 
 @router.get("/{player_id}", response_model=PlayerResponse)
