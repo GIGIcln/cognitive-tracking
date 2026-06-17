@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.assignment import PlayerGroupAssignment
@@ -68,6 +69,46 @@ class PlayerService:
                 .order_by(Player.last_name.asc(), Player.first_name.asc())
             )
         return q.offset(skip).limit(limit).all()
+
+    def count(
+        self,
+        group_id: uuid.UUID | None = None,
+        allowed_group_ids: set[uuid.UUID] | None = None,
+    ) -> int:
+        if group_id is not None:
+            return (
+                self.db.query(func.count(Player.id))
+                .join(
+                    PlayerGroupAssignment,
+                    (PlayerGroupAssignment.player_id == Player.id)
+                    & (PlayerGroupAssignment.group_id == group_id)
+                    & PlayerGroupAssignment.is_current.is_(True),
+                )
+                .scalar()
+                or 0
+            )
+        elif allowed_group_ids is not None:
+            return (
+                self.db.query(func.count(Player.id))
+                .join(
+                    PlayerGroupAssignment,
+                    (PlayerGroupAssignment.player_id == Player.id)
+                    & PlayerGroupAssignment.is_current.is_(True),
+                )
+                .filter(
+                    Player.is_active.is_(True),
+                    PlayerGroupAssignment.group_id.in_(allowed_group_ids),
+                )
+                .scalar()
+                or 0
+            )
+        else:
+            return (
+                self.db.query(func.count(Player.id))
+                .filter(Player.is_active.is_(True))
+                .scalar()
+                or 0
+            )
 
     def create(self, body: PlayerCreate) -> Player:
         player = Player(**body.model_dump(exclude={"group_id"}))

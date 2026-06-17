@@ -10,6 +10,7 @@ from app.models.measurement import Measurement
 from app.models.training_session import TrainingSession
 from app.rbac import assert_group_access, assert_write_access, require_admin, require_auth
 from app.schemas.auth import UserContext
+from app.schemas.pagination import Page
 from app.schemas.session import (
     MeasurementResponse,
     MeasurementsBatchInput,
@@ -46,21 +47,24 @@ def _get_session_or_404(db: Session, session_id: uuid.UUID) -> TrainingSession:
 
 # ── READ: admin + responsabile (tutto) + allenatore (scoped) ──────────────────
 
-@router.get("", response_model=list[SessionResponse])
+@router.get("", response_model=Page[SessionResponse])
 def list_sessions(
     group_id: uuid.UUID | None = None,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
     scope = current_user.read_scope()
+    svc = SessionService(db)
     if group_id is not None:
         assert_group_access(current_user, group_id)
-        sessions = SessionService(db).list(group_id, skip, limit)
+        sessions = svc.list(group_id, skip, limit)
+        total = svc.count(group_id=group_id)
     else:
-        sessions = SessionService(db).list(None, skip, limit, allowed_group_ids=scope)
-    return [SessionResponse.model_validate(s) for s in sessions]
+        sessions = svc.list(None, skip, limit, allowed_group_ids=scope)
+        total = svc.count(allowed_group_ids=scope)
+    return Page(items=[SessionResponse.model_validate(s) for s in sessions], total=total, limit=limit, skip=skip)
 
 
 @router.get("/{session_id}")

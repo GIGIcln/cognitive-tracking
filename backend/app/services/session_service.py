@@ -37,6 +37,18 @@ class SessionService:
             q = q.filter(TrainingSession.group_id.in_(allowed_group_ids))
         return q.order_by(TrainingSession.session_date.desc()).offset(skip).limit(limit).all()
 
+    def count(
+        self,
+        group_id: uuid.UUID | None = None,
+        allowed_group_ids: set[uuid.UUID] | None = None,
+    ) -> int:
+        q = self.db.query(func.count(TrainingSession.id)).filter(TrainingSession.is_active.is_(True))
+        if group_id:
+            q = q.filter(TrainingSession.group_id == group_id)
+        elif allowed_group_ids is not None:
+            q = q.filter(TrainingSession.group_id.in_(allowed_group_ids))
+        return q.scalar() or 0
+
     def deactivate(self, session_id: uuid.UUID) -> bool:
         session = self.db.get(TrainingSession, session_id)
         if session is None or not session.is_active:

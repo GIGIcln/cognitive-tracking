@@ -5,8 +5,9 @@ def test_list_players_empty(seeded):
     c, h = seeded["client"], seeded["headers"]
     res = c.get("/api/players", headers=h)
     assert res.status_code == 200
-    # Seeded player exists
-    assert any(p["last_name"] == "Rossi" for p in res.json())
+    data = res.json()
+    assert "items" in data and "total" in data
+    assert any(p["last_name"] == "Rossi" for p in data["items"])
 
 
 def test_list_players_requires_auth(seeded):
@@ -38,7 +39,7 @@ def test_create_player_with_group_assigns_group(seeded):
     })
     assert res.status_code == 201
     # Should appear in group player list
-    players = c.get("/api/players", headers=h, params={"group_id": gid}).json()
+    players = c.get("/api/players", headers=h, params={"group_id": gid}).json()["items"]
     assert any(p["last_name"] == "Verdi" for p in players)
 
 
@@ -65,7 +66,7 @@ def test_delete_player_soft_deletes(seeded):
     res = c.delete(f"/api/players/{pid}", headers=h)
     assert res.status_code == 200
     # Player no longer appears in active list
-    active = c.get("/api/players", headers=h).json()
+    active = c.get("/api/players", headers=h).json()["items"]
     assert not any(p["id"] == pid for p in active)
 
 
@@ -103,11 +104,14 @@ def test_list_players_filter_by_group(seeded):
     c.post(f"/api/players/{seeded['player_id']}/assign", headers=h, json={"group_id": gid})
     res = c.get("/api/players", headers=h, params={"group_id": gid})
     assert res.status_code == 200
-    assert all(p["current_group_name"] is not None for p in res.json())
+    assert all(p["current_group_name"] is not None for p in res.json()["items"])
 
 
 def test_list_players_pagination(seeded):
     c, h = seeded["client"], seeded["headers"]
     res = c.get("/api/players", headers=h, params={"skip": 0, "limit": 1})
     assert res.status_code == 200
-    assert len(res.json()) <= 1
+    data = res.json()
+    assert len(data["items"]) <= 1
+    assert data["total"] >= 0
+    assert data["limit"] == 1

@@ -49,7 +49,7 @@ def test_list_sessions_returns_all(seeded):
     _create_session(c, h, gid)
     res = c.get("/api/sessions", headers=h)
     assert res.status_code == 200
-    assert len(res.json()) >= 2
+    assert len(res.json()["items"]) >= 2
 
 
 def test_list_sessions_filter_by_group(seeded):
@@ -57,7 +57,7 @@ def test_list_sessions_filter_by_group(seeded):
     _create_session(c, h, gid)
     res = c.get("/api/sessions", headers=h, params={"group_id": gid})
     assert res.status_code == 200
-    assert all(s["group_id"] == gid for s in res.json())
+    assert all(s["group_id"] == gid for s in res.json()["items"])
 
 
 def test_list_sessions_pagination(seeded):
@@ -66,7 +66,10 @@ def test_list_sessions_pagination(seeded):
     _create_session(c, h, gid)
     res = c.get("/api/sessions", headers=h, params={"limit": 1})
     assert res.status_code == 200
-    assert len(res.json()) == 1
+    data = res.json()
+    assert len(data["items"]) == 1
+    assert data["total"] >= 2
+    assert data["limit"] == 1
 
 
 def test_get_session_returns_detail(seeded):

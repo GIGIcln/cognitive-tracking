@@ -14,7 +14,7 @@ export default function ReportsPage() {
   useEffect(() => {
     Promise.all([getPlayers(), getGroups()])
       .then(([pr, gr]) => {
-        const sorted = [...pr.data].sort(
+        const sorted = [...pr.data.items].sort(
           (a, b) =>
             a.last_name.localeCompare(b.last_name, 'it') ||
             a.first_name.localeCompare(b.first_name, 'it')

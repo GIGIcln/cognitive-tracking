@@ -66,7 +66,7 @@ export default function SessionDetailPage() {
           getGroupTargets(s.group_id),
         ])
 
-        const sorted = pRes.data.sort((a, b) =>
+        const sorted = pRes.data.items.sort((a, b) =>
           a.last_name.localeCompare(b.last_name, 'it') ||
           a.first_name.localeCompare(b.first_name, 'it')
         )
@@ -77,7 +77,7 @@ export default function SessionDetailPage() {
         setTargetsMap(tMap)
 
         const init = {}
-        pRes.data.forEach((p) => { init[p.id] = emptyMeasurement() })
+        pRes.data.items.forEach((p) => { init[p.id] = emptyMeasurement() })
 
         const existing = s.measurements ?? []
         existing.forEach((m) => {

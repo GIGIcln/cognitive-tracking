@@ -20,7 +20,7 @@ export default function PlayersPage() {
     setLoading(true)
     getPlayers(groupId || undefined)
       .then((res) => {
-        const sorted = res.data.sort((a, b) =>
+        const sorted = res.data.items.sort((a, b) =>
           a.last_name.localeCompare(b.last_name, 'it') ||
           a.first_name.localeCompare(b.first_name, 'it')
         )

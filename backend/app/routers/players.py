@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.player import Player
 from app.rbac import assert_group_access, require_admin, require_auth
 from app.schemas.auth import UserContext
+from app.schemas.pagination import Page
 from app.schemas.player import AssignRequest, PlayerCreate, PlayerResponse, PlayerUpdate
 from app.services.player_service import PlayerService
 
@@ -29,21 +30,24 @@ def _to_response(player: Player, group_name: str | None) -> PlayerResponse:
 
 # ── READ: admin + responsabile (tutto) + allenatore (scoped) ──────────────────
 
-@router.get("", response_model=list[PlayerResponse])
+@router.get("", response_model=Page[PlayerResponse])
 def list_players(
     group_id: uuid.UUID | None = None,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=200, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
     scope = current_user.read_scope()
+    svc = PlayerService(db)
     if group_id is not None:
         assert_group_access(current_user, group_id)
-        rows = PlayerService(db).list(group_id, skip, limit)
+        rows = svc.list(group_id, skip, limit)
+        total = svc.count(group_id=group_id)
     else:
-        rows = PlayerService(db).list(None, skip, limit, allowed_group_ids=scope)
-    return [_to_response(player, group_name) for player, group_name in rows]
+        rows = svc.list(None, skip, limit, allowed_group_ids=scope)
+        total = svc.count(allowed_group_ids=scope)
+    return Page(items=[_to_response(p, g) for p, g in rows], total=total, limit=limit, skip=skip)
 
 
 @router.get("/{player_id}", response_model=PlayerResponse)
