@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
+_docs_enabled = settings.app_env == "development"
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -31,9 +33,9 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="Cognitive Tracking API",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
     lifespan=lifespan,
 )
 
