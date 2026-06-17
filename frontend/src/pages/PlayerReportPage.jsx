@@ -19,6 +19,7 @@ import {
   BarChart,
   Bar,
 } from 'recharts'
+import { ChartErrorBoundary } from '../components/ErrorBoundary'
 import { getPlayer, getPlayerHistory } from '../api/players'
 import { getGroupTargets } from '../api/groups'
 import { getSessionAverages } from '../api/sessions'
@@ -205,6 +206,7 @@ export default function PlayerReportPage() {
               {formatDateShort(lastSession.session_date)} · {lastSession.session_type}
             </div>
 
+            <ChartErrorBoundary height={300}>
             <ResponsiveContainer width="100%" height={300}>
               <RadarChart data={radarData}>
                 <PolarGrid />
@@ -230,6 +232,7 @@ export default function PlayerReportPage() {
                 <Legend />
               </RadarChart>
             </ResponsiveContainer>
+            </ChartErrorBoundary>
 
             <table className="w-full mt-4 text-sm">
               <thead>
@@ -271,6 +274,7 @@ export default function PlayerReportPage() {
                 Servono almeno 2 sessioni per visualizzare il trend.
               </p>
             ) : (
+              <ChartErrorBoundary height={280}>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={lineData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -308,6 +312,7 @@ export default function PlayerReportPage() {
                   ))}
                 </LineChart>
               </ResponsiveContainer>
+              </ChartErrorBoundary>
             )}
           </div>
 
@@ -317,6 +322,7 @@ export default function PlayerReportPage() {
               <h2 className="text-base font-semibold text-gray-800 mb-4">
                 vs Media squadra (ultima sessione)
               </h2>
+              <ChartErrorBoundary height={220}>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={compData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -328,6 +334,7 @@ export default function PlayerReportPage() {
                   <Bar dataKey="Media squadra" fill="#8B1A2E" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
+              </ChartErrorBoundary>
             </div>
           )}
 

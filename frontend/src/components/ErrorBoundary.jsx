@@ -1,5 +1,29 @@
 import { Component } from 'react'
 
+export class ChartErrorBoundary extends Component {
+  state = { hasError: false }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[ChartErrorBoundary]', error, info.componentStack)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-400"
+          style={{ height: this.props.height ?? 200 }}>
+          Grafico non disponibile
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 export default class ErrorBoundary extends Component {
   state = { hasError: false, message: '' }
 

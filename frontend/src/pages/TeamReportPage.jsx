@@ -16,6 +16,7 @@ import {
 } from 'recharts'
 import { getGroup, getGroupHistory, getGroupTargets } from '../api/groups'
 import ParamCard from '../components/ParamCard'
+import { ChartErrorBoundary } from '../components/ErrorBoundary'
 import { getMeasurements } from '../api/sessions'
 import { COGNITIVE_PARAMS } from '../constants/domain'
 import { formatDateShort } from '../utils/dateUtils'
@@ -213,6 +214,7 @@ export default function TeamReportPage() {
               {lastEntry.player_count} giocatori
             </div>
 
+            <ChartErrorBoundary height={220}>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={barData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -224,6 +226,7 @@ export default function TeamReportPage() {
                 <Bar dataKey="Target ottimo" fill="#10B981" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+            </ChartErrorBoundary>
 
             <table className="w-full mt-4 text-sm">
               <thead>
@@ -366,6 +369,7 @@ export default function TeamReportPage() {
                 Servono almeno 2 sessioni per visualizzare il trend.
               </p>
             ) : (
+              <ChartErrorBoundary height={280}>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart
                   data={lineData}
@@ -406,6 +410,7 @@ export default function TeamReportPage() {
                   ))}
                 </LineChart>
               </ResponsiveContainer>
+              </ChartErrorBoundary>
             )}
           </div>
 
