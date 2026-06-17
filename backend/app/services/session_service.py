@@ -24,10 +24,18 @@ class SessionService:
         skip: int,
         limit: int,
     ) -> list[TrainingSession]:
-        q = self.db.query(TrainingSession)
+        q = self.db.query(TrainingSession).filter(TrainingSession.is_active.is_(True))
         if group_id:
             q = q.filter(TrainingSession.group_id == group_id)
         return q.order_by(TrainingSession.session_date.desc()).offset(skip).limit(limit).all()
+
+    def deactivate(self, session_id: uuid.UUID) -> bool:
+        session = self.db.get(TrainingSession, session_id)
+        if session is None or not session.is_active:
+            return False
+        session.is_active = False
+        self.db.commit()
+        return True
 
     def create(self, body: SessionCreate) -> TrainingSession | None:
         """Returns None if no current season or group is found."""

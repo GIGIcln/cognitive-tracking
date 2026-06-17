@@ -103,6 +103,17 @@ def upsert_measurements(
     return [_measurement_to_response(m) for m in measurements]
 
 
+@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_session(
+    session_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    ok = SessionService(db).deactivate(session_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Sessione non trovata")
+
+
 @router.get("/{session_id}/measurements", response_model=list[MeasurementResponse])
 def get_measurements(
     session_id: uuid.UUID,

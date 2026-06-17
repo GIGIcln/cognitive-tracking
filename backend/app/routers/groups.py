@@ -16,6 +16,7 @@ from app.models.season import Season
 from app.models.training_session import TrainingSession
 from app.models.user import User
 from app.schemas.group import (
+    GroupCreate,
     GroupDetailResponse,
     GroupResponse,
     PlayerInGroupResponse,
@@ -42,11 +43,46 @@ def list_groups(
     season = _current_season(db)
     groups = (
         db.query(Group)
-        .filter(Group.season_id == season.id)
+        .filter(Group.season_id == season.id, Group.is_active.is_(True))
         .order_by(Group.birth_year.desc(), Group.sub_group.asc())
         .all()
     )
     return [GroupResponse.model_validate(g) for g in groups]
+
+
+@router.post("", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
+def create_group(
+    body: GroupCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    season = _current_season(db)
+    group = Group(
+        season_id=season.id,
+        name=body.name,
+        category=body.category,
+        birth_year=body.birth_year,
+        level=body.level,
+        sub_group=body.sub_group,
+        max_players=body.max_players,
+    )
+    db.add(group)
+    db.commit()
+    db.refresh(group)
+    return GroupResponse.model_validate(group)
+
+
+@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_group(
+    group_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    group = db.get(Group, group_id)
+    if not group or not group.is_active:
+        raise HTTPException(status_code=404, detail="Gruppo non trovato")
+    group.is_active = False
+    db.commit()
 
 
 @router.get("/{group_id}", response_model=GroupDetailResponse)

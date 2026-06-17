@@ -5,6 +5,15 @@ import uuid
 from pydantic import BaseModel
 
 
+class GroupCreate(BaseModel):
+    name: str
+    category: str
+    birth_year: int | None = None
+    level: str
+    sub_group: str | None = None
+    max_players: int = 18
+
+
 class TargetResponse(BaseModel):
     parameter: str
     insufficient_max: float

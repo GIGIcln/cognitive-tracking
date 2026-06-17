@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getSessions, createSession } from '../api/sessions'
+import { getSessions, createSession, deleteSession } from '../api/sessions'
 import { getGroups } from '../api/groups'
 import { SESSION_TYPES } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
@@ -13,6 +13,7 @@ export default function SessionsPage() {
   const [error, setError] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
   const [form, setForm] = useState({
     group_id: '',
     session_date: new Date().toISOString().split('T')[0],
@@ -63,6 +64,20 @@ export default function SessionsPage() {
     }
   }
 
+  const handleDelete = async (e, sessionId, sessionLabel) => {
+    e.stopPropagation()
+    if (!window.confirm(`Eliminare la sessione "${sessionLabel}"?`)) return
+    setDeletingId(sessionId)
+    try {
+      await deleteSession(sessionId)
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+    } catch {
+      setError('Errore nell\'eliminazione della sessione')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const groupName = (gId) => groups.find((g) => g.id === gId)?.name ?? '–'
 
   return (
@@ -98,24 +113,43 @@ export default function SessionsPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {sessions.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => navigate(`/sessions/${s.id}`)}
-              className="w-full bg-white rounded-xl border border-gray-200 px-4 py-3 text-left hover:border-granata hover:shadow-md transition-all"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-gray-900">{formatDateLong(s.session_date)}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {s.session_type} · {groupName(s.group_id)}
-                    {s.duration_min && ` · ${s.duration_min} min`}
+          {sessions.map((s) => {
+            const label = `${formatDateLong(s.session_date)} · ${s.session_type}`
+            return (
+              <div key={s.id} className="relative">
+                <button
+                  onClick={() => navigate(`/sessions/${s.id}`)}
+                  className="w-full bg-white rounded-xl border border-gray-200 px-4 py-3 text-left hover:border-granata hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center justify-between pr-8">
+                    <div>
+                      <div className="font-medium text-gray-900">{formatDateLong(s.session_date)}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {s.session_type} · {groupName(s.group_id)}
+                        {s.duration_min && ` · ${s.duration_min} min`}
+                      </div>
+                    </div>
+                    <span className="text-gray-400">›</span>
                   </div>
-                </div>
-                <span className="text-gray-400">›</span>
+                </button>
+                <button
+                  onClick={(e) => handleDelete(e, s.id, label)}
+                  disabled={deletingId === s.id}
+                  className="absolute top-1/2 -translate-y-1/2 right-3 p-1.5 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-40"
+                  title="Elimina sessione"
+                >
+                  {deletingId === s.id ? (
+                    <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  )}
+                </button>
               </div>
-            </button>
-          ))}
+            )
+          })}
           {!sessions.length && (
             <div className="text-center text-gray-400 py-8 text-sm">
               Nessuna sessione trovata
