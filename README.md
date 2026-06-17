@@ -454,6 +454,30 @@ L'URL del database viene letto da `os.environ["DATABASE_URL"]` in `alembic/env.p
 
 Impostazione predefinita: backend su `0.0.0.0:8000`, frontend su `:5173`. Accessibile da qualsiasi device sulla stessa rete WiFi.
 
+### Accesso remoto da smartphone (Cloudflare Tunnel)
+
+Prerequisito: `brew install cloudflared`
+
+Servono due tunnel in parallelo, ognuno in un terminale separato:
+
+```bash
+# Terminale 1 — backend
+cloudflared tunnel --url http://localhost:8000 2>&1 | grep trycloudflare
+
+# Terminale 2 — frontend
+cloudflared tunnel --url http://localhost:5173 2>&1 | grep trycloudflare
+```
+
+Dopo aver avviato il Terminale 1, copiare l'URL ottenuto in `frontend/.env.local`:
+
+```
+VITE_API_URL=https://xxxx.trycloudflare.com
+```
+
+Poi riavviare `make dev`. L'URL del Terminale 2 è quello da aprire sullo smartphone.
+
+> **Nota:** gli URL cambiano a ogni riavvio dei tunnel. Per ottenere un URL nuovo (o se un tunnel è crashato): `pkill -f cloudflared`, poi riavviare entrambi i terminali e aggiornare `.env.local`. Tenere entrambi i terminali aperti finché si usa l'app da remoto.
+
 ### Cloud (Render + Vercel + Neon)
 
 | Servizio | Componente |
