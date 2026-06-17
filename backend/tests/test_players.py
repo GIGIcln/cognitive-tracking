@@ -11,7 +11,7 @@ def test_list_players_empty(seeded):
 
 
 def test_list_players_requires_auth(seeded):
-    res = seeded["client"].get("/api/players")
+    res = seeded["anon_client"].get("/api/players")
     assert res.status_code == 401
 
 

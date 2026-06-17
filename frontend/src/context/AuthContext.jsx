@@ -12,26 +12,19 @@ export function AuthProvider({ children }) {
   navigateRef.current = navigate
 
   useEffect(() => {
-    const token = localStorage.getItem('ct_token')
-    if (token) {
-      getMe()
-        .then((res) => setUser(res.data))
-        .catch(() => localStorage.removeItem('ct_token'))
-        .finally(() => setIsLoading(false))
-    } else {
-      setIsLoading(false)
-    }
+    getMe()
+      .then((res) => setUser(res.data))
+      .catch(() => {})
+      .finally(() => setIsLoading(false))
   }, [])
 
   const login = async (email, password) => {
     const res = await apiLogin(email, password)
-    localStorage.setItem('ct_token', res.data.access_token)
-    const meRes = await getMe()
-    setUser(meRes.data)
+    setUser(res.data.user)
   }
 
-  const logout = () => {
-    apiLogout()
+  const logout = async () => {
+    try { await apiLogout() } catch {}
     setUser(null)
     navigateRef.current('/login', { replace: true })
   }

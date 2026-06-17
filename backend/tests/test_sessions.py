@@ -28,7 +28,7 @@ def test_create_session_returns_201(seeded):
 
 def test_create_session_requires_auth(seeded):
     gid = seeded["group_id"]
-    res = seeded["client"].post("/api/sessions", json={**SESSION_BODY, "group_id": gid})
+    res = seeded["anon_client"].post("/api/sessions", json={**SESSION_BODY, "group_id": gid})
     assert res.status_code == 401
 
 

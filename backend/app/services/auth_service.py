@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import bcrypt as _bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
@@ -35,10 +35,12 @@ def create_access_token(record: dict) -> str:
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ) -> UserContext:
     """
     Verifica il JWT e restituisce lo UserContext.
+    Legge prima dal cookie HttpOnly, poi dall'header Authorization come fallback.
     Unico I/O: dict lookup in-memory su user_store (O(1), nessuna query DB).
     """
     settings = get_settings()
@@ -47,11 +49,14 @@ def get_current_user(
         detail="Token non valido o scaduto",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    if credentials is None:
-        raise exc
+    token = request.cookies.get("ct_token")
+    if token is None:
+        if credentials is None:
+            raise exc
+        token = credentials.credentials
     try:
         payload = jwt.decode(
-            credentials.credentials,
+            token,
             settings.secret_key,
             algorithms=[settings.algorithm],
         )

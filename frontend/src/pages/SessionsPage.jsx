@@ -28,7 +28,7 @@ export default function SessionsPage() {
   const loadSessions = (groupId) => {
     setLoading(true)
     getSessions(groupId || undefined)
-      .then((res) => setSessions(res.data.items))
+      .then((res) => setSessions(res.data.items ?? []))
       .catch(() => setError('Errore nel caricamento'))
       .finally(() => setLoading(false))
   }

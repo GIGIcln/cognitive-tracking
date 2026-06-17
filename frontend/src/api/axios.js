@@ -2,32 +2,23 @@ import axios from 'axios'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api',
+  withCredentials: true,
 })
 
 let isRedirecting = false
 
-// ── Interceptor 1: inietta JWT ────────────────────────────────────────────────
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('ct_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
-
-// ── Interceptor 2: gestione 401 (sessione scaduta) ───────────────────────────
-// NON interviene sull'endpoint di login stesso: lì un 401 significa
-// "credenziali errate" e va gestito dal componente LoginPage.
+// ── Interceptor: gestione 401 (sessione scaduta / cookie non valido) ──────────
+// NON interviene su /auth/login (credenziali errate → gestito dal componente)
+// né su /auth/me (401 = non loggato → normale al caricamento iniziale).
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     const url = error.config?.url || ''
-    const isLoginEndpoint = url.includes('/auth/login')
+    const isAuthInitEndpoint = url.includes('/auth/login') || url.includes('/auth/me')
 
-    if (error.response?.status === 401 && !isLoginEndpoint) {
+    if (error.response?.status === 401 && !isAuthInitEndpoint) {
       if (isRedirecting) return Promise.reject(error)
       isRedirecting = true
-      localStorage.removeItem('ct_token')
       window.location.replace('/login')
       setTimeout(() => { isRedirecting = false }, 1000)
     }

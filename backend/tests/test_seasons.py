@@ -16,7 +16,7 @@ def test_get_current_season_returns_200(seeded):
 
 
 def test_get_current_season_requires_auth(seeded):
-    res = seeded["client"].get("/api/seasons/current")
+    res = seeded["anon_client"].get("/api/seasons/current")
     assert res.status_code == 401
 
 

@@ -154,9 +154,12 @@ def seeded():
     http = TestClient(fastapi_app)
     token = http.post("/api/auth/login", json=_LOGIN).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
+    # Client fresco senza cookie — usato dai test "requires_auth"
+    anon = TestClient(fastapi_app)
 
     yield {
         "client": http,
+        "anon_client": anon,
         "headers": headers,
         "season_id": str(season.id),
         "group_id": str(grp.id),

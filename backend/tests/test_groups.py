@@ -11,7 +11,7 @@ def test_list_groups_returns_current_season_groups(seeded):
 
 
 def test_list_groups_requires_auth(seeded):
-    res = seeded["client"].get("/api/groups")
+    res = seeded["anon_client"].get("/api/groups")
     assert res.status_code == 401
 
 

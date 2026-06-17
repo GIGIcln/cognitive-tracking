@@ -5,6 +5,4 @@ export const login = (email, password) =>
 
 export const getMe = () => api.get('/auth/me')
 
-export const logout = () => {
-  localStorage.removeItem('ct_token')
-}
+export const logout = () => api.post('/auth/logout')
