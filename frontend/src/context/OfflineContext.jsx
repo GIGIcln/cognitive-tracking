@@ -35,12 +35,12 @@ export function OfflineContextProvider({ children }) {
     }
   }, []);
 
-  // Polling ogni 5s per aggiornare il badge
+  // Polling adattivo: 5s se ci sono item in coda, 30s altrimenti
   useEffect(() => {
     refreshCount();
-    const interval = setInterval(refreshCount, 5000);
+    const interval = setInterval(refreshCount, pendingCount > 0 ? 5000 : 30000);
     return () => clearInterval(interval);
-  }, [refreshCount]);
+  }, [refreshCount, pendingCount]);
 
   const addItem = useCallback(
     async (item) => {

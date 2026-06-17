@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -88,6 +88,7 @@ def get_group_history(
     group_id: uuid.UUID,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
+    limit: int = Query(default=60, ge=1, le=200),
 ):
     rows = (
         db.query(
@@ -112,9 +113,11 @@ def get_group_history(
             TrainingSession.session_date,
             TrainingSession.session_type,
         )
-        .order_by(TrainingSession.session_date.asc())
+        .order_by(TrainingSession.session_date.desc())
+        .limit(limit)
         .all()
     )
+    # reversed() riporta in ordine ascendente per i grafici senza subquery
     return [
         {
             "session_id": str(r.session_id),
@@ -127,7 +130,7 @@ def get_group_history(
             "avg_vci": float(r.avg_vci) if r.avg_vci is not None else None,
             "player_count": r.player_count or 0,
         }
-        for r in rows
+        for r in reversed(rows)
     ]
 
 

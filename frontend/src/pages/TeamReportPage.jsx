@@ -490,7 +490,7 @@ export default function TeamReportPage() {
                       dataKey={label}
                       stroke={LINE_COLORS[i]}
                       strokeWidth={2}
-                      dot={{ r: 3 }}
+                      dot={lineData.length > 20 ? false : { r: 3 }}
                       activeDot={{ r: 5 }}
                       hide={!!hiddenLines[label]}
                     />
