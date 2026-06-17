@@ -5,6 +5,7 @@ import { getPlayers } from '../api/players'
 import { getGroupTargets } from '../api/groups'
 import { COGNITIVE_PARAMS } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
+import ToggleSwitch from '../components/ToggleSwitch'
 
 const PARAMS = COGNITIVE_PARAMS
 
@@ -223,20 +224,11 @@ export default function SessionDetailPage() {
               </span>
               <div className="flex items-center gap-2 select-none shrink-0 ml-3">
                 <span className="text-sm text-gray-500">Assente</span>
-                <button
-                  type="button"
-                  onClick={() => toggleAbsent(currentPlayer.id)}
-                  className={`relative inline-flex items-center flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    currentM.is_absent ? 'bg-red-500' : 'bg-gray-200'
-                  }`}
-                  style={{ width: '52px', height: '28px' }}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
-                      currentM.is_absent ? 'translate-x-6' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
+                <ToggleSwitch
+                  checked={currentM.is_absent}
+                  onChange={() => toggleAbsent(currentPlayer.id)}
+                  size="md"
+                />
               </div>
             </div>
 
@@ -381,19 +373,11 @@ export default function SessionDetailPage() {
                   </span>
                   <div className="flex items-center gap-2 select-none">
                     <span className="text-sm text-gray-500">Assente</span>
-                    <button
-                      type="button"
-                      onClick={() => toggleAbsent(p.id)}
-                      className={`relative inline-flex items-center h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                        m.is_absent ? 'bg-red-500' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
-                          m.is_absent ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
+                    <ToggleSwitch
+                      checked={m.is_absent}
+                      onChange={() => toggleAbsent(p.id)}
+                      size="sm"
+                    />
                   </div>
                 </div>
 

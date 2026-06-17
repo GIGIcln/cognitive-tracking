@@ -15,6 +15,7 @@ import {
   ReferenceLine,
 } from 'recharts'
 import { getGroup, getGroupHistory, getGroupTargets } from '../api/groups'
+import ParamCard from '../components/ParamCard'
 import { getMeasurements } from '../api/sessions'
 import { COGNITIVE_PARAMS } from '../constants/domain'
 import { formatDateShort } from '../utils/dateUtils'
@@ -294,92 +295,28 @@ export default function TeamReportPage() {
               <div className="space-y-3">
                 {/* Riga 1: SR, DQI, AI */}
                 <div className="grid grid-cols-3 gap-3">
-                  {PARAMS.slice(0, 3).map(({ field, label, italianLabel }) => {
-                    const t = targetsMap[label]
-                    const withValue = [...presentMeasurements]
-                      .filter((m) => m[field] != null)
-                      .sort((a, b) => b[field] - a[field])
-                    const withoutValue = presentMeasurements.filter((m) => m[field] == null)
-                    const allSorted = [...withValue, ...withoutValue]
-                    return (
-                      <div key={field} className="border border-gray-100 rounded-lg p-3">
-                        <div className="text-xs font-semibold text-gray-600 text-center border-b border-gray-100 pb-2 mb-2">
-                          {italianLabel}
-                        </div>
-                        <div className="max-h-[220px] overflow-y-auto space-y-1">
-                          {allSorted.map((m, i) => {
-                            const val = m[field]
-                            const hasValue = val != null
-                            return (
-                              <div
-                                key={m.player_id}
-                                className="flex items-center justify-between gap-2 py-0.5"
-                              >
-                                <div className="flex items-center gap-1">
-                                  <span className="text-gray-400 text-xs w-4 text-right shrink-0">
-                                    {hasValue ? i + 1 : ''}
-                                  </span>
-                                  <span className="text-xs text-gray-700">{m.last_name}</span>
-                                </div>
-                                <span
-                                  className={`text-xs font-semibold shrink-0 ${
-                                    hasValue ? cellClass(val, t) : 'text-gray-300'
-                                  }`}
-                                >
-                                  {hasValue ? val.toFixed(1) : '—'}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {PARAMS.slice(0, 3).map(({ field, label, italianLabel }) => (
+                    <ParamCard
+                      key={field}
+                      field={field}
+                      italianLabel={italianLabel}
+                      target={targetsMap[label]}
+                      measurements={presentMeasurements}
+                    />
+                  ))}
                 </div>
 
                 {/* Riga 2: TRS, VCI — centrate */}
                 <div className="grid grid-cols-2 gap-3 max-w-[66%] mx-auto">
-                  {PARAMS.slice(3).map(({ field, label, italianLabel }) => {
-                    const t = targetsMap[label]
-                    const withValue = [...presentMeasurements]
-                      .filter((m) => m[field] != null)
-                      .sort((a, b) => b[field] - a[field])
-                    const withoutValue = presentMeasurements.filter((m) => m[field] == null)
-                    const allSorted = [...withValue, ...withoutValue]
-                    return (
-                      <div key={field} className="border border-gray-100 rounded-lg p-3">
-                        <div className="text-xs font-semibold text-gray-600 text-center border-b border-gray-100 pb-2 mb-2">
-                          {italianLabel}
-                        </div>
-                        <div className="max-h-[220px] overflow-y-auto space-y-1">
-                          {allSorted.map((m, i) => {
-                            const val = m[field]
-                            const hasValue = val != null
-                            return (
-                              <div
-                                key={m.player_id}
-                                className="flex items-center justify-between gap-2 py-0.5"
-                              >
-                                <div className="flex items-center gap-1">
-                                  <span className="text-gray-400 text-xs w-4 text-right shrink-0">
-                                    {hasValue ? i + 1 : ''}
-                                  </span>
-                                  <span className="text-xs text-gray-700">{m.last_name}</span>
-                                </div>
-                                <span
-                                  className={`text-xs font-semibold shrink-0 ${
-                                    hasValue ? cellClass(val, t) : 'text-gray-300'
-                                  }`}
-                                >
-                                  {hasValue ? val.toFixed(1) : '—'}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {PARAMS.slice(3).map(({ field, label, italianLabel }) => (
+                    <ParamCard
+                      key={field}
+                      field={field}
+                      italianLabel={italianLabel}
+                      target={targetsMap[label]}
+                      measurements={presentMeasurements}
+                    />
+                  ))}
                 </div>
               </div>
             </div>
