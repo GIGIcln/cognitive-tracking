@@ -115,3 +115,62 @@ def test_list_players_pagination(seeded):
     assert len(data["items"]) <= 1
     assert data["total"] >= 0
     assert data["limit"] == 1
+
+
+# ── At-risk ───────────────────────────────────────────────────────────────────
+
+def test_get_at_risk_requires_auth(seeded):
+    res = seeded["anon_client"].get("/api/players/at-risk")
+    assert res.status_code == 401
+
+
+def test_get_at_risk_returns_empty_without_targets(seeded):
+    """Gruppi senza target configurati non producono allerte."""
+    c, h = seeded["client"], seeded["headers"]
+    res = c.get("/api/players/at-risk", headers=h)
+    assert res.status_code == 200
+    assert res.json() == []
+
+
+def test_get_at_risk_detects_player_below_threshold(pg_seeded):
+    """Giocatore con 3 sessioni consecutive sotto soglia appare nella lista."""
+    c, h = pg_seeded["client"], pg_seeded["headers"]
+    pid = pg_seeded["player_ids"][0]
+    gid = pg_seeded["group_id"]
+
+    # 1. Imposta soglia insufficiente = 6.0 su tutti i parametri
+    c.put(f"/api/groups/{gid}/targets", headers=h, json=[
+        {"parameter": p, "insufficient_max": 6.0, "ottimo_min": 8.0}
+        for p in ("scanning_rate", "decision_quality", "anticipation",
+                  "transition_reset", "verbal_comm")
+    ])
+
+    # 2. Assegna il giocatore al gruppo
+    c.post(f"/api/players/{pid}/assign", headers=h, json={"group_id": gid})
+
+    # 3. Crea 3 sessioni con punteggio 4.0 (sotto soglia)
+    for day in ("2025-10-01", "2025-10-08", "2025-10-15"):
+        sid = c.post("/api/sessions", headers=h, json={
+            "group_id": gid,
+            "session_date": day,
+            "session_type": "Allenamento",
+            "duration_min": 90,
+        }).json()["id"]
+        c.post(f"/api/sessions/{sid}/measurements", headers=h, json={
+            "measurements": [{
+                "player_id": pid,
+                "scanning_rate": 4.0,
+                "decision_quality": 4.0,
+                "anticipation": 4.0,
+                "transition_reset": 4.0,
+                "verbal_comm": 4.0,
+            }]
+        })
+
+    res = c.get("/api/players/at-risk", headers=h)
+    assert res.status_code == 200
+    at_risk = res.json()
+    match = next((p for p in at_risk if p["player_id"] == pid), None)
+    assert match is not None, "Il giocatore sotto soglia non appare nella lista at-risk"
+    assert match["avg_score_last_session"] < match["threshold"]
+    assert match["consecutive_low_sessions"] == 3

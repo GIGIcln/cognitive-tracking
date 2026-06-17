@@ -225,3 +225,56 @@ def test_upsert_measurements_unknown_player_returns_404(pg_seeded):
     })
     assert res.status_code == 404
     assert "non trovati" in res.json()["detail"].lower()
+
+
+# ── Rankings ──────────────────────────────────────────────────────────────────
+
+def test_get_session_rankings_empty_when_no_measurements(seeded):
+    c, h, gid = seeded["client"], seeded["headers"], seeded["group_id"]
+    sid = _create_session(c, h, gid)
+    res = c.get(f"/api/sessions/{sid}/rankings", headers=h)
+    assert res.status_code == 200
+    assert res.json() == []
+
+
+def test_get_session_rankings_ordered_and_includes_percentile(pg_seeded):
+    """I giocatori sono ordinati per avg_score decrescente; il primo ha rank 1 e percentile 100."""
+    c, h = pg_seeded["client"], pg_seeded["headers"]
+    pid1, pid2 = pg_seeded["player_ids"]
+    gid = pg_seeded["group_id"]
+
+    sid = _create_session(c, h, gid)
+    c.post(f"/api/sessions/{sid}/measurements", headers=h,
+           json=_measurement_payload([pid1, pid2], [9.0, 5.0]))
+
+    res = c.get(f"/api/sessions/{sid}/rankings", headers=h)
+    assert res.status_code == 200
+    ranked = res.json()
+    assert len(ranked) == 2
+
+    # Ordine decrescente: il primo ha il punteggio più alto
+    assert ranked[0]["avg_score"] > ranked[1]["avg_score"]
+    assert ranked[0]["rank"] == 1
+    assert ranked[1]["rank"] == 2
+
+    # Con 2 giocatori: primo = 50° percentile, secondo = 0°
+    # formula: round((total - i - 1) / total * 100)
+    assert ranked[0]["percentile"] == 50
+    assert ranked[1]["percentile"] == 0
+    assert ranked[0]["total"] == 2
+
+    # Tutti i campi attesi sono presenti e il percentile è nel range valido
+    for r in ranked:
+        assert "player_id" in r
+        assert "first_name" in r
+        assert "avg_score" in r
+        assert "rank" in r
+        assert "percentile" in r
+        assert 0 <= r["percentile"] <= 100
+
+
+def test_get_session_rankings_nonexistent_returns_404(seeded):
+    import uuid
+    c, h = seeded["client"], seeded["headers"]
+    res = c.get(f"/api/sessions/{uuid.uuid4()}/rankings", headers=h)
+    assert res.status_code == 404
