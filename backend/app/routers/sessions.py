@@ -135,11 +135,9 @@ def upsert_measurements(
     assert_write_access(current_user, session.group_id)
 
     try:
-        measurements = SessionService(db).upsert_measurements(session_id, body)
+        measurements = SessionService(db).upsert_measurements(session, body)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-    if measurements is None:
-        raise HTTPException(status_code=404, detail="Sessione non trovata")
     return [_measurement_to_response(m) for m in measurements]
 
 

@@ -113,13 +113,9 @@ class SessionService:
         return session.measurements
 
     def upsert_measurements(
-        self, session_id: uuid.UUID, body: MeasurementsBatchInput
-    ) -> list[Measurement] | None:
-        """Returns None if session not found, raises ValueError if players missing."""
-        session = self.db.get(TrainingSession, session_id)
-        if session is None:
-            return None
-
+        self, session: TrainingSession, body: MeasurementsBatchInput
+    ) -> list[Measurement]:
+        """Raises ValueError if any player_id is not found."""
         player_ids = {m.player_id for m in body.measurements}
         found_ids = {
             row.id
@@ -131,7 +127,7 @@ class SessionService:
 
         values = [
             {
-                "session_id": session_id,
+                "session_id": session.id,
                 "player_id": m.player_id,
                 "group_id": session.group_id,
                 "scanning_rate": m.scanning_rate,
@@ -161,4 +157,4 @@ class SessionService:
         self.db.execute(stmt)
         self.db.commit()
 
-        return self.get_measurements(session_id)
+        return self.get_measurements(session.id)
