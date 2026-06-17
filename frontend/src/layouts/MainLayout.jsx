@@ -1,18 +1,25 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import OfflineBanner from '../components/OfflineBanner'
+import { LayoutDashboard, Users, User, ClipboardList, BarChart2, Calendar } from 'lucide-react'
 
 const baseNavItems = [
-  { to: '/', label: 'Dashboard', icon: '🏠', end: true },
-  { to: '/groups', label: 'Gruppi', icon: '👥' },
-  { to: '/players', label: 'Giocatori', icon: '⚽' },
-  { to: '/sessions', label: 'Sessioni', icon: '📋' },
-  { to: '/reports', label: 'Report', icon: '📊' },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/groups', label: 'Gruppi', icon: Users },
+  { to: '/players', label: 'Giocatori', icon: User },
+  { to: '/sessions', label: 'Sessioni', icon: ClipboardList },
+  { to: '/reports', label: 'Report', icon: BarChart2 },
 ]
 
 const adminNavItems = [
-  { to: '/seasons', label: 'Stagioni', icon: '🗓️' },
+  { to: '/seasons', label: 'Stagioni', icon: Calendar },
 ]
+
+const roleLabel = (role) => ({
+  admin: 'admin',
+  responsabile_tecnico: 'resp. tecnico',
+  allenatore: 'allenatore',
+}[role] ?? role)
 
 export default function MainLayout() {
   const { user, logout, isAdmin } = useAuth()
@@ -47,19 +54,24 @@ export default function MainLayout() {
                 }`
               }
             >
-              <span>{icon}</span>
+              {(() => { const Icon = icon; return <Icon size={18} strokeWidth={1.75} /> })()}
               {label}
             </NavLink>
           ))}
         </nav>
 
         <div className="p-4 border-t border-gray-200">
-          <div className="text-xs text-gray-500 mb-2 truncate">
-            {user?.full_name || user?.email}
+          <div className="text-sm font-medium text-gray-700 truncate">
+            {user?.full_name?.split(' ')[0] || user?.email}
+            {user?.roles?.[0] && (
+              <span className="text-xs font-normal text-gray-400 ml-1">
+                ({roleLabel(user.roles[0])})
+              </span>
+            )}
           </div>
           <button
             onClick={logout}
-            className="text-sm text-red-600 hover:text-red-800 transition-colors"
+            className="mt-1.5 text-xs text-red-500 hover:text-red-700 transition-colors"
           >
             Esci →
           </button>
@@ -90,7 +102,7 @@ export default function MainLayout() {
                 }`
               }
             >
-              <span className="text-2xl leading-none">{icon}</span>
+              {(() => { const Icon = icon; return <Icon size={22} strokeWidth={1.75} /> })()}
               <span className="text-[10px] font-medium">{label}</span>
             </NavLink>
           ))}

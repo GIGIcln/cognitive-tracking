@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getGroup, updateGroupTargets } from '../api/groups'
 import { deletePlayer } from '../api/players'
 import PlayerFormModal from '../components/PlayerFormModal'
+import { Pencil, Trash2 } from 'lucide-react'
 import { LEVEL_COLORS } from '../constants/domain'
 import { useAuth } from '../context/AuthContext'
 
@@ -156,17 +157,17 @@ export default function GroupDetailPage() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setEditPlayer(p)}
-                      className="text-gray-400 hover:text-granata transition-colors text-lg leading-none"
+                      className="p-1 text-gray-400 hover:text-granata transition-colors"
                       title="Modifica giocatore"
                     >
-                      ✏️
+                      <Pencil size={15} strokeWidth={1.75} />
                     </button>
                     <button
                       onClick={() => setDeleteConfirm({ open: true, player: p })}
-                      className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none"
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors"
                       title="Rimuovi giocatore"
                     >
-                      🗑
+                      <Trash2 size={15} strokeWidth={1.75} />
                     </button>
                   </div>
                 )}
