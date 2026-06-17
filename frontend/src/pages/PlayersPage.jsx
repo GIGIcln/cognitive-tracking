@@ -94,7 +94,14 @@ export default function PlayersPage() {
               className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between"
             >
               <div>
-                <div className="font-medium text-gray-900">{p.last_name} {p.first_name}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-900">{p.last_name} {p.first_name}</span>
+                  {p.position && (
+                    <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
+                      {p.position}
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs text-gray-500 mt-0.5">
                   {p.birth_year && `${p.birth_year}`}
                   {p.birth_year && ' · '}

@@ -8,6 +8,13 @@ export const LEVEL_COLORS = {
 
 export const SESSION_TYPES = ['SSG', 'Partita a tema', 'Partita']
 
+export const POSITIONS = [
+  { value: 'POR', label: 'Portiere' },
+  { value: 'DIF', label: 'Difensore' },
+  { value: 'CEN', label: 'Centrocampista' },
+  { value: 'ATT', label: 'Attaccante' },
+]
+
 export const GROUP_CATEGORIES = ['Esordienti', 'Pulcini', 'Primi Calci']
 
 export const COGNITIVE_PARAMS = [

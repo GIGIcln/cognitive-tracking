@@ -9,6 +9,7 @@ class PlayerCreate(BaseModel):
     first_name: str
     last_name: str
     birth_year: int
+    position: str | None = None
     notes: str | None = None
     group_id: uuid.UUID | None = None
 
@@ -17,6 +18,7 @@ class PlayerUpdate(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     birth_year: int | None = None
+    position: str | None = None
     is_active: bool | None = None
     notes: str | None = None
 
@@ -26,6 +28,7 @@ class PlayerResponse(BaseModel):
     first_name: str
     last_name: str
     birth_year: int | None
+    position: str | None = None
     is_active: bool
     notes: str | None
     current_group_name: str | None = None

@@ -47,6 +47,7 @@ export default function PlayerReportPage() {
   const [playerName, setPlayerName] = useState('')
   const [playerFirstName, setPlayerFirstName] = useState('')
   const [playerLastName, setPlayerLastName] = useState('')
+  const [playerPosition, setPlayerPosition] = useState(null)
   const [history, setHistory] = useState([])
   const [targets, setTargets] = useState([])
   const [sessionAverages, setSessionAverages] = useState(null)
@@ -68,10 +69,11 @@ export default function PlayerReportPage() {
         const hist = historyRes.data
         setHistory(hist)
 
-        const { first_name, last_name } = playerRes.data
+        const { first_name, last_name, position } = playerRes.data
         setPlayerName(`${first_name} ${last_name}`)
         setPlayerFirstName(first_name)
         setPlayerLastName(last_name)
+        setPlayerPosition(position ?? null)
 
         if (hist.length > 0) {
           const last = hist[hist.length - 1]
@@ -90,18 +92,6 @@ export default function PlayerReportPage() {
     }
     load()
   }, [playerId])
-
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-4 border-granata border-t-transparent" />
-      </div>
-    )
-  }
-
-  if (error) {
-    return <div className="text-red-600 text-sm">{error}</div>
-  }
 
   const lastSession = history.length > 0 ? history[history.length - 1] : null
 
@@ -191,6 +181,18 @@ export default function PlayerReportPage() {
     setHiddenLines((prev) => ({ ...prev, [data.dataKey]: !prev[data.dataKey] }))
   }
 
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-4 border-granata border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return <div className="text-red-600 text-sm">{error}</div>
+  }
+
   return (
     <div id="report-content" className="space-y-6 pb-8">
       {/* Header */}
@@ -203,9 +205,16 @@ export default function PlayerReportPage() {
             ←
           </button>
           <div className="report-header">
-            <h1 className="text-xl font-bold text-gray-900">
-              {playerName || 'Giocatore'}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-gray-900">
+                {playerName || 'Giocatore'}
+              </h1>
+              {playerPosition && (
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">
+                  {playerPosition}
+                </span>
+              )}
+            </div>
             <div className="text-sm text-gray-500 mt-0.5">Report individuale</div>
           </div>
         </div>

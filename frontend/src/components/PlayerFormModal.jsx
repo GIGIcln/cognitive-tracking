@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { createPlayer, updatePlayer, assignPlayer } from '../api/players'
 import { getGroups } from '../api/groups'
+import { POSITIONS } from '../constants/domain'
 
-const EMPTY_FORM = { first_name: '', last_name: '', birth_year: '', notes: '', group_id: '' }
+const EMPTY_FORM = { first_name: '', last_name: '', birth_year: '', position: '', notes: '', group_id: '' }
 
 export default function PlayerFormModal({
   isOpen,
@@ -36,6 +37,7 @@ export default function PlayerFormModal({
             first_name: player.first_name ?? '',
             last_name: player.last_name ?? '',
             birth_year: player.birth_year ?? '',
+            position: player.position ?? '',
             notes: player.notes ?? '',
             group_id: currentId,
           })
@@ -64,6 +66,7 @@ export default function PlayerFormModal({
           first_name: form.first_name,
           last_name: form.last_name,
           birth_year: parseInt(form.birth_year),
+          position: form.position || null,
           notes: form.notes || null,
         })
         if (groupChanged) {
@@ -81,6 +84,7 @@ export default function PlayerFormModal({
           first_name: form.first_name,
           last_name: form.last_name,
           birth_year: parseInt(form.birth_year),
+          position: form.position || null,
           notes: form.notes || null,
           group_id: preselectedGroupId || form.group_id || null,
         })
@@ -132,6 +136,16 @@ export default function PlayerFormModal({
             required
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
           />
+          <select
+            value={form.position}
+            onChange={(e) => setForm({ ...form, position: e.target.value })}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
+          >
+            <option value="">Posizione (opzionale)</option>
+            {POSITIONS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
           <textarea
             placeholder="Note (opzionale)"
             value={form.notes}
