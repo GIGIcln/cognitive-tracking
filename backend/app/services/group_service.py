@@ -3,18 +3,88 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
+from app.models.assignment import PlayerGroupAssignment
 from app.models.group import Group
 from app.models.group_target import GroupTarget
 from app.models.measurement import Measurement
+from app.models.season import Season
 from app.models.training_session import TrainingSession
-from app.schemas.group import TargetUpdateItem
+from app.schemas.group import GroupCreate, TargetUpdateItem
 
 
 class GroupService:
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def _current_season(self) -> Season | None:
+        return self.db.query(Season).filter(Season.is_current.is_(True)).first()
+
+    def list(self, scope: list[uuid.UUID] | None) -> list[Group]:
+        season = self._current_season()
+        if not season:
+            return []
+        q = (
+            self.db.query(Group)
+            .filter(Group.season_id == season.id, Group.is_active.is_(True))
+            .order_by(Group.birth_year.desc(), Group.sub_group.asc())
+        )
+        if scope is not None:
+            q = q.filter(Group.id.in_(scope))
+        return q.all()
+
+    def get(self, group_id: uuid.UUID) -> tuple[Group, list[PlayerGroupAssignment]] | tuple[None, None]:
+        group = (
+            self.db.query(Group)
+            .options(joinedload(Group.targets))
+            .filter(Group.id == group_id)
+            .first()
+        )
+        if not group:
+            return None, None
+        assignments = (
+            self.db.query(PlayerGroupAssignment)
+            .options(joinedload(PlayerGroupAssignment.player))
+            .filter(
+                PlayerGroupAssignment.group_id == group_id,
+                PlayerGroupAssignment.is_current.is_(True),
+            )
+            .all()
+        )
+        return group, assignments
+
+    def get_targets(self, group_id: uuid.UUID) -> list[GroupTarget] | None:
+        group = self.db.get(Group, group_id)
+        if not group:
+            return None
+        return group.targets
+
+    def create(self, body: GroupCreate) -> Group | None:
+        season = self._current_season()
+        if not season:
+            return None
+        group = Group(
+            season_id=season.id,
+            name=body.name,
+            category=body.category,
+            birth_year=body.birth_year,
+            level=body.level,
+            sub_group=body.sub_group,
+            max_players=body.max_players,
+        )
+        self.db.add(group)
+        self.db.commit()
+        self.db.refresh(group)
+        return group
+
+    def delete(self, group_id: uuid.UUID) -> bool:
+        group = self.db.get(Group, group_id)
+        if not group or not group.is_active:
+            return False
+        group.is_active = False
+        self.db.commit()
+        return True
 
     def get_history(self, group_id: uuid.UUID, limit: int = 60) -> list[dict]:
         rows = (
