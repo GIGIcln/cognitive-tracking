@@ -53,7 +53,9 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origins_list,
-    allow_origin_regex=r"https://.*\.trycloudflare\.com",
+    # La regex trycloudflare è attiva solo in development per il tunneling locale.
+    # In production qualsiasi origine deve essere elencata esplicitamente in ALLOWED_ORIGINS.
+    allow_origin_regex=r"https://.*\.trycloudflare\.com" if settings.app_env == "development" else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -12,9 +12,14 @@ from app.services.auth_service import create_access_token, get_current_user, has
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# Pre-calcolato a startup: garantisce che verify_password venga sempre chiamata
+# indipendentemente dall'esistenza dell'utente, eliminando il timing attack.
+_DUMMY_HASH = hash_password("DummyPassword1!")
+
 
 @router.post("/setup", status_code=status.HTTP_201_CREATED)
-def setup(body: SetupRequest, db: Session = Depends(get_db)):
+@limiter.limit("3/minute")
+def setup(request: Request, body: SetupRequest, db: Session = Depends(get_db)):
     if db.query(User).first():
         raise HTTPException(status_code=400, detail="Setup già completato: esiste almeno un utente")
     user = User(
@@ -36,7 +41,9 @@ def setup(body: SetupRequest, db: Session = Depends(get_db)):
 @limiter.limit("5/minute")
 def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == body.email).first()
-    if not user or not verify_password(body.password, user.hashed_password):
+    candidate_hash = user.hashed_password if user else _DUMMY_HASH
+    is_valid = verify_password(body.password, candidate_hash)
+    if not user or not is_valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenziali non valide")
     token = create_access_token({"sub": str(user.id)})
     return TokenResponse(access_token=token, user=UserResponse.model_validate(user))
