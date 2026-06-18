@@ -11,6 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app import user_store
 from app.config import get_settings
@@ -44,6 +45,22 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+class _LimitUploadSize(BaseHTTPMiddleware):
+    _MAX_BYTES = 1_000_000  # 1 MB
+
+    async def dispatch(self, request: Request, call_next):
+        cl = request.headers.get("content-length")
+        if cl and int(cl) > self._MAX_BYTES:
+            return JSONResponse(
+                {"detail": "Payload troppo grande (max 1MB)."},
+                status_code=413,
+            )
+        return await call_next(request)
+
+
+app.add_middleware(_LimitUploadSize)
 
 
 @app.exception_handler(RequestValidationError)

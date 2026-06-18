@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from typing import Any
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.limiter import limiter
 from app.models.player import Player
 from app.rbac import assert_group_access, require_admin, require_auth
 from app.schemas.auth import UserContext
@@ -53,7 +54,9 @@ def list_players(
 
 
 @router.get("/at-risk", response_model=list[dict[str, Any]])
+@limiter.limit("20/minute")
 def get_at_risk_players(
+    request: Request,
     min_sessions: int = Query(default=3, ge=2, le=10),
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
