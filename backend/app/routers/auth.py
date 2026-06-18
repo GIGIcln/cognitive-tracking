@@ -33,12 +33,13 @@ def login(request: Request, response: Response, body: LoginRequest):
         )
     settings = get_settings()
     token = create_access_token(record)
+    is_production = settings.app_env == "production"
     response.set_cookie(
         key="ct_token",
         value=token,
         httponly=True,
-        samesite="none",
-        secure=True,
+        samesite="none" if is_production else "lax",
+        secure=is_production,
         max_age=settings.access_token_expire_minutes * 60,
         path="/",
     )
@@ -56,7 +57,14 @@ def login(request: Request, response: Response, body: LoginRequest):
 
 @router.post("/logout")
 def logout(response: Response):
-    response.delete_cookie(key="ct_token", path="/", samesite="none")
+    settings = get_settings()
+    is_production = settings.app_env == "production"
+    response.delete_cookie(
+        key="ct_token",
+        path="/",
+        samesite="none" if is_production else "lax",
+        secure=is_production,
+    )
     return {"message": "Logout effettuato"}
 
 
