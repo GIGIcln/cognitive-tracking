@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login as apiLogin, getMe, logout as apiLogout } from '../api/auth'
+import { clearQueue } from '../utils/offlineQueue'
 
 const AuthContext = createContext(null)
 
@@ -25,6 +26,7 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try { await apiLogout() } catch {}
+    try { await clearQueue() } catch {}
     setUser(null)
     navigateRef.current('/login', { replace: true })
   }

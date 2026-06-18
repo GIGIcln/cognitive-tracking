@@ -66,3 +66,8 @@ export async function incrementRetry(id) {
   }
   await tx.done;
 }
+
+export async function clearQueue() {
+  const db = await getDB();
+  return db.clear(STORE_NAME);
+}
