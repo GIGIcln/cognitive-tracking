@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
 from datetime import date
 
 from sqlalchemy import func
@@ -252,22 +253,36 @@ class PlayerService:
             .all()
         )
 
+        player_ids = [p.id for p, _ in player_rows]
+        player_to_group: dict[uuid.UUID, uuid.UUID] = {p.id: gid for p, gid in player_rows}
+
+        # Single batch query replaces the previous per-player N+1 loop.
+        # Global ORDER BY session_date DESC ensures each player's bucket
+        # accumulates measurements most-recent-first.
+        all_meas = (
+            self.db.query(Measurement, TrainingSession.session_date)
+            .join(TrainingSession, TrainingSession.id == Measurement.session_id)
+            .filter(
+                Measurement.player_id.in_(player_ids),
+                Measurement.is_absent.is_(False),
+                Measurement.group_id.in_(thresholds.keys()),
+            )
+            .order_by(TrainingSession.session_date.desc())
+            .all()
+        )
+
+        measurements_by_player: dict[uuid.UUID, list[Measurement]] = defaultdict(list)
+        for m, _ in all_meas:
+            expected_gid = player_to_group.get(m.player_id)
+            if expected_gid and m.group_id == expected_gid:
+                bucket = measurements_by_player[m.player_id]
+                if len(bucket) < min_sessions:
+                    bucket.append(m)
+
         result = []
         for player, group_id in player_rows:
             threshold = thresholds[group_id]
-
-            measurements = (
-                self.db.query(Measurement)
-                .join(TrainingSession, TrainingSession.id == Measurement.session_id)
-                .filter(
-                    Measurement.player_id == player.id,
-                    Measurement.is_absent.is_(False),
-                    TrainingSession.group_id == group_id,
-                )
-                .order_by(TrainingSession.session_date.desc())
-                .limit(min_sessions)
-                .all()
-            )
+            measurements = measurements_by_player.get(player.id, [])
 
             if len(measurements) < min_sessions:
                 continue
