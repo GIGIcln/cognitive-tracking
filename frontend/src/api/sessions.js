@@ -1,7 +1,7 @@
 import api from './axios'
 
-export const getSessions = (groupId) =>
-  api.get('/sessions', { params: groupId ? { group_id: groupId } : {} })
+export const getSessions = (groupId, limit) =>
+  api.get('/sessions', { params: { ...(groupId ? { group_id: groupId } : {}), ...(limit ? { limit } : {}) } })
 
 export const createSession = (data) => api.post('/sessions', data)
 export const deleteSession = (id) => api.delete(`/sessions/${id}`)
