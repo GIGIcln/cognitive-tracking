@@ -151,6 +151,9 @@ export default function SessionsPage() {
                         {s.session_type} · {groupName(s.group_id)}
                         {s.duration_min && ` · ${s.duration_min} min`}
                       </div>
+                      {s.notes && (
+                        <div className="text-xs text-gray-400 mt-1 truncate max-w-xs">{s.notes}</div>
+                      )}
                     </div>
                     <span className="text-gray-400">›</span>
                   </div>

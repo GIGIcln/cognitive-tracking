@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getSession, saveMeasurements } from '../api/sessions'
+import { getSession, saveMeasurements, updateSession } from '../api/sessions'
 import { getEvents, saveEvents } from '../api/events'
 import { getPlayers } from '../api/players'
 import { getGroupTargets } from '../api/groups'
@@ -14,6 +14,7 @@ import {
 } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
 import ToggleSwitch from '../components/ToggleSwitch'
+import { useAuth } from '../context/AuthContext'
 
 const PARAMS = COGNITIVE_PARAMS
 
@@ -56,6 +57,67 @@ const emptyMeasurement = () =>
 
 const emptyEventRow = () => ({ numerator: 0, denominator: 0, method: 'live' })
 
+function NotesBlock({ notes, editing, value, saving, onChange, onEdit, onSave, onCancel }) {
+  const { isAdmin } = useAuth()
+
+  if (editing) {
+    return (
+      <div className="mt-2">
+        <textarea
+          autoFocus
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Aggiungi note sulla sessione…"
+          rows={3}
+          className="w-full border border-granata rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata resize-none"
+        />
+        <div className="flex gap-2 mt-1.5">
+          <button
+            onClick={onCancel}
+            className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1 border border-gray-200 rounded-lg"
+          >
+            Annulla
+          </button>
+          <button
+            onClick={onSave}
+            disabled={saving}
+            className="text-xs text-white bg-granata hover:bg-granata-dark px-3 py-1 rounded-lg disabled:opacity-60"
+          >
+            {saving ? 'Salvataggio…' : 'Salva note'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (notes) {
+    return (
+      <div
+        className={`mt-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 whitespace-pre-wrap leading-relaxed ${isAdmin ? 'cursor-pointer hover:bg-gray-100 transition-colors' : ''}`}
+        onClick={isAdmin ? onEdit : undefined}
+        title={isAdmin ? 'Clicca per modificare' : undefined}
+      >
+        {notes}
+      </div>
+    )
+  }
+
+  if (!isAdmin) return null
+
+  return (
+    <button
+      onClick={onEdit}
+      className="mt-2 text-xs text-gray-400 hover:text-granata transition-colors flex items-center gap-1"
+    >
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+      Aggiungi note
+    </button>
+  )
+}
+
 export default function SessionDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -72,6 +134,9 @@ export default function SessionDetailPage() {
   const [error, setError]           = useState('')
   const [saveOk, setSaveOk]         = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [editingNotes, setEditingNotes] = useState(false)
+  const [notesValue, setNotesValue] = useState('')
+  const [savingNotes, setSavingNotes] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -79,6 +144,7 @@ export default function SessionDetailPage() {
         const sRes = await getSession(id)
         const s = sRes.data
         setSession(s)
+        setNotesValue(s.notes ?? '')
 
         const [pRes, tRes, eRes] = await Promise.all([
           getPlayers(s.group_id),
@@ -236,6 +302,19 @@ export default function SessionDetailPage() {
       setError('Errore nel salvataggio degli eventi')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSaveNotes = async () => {
+    setSavingNotes(true)
+    try {
+      const res = await updateSession(id, { notes: notesValue || null })
+      setSession((prev) => ({ ...prev, notes: res.data.notes }))
+      setEditingNotes(false)
+    } catch {
+      setError('Errore nel salvataggio delle note')
+    } finally {
+      setSavingNotes(false)
     }
   }
 
@@ -423,6 +502,18 @@ export default function SessionDetailPage() {
             </div>
           </div>
 
+          {/* Note sessione — mobile */}
+          <NotesBlock
+            notes={session.notes}
+            editing={editingNotes}
+            value={notesValue}
+            saving={savingNotes}
+            onChange={setNotesValue}
+            onEdit={() => setEditingNotes(true)}
+            onSave={handleSaveNotes}
+            onCancel={() => { setEditingNotes(false); setNotesValue(session.notes ?? '') }}
+          />
+
           {/* Progress bar */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500 shrink-0">
@@ -579,6 +670,20 @@ export default function SessionDetailPage() {
         {error && (
           <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg mb-4 border border-red-200">{error}</div>
         )}
+
+        {/* Note sessione — desktop */}
+        <div className="mb-5">
+          <NotesBlock
+            notes={session.notes}
+            editing={editingNotes}
+            value={notesValue}
+            saving={savingNotes}
+            onChange={setNotesValue}
+            onEdit={() => setEditingNotes(true)}
+            onSave={handleSaveNotes}
+            onCancel={() => { setEditingNotes(false); setNotesValue(session.notes ?? '') }}
+          />
+        </div>
 
         {entryMode === 'event' && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-5 text-xs text-blue-700">

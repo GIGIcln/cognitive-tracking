@@ -11,7 +11,7 @@ from app.models.measurement import Measurement
 from app.models.player import Player
 from app.models.season import Season
 from app.models.training_session import TrainingSession
-from app.schemas.session import MeasurementsBatchInput, SessionCreate
+from app.schemas.session import MeasurementsBatchInput, SessionCreate, SessionUpdate
 
 
 class SessionService:
@@ -48,6 +48,16 @@ class SessionService:
         elif allowed_group_ids is not None:
             q = q.filter(TrainingSession.group_id.in_(allowed_group_ids))
         return q.scalar() or 0
+
+    def update(self, session_id: uuid.UUID, body: SessionUpdate) -> TrainingSession | None:
+        session = self.db.get(TrainingSession, session_id)
+        if session is None or not session.is_active:
+            return None
+        for field, value in body.model_dump(exclude_unset=True).items():
+            setattr(session, field, value)
+        self.db.commit()
+        self.db.refresh(session)
+        return session
 
     def deactivate(self, session_id: uuid.UUID) -> bool:
         session = self.db.get(TrainingSession, session_id)

@@ -19,6 +19,7 @@ from app.schemas.session import (
     SessionCreate,
     SessionRankingsItemResponse,
     SessionResponse,
+    SessionUpdate,
 )
 from app.services.observation_service import (
     ObservationService,
@@ -202,6 +203,19 @@ def get_events(
 
 
 # ── DELETE: solo admin ────────────────────────────────────────────────────────
+
+@router.patch("/{session_id}", response_model=SessionResponse)
+def update_session(
+    session_id: uuid.UUID,
+    body: SessionUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_admin),
+):
+    session = SessionService(db).update(session_id, body)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Sessione non trovata")
+    return SessionResponse.model_validate(session)
+
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_session(

@@ -23,6 +23,12 @@ class SessionCreate(BaseModel):
     notes: str | None = None
 
 
+class SessionUpdate(BaseModel):
+    session_type: str | None = None
+    duration_min: int | None = None
+    notes: str | None = None
+
+
 class SessionResponse(BaseModel):
     id: uuid.UUID
     group_id: uuid.UUID
