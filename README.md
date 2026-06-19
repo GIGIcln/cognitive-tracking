@@ -130,25 +130,30 @@ cognitivetracking/
 │   │   │   ├── player.py        # Anagrafica giocatori
 │   │   │   ├── assignment.py    # Assegnazione giocatore → gruppo (storico)
 │   │   │   ├── training_session.py  # Sessione di allenamento
-│   │   │   ├── measurement.py   # Misurazioni cognitive per sessione/giocatore
-│   │   │   └── group_target.py  # Target cognitivi per gruppo/parametro
+│   │   │   ├── measurement.py       # Misurazioni cognitive (voto 1–10 o derivato)
+│   │   │   ├── observation_event.py # ← NUOVO: eventi grezzi (num/denom per metrica)
+│   │   │   └── group_target.py      # Target cognitivi per gruppo/parametro
 │   │   ├── routers/
 │   │   │   ├── auth.py          # /api/auth/* (login, logout, me)
 │   │   │   ├── seasons.py       # /api/seasons/* (lista, corrente, crea, archivia)
 │   │   │   ├── groups.py        # /api/groups/* (lista, dettaglio, target, history)
 │   │   │   ├── players.py       # /api/players/* (CRUD, assign, history)
-│   │   │   └── sessions.py      # /api/sessions/* (CRUD, measurements upsert)
+│   │   │   └── sessions.py      # /api/sessions/* (CRUD, measurements, events)
 │   │   ├── schemas/             # Schemi Pydantic per request/response
 │   │   └── services/
-│   │       ├── auth_service.py     # hash/verify password, JWT, get_current_user
-│   │       ├── player_service.py   # logica di business per giocatori e assignment
-│   │       ├── season_service.py   # logica di business per stagioni
-│   │       └── session_service.py  # logica di business per sessioni e misurazioni
+│   │       ├── auth_service.py        # hash/verify password, JWT, get_current_user
+│   │       ├── observation_service.py # ← NUOVO: derivazione score + reliability da eventi
+│   │       ├── player_service.py      # logica di business per giocatori e assignment
+│   │       ├── season_service.py      # logica di business per stagioni
+│   │       └── session_service.py     # logica di business per sessioni e misurazioni
 │   ├── alembic/
 │   │   └── versions/
 │   │       ├── 0001_initial_schema.py
 │   │       ├── 0002_add_performance_indexes.py
-│   │       └── 0003_add_missing_indexes.py
+│   │       ├── 0003_add_missing_indexes.py
+│   │       ├── 0004_add_soft_delete_and_updated_at.py
+│   │       ├── 0005_add_player_position.py
+│   │       └── 0006_add_observation_events.py   # ← NUOVO
 │   ├── users.example.json       # Template per users.json (committato; users.json è gitignored)
 │   ├── scripts/
 │   │   └── hash_password.py     # Genera hash bcrypt da inserire in users.json
@@ -309,9 +314,19 @@ training_sessions
 measurements
   id (UUID PK) · session_id (FK) · player_id (FK) · group_id (FK)
   scanning_rate · decision_quality · anticipation · transition_reset · verbal_comm
-    → tutti Numeric(3,1), nullable
+    → tutti Numeric(3,1), nullable  (valorizzati da voto manuale O derivati da eventi)
   is_absent (bool) · notes · created_at
   [UNIQUE (session_id, player_id)]  ← garantisce upsert idempotente
+
+observation_events                  ← NUOVO — eventi grezzi per la modalità conteggio
+  id (UUID PK) · session_id (FK) · player_id (FK) · group_id (FK)
+  metric_type (string: SR|DQI|AI|TRS|VCI)
+  numerator (int)    ← eventi positivi osservati
+  denominator (int)  ← opportunità totali (o minuti, o 1 per AI)
+  method (string: live|video|audio)
+  observer_notes (text, nullable)
+  created_at · updated_at
+  [UNIQUE (session_id, player_id, metric_type)]
 
 group_targets
   id (UUID PK) · group_id (FK) · parameter (string) · insufficient_max · ottimo_min
@@ -377,8 +392,10 @@ I giocatori non vengono cancellati fisicamente: il campo `is_active` viene porta
 | POST | `/api/sessions` | Crea nuova sessione |
 | GET | `/api/sessions/{id}` | Dettaglio sessione con misurazioni |
 | GET | `/api/sessions/{id}/averages` | Medie di gruppo per quella sessione |
-| POST | `/api/sessions/{id}/measurements` | Upsert batch misurazioni |
+| POST | `/api/sessions/{id}/measurements` | Upsert batch misurazioni (modalità voto 1–10) |
 | GET | `/api/sessions/{id}/measurements` | Lista misurazioni della sessione |
+| POST | `/api/sessions/{id}/events` | Upsert batch eventi grezzi (modalità conteggio) |
+| GET | `/api/sessions/{id}/events` | Lista eventi grezzi con score derivato e reliability flag |
 
 Tutti gli endpoint (escluso `/api/auth/login`) richiedono autenticazione. Il token JWT viene trasmesso automaticamente dal browser tramite il cookie `ct_token` (HttpOnly, Secure, SameSite=None) impostato al login — nessun header `Authorization` da gestire manualmente.
 
@@ -584,6 +601,18 @@ Passi chiave:
 ---
 
 ## Changelog
+
+### 2026-06-19 — Modalità Conteggio Eventi (Event-Based Entry)
+
+Aggiunto un secondo modo di inserimento dati basato su conteggi osservabili, in alternativa al voto olistico 1–10.
+
+- **Nuovo modello `ObservationEvent`** — tabella `observation_events` che memorizza `numerator` / `denominator` per ciascuna metrica per sessione/giocatore. Constraint `UNIQUE(session_id, player_id, metric_type)` garantisce upsert idempotente.
+- **`ObservationService`** — logica di derivazione del punteggio 1–10 da conteggi grezzi, con formule specifiche per metrica (rate percentuale per SR/DQI/TRS, conteggio assoluto per AI, frequenza per VCI) e calcolo del `reliability_flag` (insufficient/low/medium/high) in funzione del campione.
+- **Due nuovi endpoint** — `POST /api/sessions/{id}/events` (upsert batch eventi + write-back derivato in `measurements`) e `GET /api/sessions/{id}/events` (lista eventi con score e reliability).
+- **Frontend — toggle modalità** — `SessionDetailPage` ora espone un toggle "Voto 1–10 / Conteggio eventi". In modalità evento ogni metrica mostra contatori +/− per numeratore e denominatore, con preview del punteggio derivato e badge di affidabilità in tempo reale. Il page si auto-commuta in modalità eventi se la sessione ha già eventi salvati.
+- **`METRIC_EVENT_CONFIG` in `domain.js`** — configurazione per label, soglie `min_n` e tipo di raccolta per ciascuna delle 5 metriche. `deriveScore()` e `deriveReliability()` disponibili come utility frontend che replicano esattamente la logica backend.
+- **Migrazione `0006_add_observation_events.py`** — aggiunge la tabella con indici su `session_id` e `player_id`.
+- **Compatibilità garantita** — la tabella `measurements` e tutti gli endpoint esistenti rimangono invariati; i report leggono sempre `measurements` indipendentemente dalla modalità di inserimento usata.
 
 ### 2026-06-17 — RBAC, Sicurezza Auth & Stagioni
 - Sistema RBAC file-based: ruoli `admin`, `responsabile_tecnico`, `allenatore` con data scoping a livello query DB.

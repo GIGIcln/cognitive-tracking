@@ -7,6 +7,7 @@ from app.models.assignment import PlayerGroupAssignment
 from app.models.training_session import TrainingSession
 from app.models.measurement import Measurement
 from app.models.group_target import GroupTarget
+from app.models.observation_event import ObservationEvent
 
 __all__ = [
     "Base",
@@ -18,4 +19,5 @@ __all__ = [
     "TrainingSession",
     "Measurement",
     "GroupTarget",
+    "ObservationEvent",
 ]

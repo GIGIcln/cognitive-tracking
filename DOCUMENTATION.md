@@ -104,7 +104,11 @@ Il giocatore è un punto di riferimento verbale per i compagni. La sua voce aiut
 
 ## La Scala di Valutazione (1–10)
 
-Tutti e cinque i parametri vengono valutati con una **scala intera da 1 a 10**.
+Tutti e cinque i parametri vengono restituiti su una **scala da 1 a 10**. Questa scala può essere alimentata in due modi diversi:
+
+### Modalità Voto (predefinita)
+
+Il voto viene assegnato direttamente dall'allenatore al termine della sessione, in modo olistico:
 
 ```
  1 – 2  →  Assenza quasi totale del comportamento
@@ -113,6 +117,18 @@ Tutti e cinque i parametri vengono valutati con una **scala intera da 1 a 10**.
  7 – 8  →  Comportamento frequente e relativamente stabile
  9 – 10 →  Comportamento sistematico, maturo, costante
 ```
+
+### Modalità Conteggio Eventi (avanzata)
+
+In questa modalità l'allenatore non assegna un voto ma conta **eventi osservabili specifici** durante la sessione. Il punteggio 1–10 viene derivato automaticamente dalla formula. Vedere la sezione **Come Inserire i Dati — Modalità Conteggio**.
+
+| Metrica | Cosa si conta (numeratore) | Su quante occasioni (denominatore) | Formula |
+|---|---|---|---|
+| SR | Rotazioni di testa pre-tocco | Ricezioni in pressione (≥1 avv. entro 6m) | % ricezioni con ≥1 check → 1–10 |
+| DQI | Decisioni corrette | Decision points identificati | % decisioni corrette → 1–10 |
+| AI | Movimenti anticipatori riconosciuti | — (solo conteggio) | 10 mosse = 10, 0 mosse = 1 |
+| TRS | Transizioni reset nei tempi | Transizioni osservate | % reset → 1–10 |
+| VCI | Comunicazioni verbali rilevanti | Minuti di osservazione | Freq./min → 1–10 (2+ /min = 10) |
 
 **Importante:** la scala non è assoluta ma **relativa alla categoria e al livello del gruppo**. Un 7 nei Primi Calci U9 ha un significato completamente diverso da un 7 negli Esordienti U13. I target sono definiti separatamente per ciascun gruppo proprio per questo motivo.
 
@@ -179,7 +195,15 @@ Le misurazioni vengono associate a un tipo di sessione che influenza la lettura 
 
 ## Come Inserire i Dati — Flusso Operativo
 
-### Da mobile (campo)
+La pagina di inserimento sessione offre due modalità selezionabili con un toggle in alto a destra: **Voto 1–10** (default) e **Conteggio eventi**.
+
+Le due modalità scrivono entrambe nella stessa tabella di misurazioni e i report funzionano in modo identico. Se una sessione ha già eventi salvati, la modalità viene impostata automaticamente su "Conteggio".
+
+---
+
+### Modalità Voto 1–10
+
+#### Da mobile (campo)
 
 1. Aprire la sezione **Sessioni** e creare una nuova sessione (gruppo, data, tipo, durata).
 2. La piattaforma apre automaticamente la pagina di inserimento.
@@ -189,15 +213,71 @@ Le misurazioni vengono associate a un tipo di sessione che influenza la lettura 
    - Se il giocatore è assente, attivare il toggle "Assente" — i dati non vengono richiesti.
 4. Alla fine dell'ultimo giocatore, premere **Salva sessione**.
 
-> I dati vengono salvati sul server in qualsiasi momento premendo "Salva sessione". È possibile tornare sulla stessa sessione in un secondo momento per completare o correggere i dati.
-
-### Da desktop (post-allenamento)
+#### Da desktop (post-allenamento)
 
 1. Aprire la sessione dall'elenco.
 2. Tutti i giocatori sono visibili in una griglia unica.
 3. Inserire i valori nelle celle (solo interi da 1 a 10).
 4. Le celle si colorano in tempo reale.
 5. Premere **Salva sessione** nella barra infissa in basso.
+
+> I dati vengono salvati sul server in qualsiasi momento premendo "Salva sessione". È possibile tornare sulla stessa sessione in un secondo momento per completare o correggere i dati.
+
+---
+
+### Modalità Conteggio Eventi
+
+Questa modalità è consigliata per chi vuole raccogliere dati più oggettivi e riproducibili. Invece di un voto, si inseriscono due numeri per ogni metrica: **quante volte si è osservato il comportamento** (numeratore) e **quante occasioni totali** (denominatore).
+
+Il punteggio 1–10 viene derivato automaticamente dalla formula e viene mostrato in anteprima accanto ai contatori.
+
+#### Cosa inserire per ciascuna metrica
+
+| Metrica | Numeratore (+) | Denominatore (+) | Note |
+|---|---|---|---|
+| **SR** | Ogni rotazione di testa pre-tocco | Ogni volta che il giocatore riceve con almeno 1 avversario entro 6 m | Conta solo rotazioni prima del primo tocco |
+| **DQI** | Ogni decisione corretta nel contesto | Ogni decision point identificato | Richiede video o mini-gioco osservato |
+| **AI** | Ogni movimento anticipatorio riconosciuto | — (lasciare a 0, non rilevante) | Conteggio assoluto, non rate |
+| **TRS** | Ogni transizione con reset nei tempi | Ogni perdita di palla osservata | Usare cronometro o stima |
+| **VCI** | Ogni comunicazione verbale rilevante | Minuti di osservazione del giocatore | Minuti, non numero di azioni |
+
+#### Badge di affidabilità
+
+Accanto a ogni punteggio derivato compare un badge che indica la qualità statistica del dato:
+
+| Badge | Significato | Soglie indicative |
+|---|---|---|
+| 🔴 Dati insufficienti | Troppo pochi eventi per essere attendibile | SR < 7 ricezioni, DQI < 10 decision points |
+| 🟠 Affid. bassa | Stima possibile, banda larga | SR 7–14, DQI 10–19 |
+| 🟡 Affid. media | Dato utilizzabile con cautela | SR 15–29, DQI 20–39 |
+| 🟢 Affid. alta | Dato stabile e interpretabile | SR ≥ 30, DQI ≥ 40 |
+
+> **Per U9–U10:** i campioni sono piccoli per natura. Aggregare i dati su **almeno 3 sessioni** prima di trarre conclusioni. Il badge "Dati insufficienti" è normale nelle prime sessioni.
+
+#### Da mobile — modalità conteggio
+
+1. Selezionare **Conteggio eventi** nel toggle in alto.
+2. Per ogni giocatore, usare i pulsanti **+** e **−** per incrementare numeratore e denominatore.
+3. Il punteggio derivato e il badge di affidabilità si aggiornano in tempo reale.
+4. Alla fine dell'ultimo giocatore, premere **Salva sessione**.
+
+#### Da desktop — modalità conteggio
+
+1. Selezionare **Conteggio eventi** nel toggle in alto a destra.
+2. Ogni giocatore mostra una griglia compatta con i contatori per ciascuna metrica.
+3. Premere **Salva sessione** nella barra infissa in basso.
+
+---
+
+### Quale modalità scegliere?
+
+| Situazione | Consiglio |
+|---|---|
+| Staff senza tempo di preparazione, osservazione globale | Voto 1–10 |
+| Sessione SSG con focus su 1–2 giocatori | Conteggio eventi (per le metriche osservate) |
+| Allenamento ripreso con video | Conteggio eventi (post-sessione da video) |
+| Prima sessione di un gruppo nuovo | Voto 1–10 per calibrazione rapida |
+| Report da presentare a famiglie / direzione | Conteggio eventi (più credibile) |
 
 ---
 
@@ -261,6 +341,15 @@ Verificare prima se il dato è attendibile (il giocatore era in un giorno negati
 **Come gestisco un giocatore che cambia gruppo?**
 Dalla pagina **Giocatori** o dal profilo del giocatore è possibile assegnarlo a un nuovo gruppo. Lo storico delle sessioni precedenti rimane invariato e leggibile nel report individuale (con indicazione del gruppo di appartenenza al momento della sessione). I target applicati nei grafici sono quelli del gruppo più recente.
 
+**Posso usare le due modalità (voto e conteggio) nella stessa sessione?**
+Sì. Si può inserire un voto per alcuni giocatori e conteggi per altri. Per un giocatore specifico, se vengono salvati eventi di conteggio, il punteggio derivato sovrascrive quello inserito manualmente per quella metrica. Le metriche senza eventi mantengono il voto manuale.
+
+**Il badge "Dati insufficienti" significa che il dato è sbagliato?**
+No — significa solo che la dimensione del campione è troppo piccola per fare affidamento sul dato come stima stabile. Può comunque essere un'indicazione utile, ma va presa con cautela. Aggregare su più sessioni risolve il problema nella maggior parte dei casi.
+
+**Il punteggio derivato (da conteggio) e quello manuale (1–10) sono comparabili nei report?**
+Sì. I report, i grafici e le classifiche leggono sempre il campo punteggio 1–10 nella tabella misurazioni, indipendentemente da come è stato generato. L'unica differenza è nella pagina di inserimento.
+
 **I dati vengono condivisi con altri club o enti?**
 No. La piattaforma è installata localmente o su server privato del club. Non esiste nessuna condivisione automatica verso terzi.
 
@@ -280,3 +369,9 @@ No. La piattaforma è installata localmente o su server privato del club. Non es
 | Target ottimo | Soglia minima al di sopra della quale il valore è classificato come ottimo |
 | Assegnazione | Collegamento tra giocatore e gruppo in un determinato periodo |
 | Stagione corrente | La stagione attiva su cui operano tutte le funzionalità |
+| Modalità Voto | Inserimento diretto del punteggio 1–10 per ogni parametro (giudizio olistico) |
+| Modalità Conteggio | Inserimento di eventi osservabili (numeratore/denominatore) con score derivato automaticamente |
+| Numeratore | Conteggio degli eventi positivi osservati (es. check pre-tocco, decisioni corrette) |
+| Denominatore | Conteggio delle occasioni totali (es. ricezioni, decision points, minuti) |
+| Score derivato | Punteggio 1–10 calcolato automaticamente da numeratore e denominatore |
+| Reliability flag | Badge di affidabilità statistica: insufficient / low / medium / high |

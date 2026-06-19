@@ -7,9 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.measurement import Measurement
+from app.models.player import Player
 from app.models.training_session import TrainingSession
 from app.rbac import assert_group_access, assert_write_access, require_admin, require_auth
 from app.schemas.auth import UserContext
+from app.schemas.observation_event import ObservationEventResponse, ObservationEventsBatchInput
 from app.schemas.pagination import Page
 from app.schemas.session import (
     MeasurementResponse,
@@ -17,6 +19,7 @@ from app.schemas.session import (
     SessionCreate,
     SessionResponse,
 )
+from app.services.observation_service import ObservationService, event_to_response
 from app.services.session_service import SessionService
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -185,6 +188,40 @@ def upsert_measurements(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     return [_measurement_to_response(m) for m in measurements]
+
+
+# ── OBSERVATION EVENTS (event-based entry mode) ───────────────────────────────
+
+@router.post("/{session_id}/events", response_model=list[ObservationEventResponse])
+def upsert_events(
+    session_id: uuid.UUID,
+    body: ObservationEventsBatchInput,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    session = _get_session_or_404(db, session_id)
+    assert_write_access(current_user, session.group_id)
+
+    player_ids = {ev.player_id for ev in body.events}
+    missing = [pid for pid in player_ids if db.get(Player, pid) is None]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Giocatori non trovati: {missing}")
+
+    events = ObservationService(db).upsert_events(session_id, session.group_id, body)
+    return [event_to_response(e) for e in events]
+
+
+@router.get("/{session_id}/events", response_model=list[ObservationEventResponse])
+def get_events(
+    session_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    session = _get_session_or_404(db, session_id)
+    assert_group_access(current_user, session.group_id)
+
+    events = ObservationService(db).get_events(session_id)
+    return [event_to_response(e) for e in events]
 
 
 # ── DELETE: solo admin ────────────────────────────────────────────────────────
