@@ -1,9 +1,11 @@
-export async function exportReportPDF(contentId, filename, title, subtitle) {
+export async function exportReportPDF(contentId, filename) {
   const { default: html2canvas } = await import('html2canvas')
   const { default: jsPDF } = await import('jspdf')
 
   const exportButtons = document.getElementById('export-buttons')
+  const backBtn = document.getElementById('report-back-btn')
   if (exportButtons) exportButtons.style.display = 'none'
+  if (backBtn) backBtn.style.display = 'none'
 
   const pdf = new jsPDF({
     orientation: 'portrait',
@@ -13,32 +15,15 @@ export async function exportReportPDF(contentId, filename, title, subtitle) {
 
   const pdfWidth = pdf.internal.pageSize.getWidth()
   const pdfHeight = pdf.internal.pageSize.getHeight()
-  const margin = 10
+  const margin = 8
   const contentWidth = pdfWidth - margin * 2
   let currentY = margin
-  let firstPage = true
 
-  if (title) {
-    pdf.setFontSize(18)
-    pdf.setFont('helvetica', 'bold')
-    pdf.setTextColor(139, 26, 46)
-    pdf.text(title, margin, currentY + 6)
-    currentY += 10
-  }
+  document.querySelectorAll(`#${contentId} [class*="overflow-x"]`).forEach((el) => { el.scrollLeft = 0 })
 
-  if (subtitle) {
-    pdf.setFontSize(10)
-    pdf.setFont('helvetica', 'normal')
-    pdf.setTextColor(120, 120, 120)
-    pdf.text(subtitle, margin, currentY)
-    currentY += 8
-  }
-
-  pdf.setTextColor(0, 0, 0)
-
-  const sections = document.querySelectorAll(`#${contentId} .report-section`)
-  for (const section of sections) {
-    const canvas = await html2canvas(section, {
+  const sections = Array.from(document.querySelectorAll(`#${contentId} .report-section`))
+  for (let idx = 0; idx < sections.length; idx++) {
+    const canvas = await html2canvas(sections[idx], {
       scale: 2,
       backgroundColor: '#ffffff',
       useCORS: true,
@@ -49,22 +34,23 @@ export async function exportReportPDF(contentId, filename, title, subtitle) {
     const imgData = canvas.toDataURL('image/png')
     const imgH = (canvas.height * contentWidth) / canvas.width
 
-    if (!firstPage && currentY + imgH > pdfHeight - margin) {
+    if (currentY > margin && currentY + imgH > pdfHeight - margin) {
       pdf.addPage()
       currentY = margin
     }
 
     pdf.addImage(imgData, 'PNG', margin, currentY, contentWidth, imgH)
-    currentY += imgH + 4
-    firstPage = false
+    currentY += imgH + 3
 
-    if (currentY > pdfHeight - margin - 10) {
+    const isLast = idx === sections.length - 1
+    if (!isLast && currentY > pdfHeight - margin - 8) {
       pdf.addPage()
       currentY = margin
     }
   }
 
   if (exportButtons) exportButtons.style.display = ''
+  if (backBtn) backBtn.style.display = ''
   pdf.save(filename)
 }
 
@@ -107,9 +93,7 @@ export function exportPlayerCSV(playerName, history, targets) {
     )
     .join('\n')
 
-  const blob = new Blob(['﻿' + csvContent], {
-    type: 'text/csv;charset=utf-8',
-  })
+  const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -148,11 +132,8 @@ export function exportTeamCSV(groupName, history, rankings, targets) {
 
   const targetHeaders = ['Parametro', 'Max Insufficiente', 'Min Ottimo']
   const paramLabels = {
-    SR: 'Scanning Rate',
-    DQI: 'Decision Quality',
-    AI: 'Anticipazione',
-    TRS: 'Trans. Reset',
-    VCI: 'Comunicazione',
+    SR: 'Scanning Rate', DQI: 'Decision Quality',
+    AI: 'Anticipazione', TRS: 'Trans. Reset', VCI: 'Comunicazione',
   }
   const targetRows = targets.map((t) => [
     paramLabels[t.parameter] ?? t.parameter,
@@ -183,9 +164,7 @@ export function exportTeamCSV(groupName, history, rankings, targets) {
     )
     .join('\n')
 
-  const blob = new Blob(['﻿' + csvContent], {
-    type: 'text/csv;charset=utf-8',
-  })
+  const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

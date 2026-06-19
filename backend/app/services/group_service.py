@@ -148,6 +148,7 @@ class GroupService:
                 TrainingSession.session_date,
                 TrainingSession.session_type,
             )
+            .having(func.count(Measurement.id) > 0)
             .order_by(TrainingSession.session_date.asc())
             .offset(skip)
             .limit(limit)
