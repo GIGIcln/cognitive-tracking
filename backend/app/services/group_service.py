@@ -10,6 +10,7 @@ from app.models.group import Group
 from app.models.group_change_log import GroupChangeLog
 from app.models.group_target import GroupTarget
 from app.models.measurement import Measurement
+from app.models.player import Player
 from app.models.season import Season
 from app.models.training_session import TrainingSession
 from app.schemas.group import GroupCreate, GroupUpdate, TargetUpdateItem
@@ -166,6 +167,52 @@ class GroupService:
             }
             for r in rows
         ]
+
+    def get_attendance(self, group_id: uuid.UUID, limit: int = 20) -> dict | None:
+        if not self.db.get(Group, group_id):
+            return None
+
+        session_ids = [
+            row.id for row in (
+                self.db.query(TrainingSession.id)
+                .filter(
+                    TrainingSession.group_id == group_id,
+                    TrainingSession.is_active.is_(True),
+                )
+                .order_by(TrainingSession.session_date.desc())
+                .limit(limit)
+                .all()
+            )
+        ]
+        if not session_ids:
+            return {"sessions": [], "players": [], "records": []}
+
+        sessions = (
+            self.db.query(TrainingSession)
+            .filter(TrainingSession.id.in_(session_ids))
+            .order_by(TrainingSession.session_date.asc())
+            .all()
+        )
+
+        rows = (
+            self.db.query(Measurement, Player)
+            .join(Player, Player.id == Measurement.player_id)
+            .filter(Measurement.session_id.in_(session_ids))
+            .order_by(Player.last_name.asc(), Player.first_name.asc())
+            .all()
+        )
+
+        seen_players: dict[uuid.UUID, Player] = {}
+        records = []
+        for m, p in rows:
+            seen_players[p.id] = p
+            records.append({"player_id": p.id, "session_id": m.session_id, "is_absent": m.is_absent})
+
+        return {
+            "sessions": sessions,
+            "players": list(seen_players.values()),
+            "records": records,
+        }
 
     def update_targets(
         self, group_id: uuid.UUID, body: list[TargetUpdateItem]

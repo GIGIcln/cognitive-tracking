@@ -9,6 +9,10 @@ from app.database import get_db
 from app.rbac import assert_group_access, require_admin, require_auth
 from app.schemas.auth import UserContext
 from app.schemas.group import (
+    AttendancePlayerInfo,
+    AttendanceRecord,
+    AttendanceSessionInfo,
+    GroupAttendanceResponse,
     GroupChangeLogResponse,
     GroupCreate,
     GroupDetailResponse,
@@ -66,6 +70,24 @@ def get_group_history(
 ):
     assert_group_access(current_user, group_id)
     return GroupService(db).get_history(group_id, skip, limit)
+
+
+@router.get("/{group_id}/attendance", response_model=GroupAttendanceResponse)
+def get_attendance(
+    group_id: uuid.UUID,
+    limit: int = Query(default=20, ge=1, le=60),
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    assert_group_access(current_user, group_id)
+    data = GroupService(db).get_attendance(group_id, limit)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Gruppo non trovato")
+    return GroupAttendanceResponse(
+        sessions=[AttendanceSessionInfo.model_validate(s) for s in data["sessions"]],
+        players=[AttendancePlayerInfo(id=p.id, first_name=p.first_name, last_name=p.last_name) for p in data["players"]],
+        records=[AttendanceRecord(**r) for r in data["records"]],
+    )
 
 
 @router.get("/{group_id}/targets", response_model=list[TargetResponse])

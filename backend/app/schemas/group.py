@@ -76,6 +76,30 @@ class GroupDetailResponse(GroupResponse):
     targets: list[TargetResponse]
 
 
+class AttendanceSessionInfo(BaseModel):
+    id: uuid.UUID
+    session_date: date
+    session_type: str
+
+
+class AttendancePlayerInfo(BaseModel):
+    id: uuid.UUID
+    first_name: str
+    last_name: str
+
+
+class AttendanceRecord(BaseModel):
+    player_id: uuid.UUID
+    session_id: uuid.UUID
+    is_absent: bool
+
+
+class GroupAttendanceResponse(BaseModel):
+    sessions: list[AttendanceSessionInfo]
+    players: list[AttendancePlayerInfo]
+    records: list[AttendanceRecord]
+
+
 class GroupChangeLogResponse(BaseModel):
     id: uuid.UUID
     changed_at: datetime

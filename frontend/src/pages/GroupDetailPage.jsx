@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getGroup, updateGroupTargets, getGroupChangelog } from '../api/groups'
+import { getGroup, updateGroupTargets, getGroupChangelog, getGroupAttendance } from '../api/groups'
 import { deletePlayer } from '../api/players'
 import PlayerFormModal from '../components/PlayerFormModal'
 import { Pencil, Trash2 } from 'lucide-react'
@@ -16,6 +16,138 @@ const FIELD_LABELS = {
   sub_group: 'Sottogruppo',
   max_players: 'Max giocatori',
   name: 'Nome',
+}
+
+const SESSION_TYPE_SHORT = { training: 'All', match: 'Par', test: 'Test' }
+
+function AttendanceGrid({ data, loading, limit, onLimitChange }) {
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="animate-spin rounded-full h-6 w-6 border-4 border-granata border-t-transparent" />
+      </div>
+    )
+  }
+
+  const sessions = data?.sessions ?? []
+  const players = data?.players ?? []
+  const records = data?.records ?? []
+
+  // Build lookup: playerIdStr -> sessionIdStr -> is_absent
+  const lookup = {}
+  for (const r of records) {
+    const pid = String(r.player_id)
+    if (!lookup[pid]) lookup[pid] = {}
+    lookup[pid][String(r.session_id)] = r.is_absent
+  }
+
+  const pct = (n, d) => d === 0 ? '—' : `${Math.round((n / d) * 100)}%`
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-sm text-gray-500">
+          {players.length} giocatori · {sessions.length} sessioni
+        </span>
+        <select
+          value={limit}
+          onChange={(e) => onLimitChange(Number(e.target.value))}
+          className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-granata"
+        >
+          {[10, 20, 30, 60].map((n) => (
+            <option key={n} value={n}>Ultime {n}</option>
+          ))}
+        </select>
+      </div>
+
+      {!sessions.length ? (
+        <div className="text-center text-gray-400 py-12 text-sm">Nessuna sessione registrata</div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <table className="text-xs border-collapse" style={{ minWidth: `${sessions.length * 44 + 180}px` }}>
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="sticky left-0 bg-gray-50 text-left px-3 py-2.5 text-gray-600 font-medium min-w-[160px] z-10 border-r border-gray-200">
+                  Giocatore
+                </th>
+                {sessions.map((s) => {
+                  const d = new Date(s.session_date)
+                  return (
+                    <th key={s.id} className="px-1.5 py-2 text-center text-gray-500 font-medium min-w-[40px]">
+                      <div>{d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}</div>
+                      <div className="text-gray-400 font-normal">{SESSION_TYPE_SHORT[s.session_type] ?? s.session_type}</div>
+                    </th>
+                  )
+                })}
+                <th className="px-2 py-2.5 text-center text-gray-600 font-medium min-w-[52px] border-l border-gray-200">
+                  % pres.
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {players.map((p) => {
+                const pid = String(p.id)
+                let present = 0
+                let total = 0
+                return (
+                  <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="sticky left-0 bg-white hover:bg-gray-50 px-3 py-2 font-medium text-gray-800 border-r border-gray-200 z-10">
+                      {p.last_name} {p.first_name}
+                    </td>
+                    {sessions.map((s) => {
+                      const sid = String(s.id)
+                      const record = lookup[pid]?.[sid]
+                      if (record === undefined) {
+                        return <td key={s.id} className="px-1 py-2 text-center text-gray-300">—</td>
+                      }
+                      total++
+                      const isPresent = !record
+                      if (isPresent) present++
+                      return (
+                        <td key={s.id} className="px-1 py-2 text-center">
+                          {isPresent
+                            ? <span className="text-green-600 font-bold">✓</span>
+                            : <span className="text-red-500 font-bold">✗</span>
+                          }
+                        </td>
+                      )
+                    })}
+                    <td className="px-2 py-2 text-center font-semibold border-l border-gray-200 text-gray-700">
+                      {pct(present, total)}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-gray-200 bg-gray-50">
+                <td className="sticky left-0 bg-gray-50 px-3 py-2 text-gray-500 font-medium border-r border-gray-200 z-10">
+                  % presenze
+                </td>
+                {sessions.map((s) => {
+                  const sid = String(s.id)
+                  let present = 0, total = 0
+                  for (const p of players) {
+                    const record = lookup[String(p.id)]?.[sid]
+                    if (record !== undefined) { total++; if (!record) present++ }
+                  }
+                  const p = total === 0 ? null : Math.round((present / total) * 100)
+                  return (
+                    <td key={s.id} className="px-1 py-2 text-center font-semibold" style={{
+                      color: p === null ? '#9ca3af' : p >= 80 ? '#16a34a' : p >= 60 ? '#d97706' : '#dc2626'
+                    }}>
+                      {p === null ? '—' : `${p}%`}
+                    </td>
+                  )
+                })}
+                <td className="border-l border-gray-200" />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function ChangelogTimeline({ entries, loading }) {
@@ -89,6 +221,9 @@ export default function GroupDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const [changelog, setChangelog] = useState([])
   const [changelogLoading, setChangelogLoading] = useState(false)
+  const [attendance, setAttendance] = useState(null)
+  const [attendanceLoading, setAttendanceLoading] = useState(false)
+  const [attendanceLimit, setAttendanceLimit] = useState(20)
   const { isAdmin } = useAuth()
 
   const load = () => {
@@ -118,6 +253,15 @@ export default function GroupDetailPage() {
       .catch(() => {})
       .finally(() => setChangelogLoading(false))
   }, [activeTab, id])
+
+  useEffect(() => {
+    if (activeTab !== 'presenze') return
+    setAttendanceLoading(true)
+    getGroupAttendance(id, attendanceLimit)
+      .then((res) => setAttendance(res.data))
+      .catch(() => {})
+      .finally(() => setAttendanceLoading(false))
+  }, [activeTab, id, attendanceLimit])
 
   const handleSaveTargets = async () => {
     setSaving(true)
@@ -188,6 +332,7 @@ export default function GroupDetailPage() {
           { key: 'players', label: 'Giocatori' },
           { key: 'targets', label: 'Target' },
           { key: 'sviluppo', label: 'Sviluppo' },
+          { key: 'presenze', label: 'Presenze' },
         ].map(({ key, label }) => (
           <button
             key={key}
@@ -305,6 +450,16 @@ export default function GroupDetailPage() {
       {/* Sviluppo tab */}
       {activeTab === 'sviluppo' && (
         <ChangelogTimeline entries={changelog} loading={changelogLoading} />
+      )}
+
+      {/* Presenze tab */}
+      {activeTab === 'presenze' && (
+        <AttendanceGrid
+          data={attendance}
+          loading={attendanceLoading}
+          limit={attendanceLimit}
+          onLimitChange={setAttendanceLimit}
+        />
       )}
 
       {/* Targets tab */}
