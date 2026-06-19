@@ -15,6 +15,8 @@ class ObservationEventInput(BaseModel):
     denominator: int = Field(ge=0)
     method: str = "live"
     observer_notes: str | None = None
+    video_ref: str | None = None
+    codebook_version: str = "v1"
 
     @model_validator(mode="after")
     def _validate_enums(self) -> ObservationEventInput:

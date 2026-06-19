@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import UUID, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import UUID, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -20,12 +20,6 @@ VALID_METHODS = frozenset({"live", "video", "audio"})
 
 class ObservationEvent(Base):
     __tablename__ = "observation_events"
-    __table_args__ = (
-        UniqueConstraint(
-            "session_id", "player_id", "metric_type",
-            name="uq_observation_session_player_metric",
-        ),
-    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id: Mapped[uuid.UUID] = mapped_column(
@@ -42,6 +36,8 @@ class ObservationEvent(Base):
     denominator: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     method: Mapped[str] = mapped_column(String(10), nullable=False, default="live")
     observer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    video_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    codebook_version: Mapped[str] = mapped_column(String(16), nullable=False, server_default="v1")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

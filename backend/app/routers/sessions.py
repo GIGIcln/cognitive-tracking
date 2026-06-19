@@ -19,7 +19,11 @@ from app.schemas.session import (
     SessionCreate,
     SessionResponse,
 )
-from app.services.observation_service import ObservationService, event_to_response
+from app.services.observation_service import (
+    ObservationService,
+    aggregate_events_to_responses,
+    event_to_response,
+)
 from app.services.session_service import SessionService
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -208,7 +212,7 @@ def upsert_events(
         raise HTTPException(status_code=404, detail=f"Giocatori non trovati: {missing}")
 
     events = ObservationService(db).upsert_events(session_id, session.group_id, body)
-    return [event_to_response(e) for e in events]
+    return aggregate_events_to_responses(events)
 
 
 @router.get("/{session_id}/events", response_model=list[ObservationEventResponse])

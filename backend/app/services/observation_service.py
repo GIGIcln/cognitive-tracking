@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
 
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.measurement import Measurement
@@ -15,7 +15,7 @@ _METRIC_MIN_N: dict[str, int] = {
     "DQI": 20,
     "TRS": 10,
     "VCI": 8,   # denominator = minutes observed
-    # AI uses numerator as sample size; thresholds set in _reliability_flag below
+    # AI uses numerator as sample size; thresholds set in reliability_flag below
 }
 
 # Maps metric label → Measurement column name
@@ -31,7 +31,7 @@ _METRIC_TO_FIELD: dict[str, str] = {
 def reliability_flag(metric: str, numerator: int, denominator: int) -> str:
     """Return 'insufficient' | 'low' | 'medium' | 'high'."""
     if metric == "AI":
-        # AI is count-only; reliability based on number of recognized moves
+        # AI is count-only; reliability based on number of recognised moves
         n = numerator
         if n < 3:  return "insufficient"
         if n < 6:  return "low"
@@ -79,6 +79,7 @@ def normalized_score(metric: str, numerator: int, denominator: int) -> float | N
 
 
 def event_to_response(event: ObservationEvent) -> ObservationEventResponse:
+    """Convert a single raw row to a response — used by GET /events for audit access."""
     raw: float | None = (
         event.numerator / event.denominator if event.denominator > 0 else None
     )
@@ -101,6 +102,41 @@ def event_to_response(event: ObservationEvent) -> ObservationEventResponse:
     )
 
 
+def aggregate_events_to_responses(events: list[ObservationEvent]) -> list[ObservationEventResponse]:
+    """Aggregate raw event rows by (player_id, metric_type) → one response per group.
+
+    Derivation formulas and reliability thresholds are unchanged — they receive the
+    same scalar inputs as before, now computed as SUM across all rows in the group.
+    """
+    groups: dict[tuple, list[ObservationEvent]] = defaultdict(list)
+    for ev in events:
+        groups[(ev.player_id, ev.metric_type)].append(ev)
+
+    responses: list[ObservationEventResponse] = []
+    for (player_id, metric_type), rows in groups.items():
+        agg_num = sum(r.numerator for r in rows)
+        agg_den = sum(r.denominator for r in rows)
+        raw: float | None = agg_num / agg_den if agg_den > 0 else None
+        n = agg_num if metric_type == "AI" else agg_den
+        last = rows[-1]
+        responses.append(ObservationEventResponse(
+            id=last.id,
+            player_id=player_id,
+            first_name=last.player.first_name,
+            last_name=last.player.last_name,
+            metric_type=metric_type,
+            numerator=agg_num,
+            denominator=agg_den,
+            raw_rate=round(raw, 3) if raw is not None else None,
+            n_events=n,
+            reliability_flag=reliability_flag(metric_type, agg_num, agg_den),
+            normalized_score=normalized_score(metric_type, agg_num, agg_den),
+            method=last.method,
+            observer_notes=last.observer_notes,
+        ))
+    return responses
+
+
 class ObservationService:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -111,49 +147,52 @@ class ObservationService:
         group_id: uuid.UUID,
         batch: ObservationEventsBatchInput,
     ) -> list[ObservationEvent]:
-        # Upsert each event row
+        """Idempotent batch save: delete existing rows for each (player, metric) pair
+        in the batch, then insert all incoming rows fresh.  Multiple rows per pair
+        are supported — the table is now append-only with no UNIQUE constraint."""
+
+        # 1. Delete previous rows only for the (player_id, metric_type) pairs in this batch
+        keys = {(ev.player_id, ev.metric_type) for ev in batch.events}
+        for player_id, metric_type in keys:
+            self.db.query(ObservationEvent).filter(
+                ObservationEvent.session_id == session_id,
+                ObservationEvent.player_id == player_id,
+                ObservationEvent.metric_type == metric_type,
+            ).delete(synchronize_session=False)
+
+        # 2. Insert all incoming rows as new events
         for ev in batch.events:
-            stmt = (
-                pg_insert(ObservationEvent)
-                .values(
-                    session_id=session_id,
-                    player_id=ev.player_id,
-                    group_id=group_id,
-                    metric_type=ev.metric_type,
-                    numerator=ev.numerator,
-                    denominator=ev.denominator,
-                    method=ev.method,
-                    observer_notes=ev.observer_notes,
-                )
-                .on_conflict_do_update(
-                    constraint="uq_observation_session_player_metric",
-                    set_={
-                        "numerator": ev.numerator,
-                        "denominator": ev.denominator,
-                        "method": ev.method,
-                        "observer_notes": ev.observer_notes,
-                    },
-                )
-            )
-            self.db.execute(stmt)
+            self.db.add(ObservationEvent(
+                session_id=session_id,
+                player_id=ev.player_id,
+                group_id=group_id,
+                metric_type=ev.metric_type,
+                numerator=ev.numerator,
+                denominator=ev.denominator,
+                method=ev.method,
+                observer_notes=ev.observer_notes,
+                video_ref=ev.video_ref,
+                codebook_version=ev.codebook_version,
+            ))
 
         self.db.flush()
 
-        # Write back derived scores into the measurements table
-        player_events: dict[uuid.UUID, list] = {}
+        # 3. Write derived scores back to measurements using AGGREGATED batch values.
+        #    We aggregate from batch.events (the data we just inserted for these pairs).
+        #    Other (player, metric) pairs already in measurements are untouched.
+        player_metric_agg: dict[tuple, dict[str, int]] = defaultdict(lambda: {"num": 0, "den": 0})
         for ev in batch.events:
-            player_events.setdefault(ev.player_id, []).append(ev)
+            key = (ev.player_id, ev.metric_type)
+            player_metric_agg[key]["num"] += ev.numerator
+            player_metric_agg[key]["den"] += ev.denominator
 
-        for player_id, evs in player_events.items():
-            updates: dict[str, float] = {}
-            for ev in evs:
-                score = normalized_score(ev.metric_type, ev.numerator, ev.denominator)
-                if score is not None:
-                    updates[_METRIC_TO_FIELD[ev.metric_type]] = score
+        player_updates: dict[uuid.UUID, dict[str, float]] = defaultdict(dict)
+        for (player_id, metric_type), agg in player_metric_agg.items():
+            score = normalized_score(metric_type, agg["num"], agg["den"])
+            if score is not None:
+                player_updates[player_id][_METRIC_TO_FIELD[metric_type]] = score
 
-            if not updates:
-                continue
-
+        for player_id, updates in player_updates.items():
             existing = (
                 self.db.query(Measurement)
                 .filter(
@@ -166,14 +205,12 @@ class ObservationService:
                 for field, value in updates.items():
                     setattr(existing, field, value)
             else:
-                self.db.add(
-                    Measurement(
-                        session_id=session_id,
-                        player_id=player_id,
-                        group_id=group_id,
-                        **updates,
-                    )
-                )
+                self.db.add(Measurement(
+                    session_id=session_id,
+                    player_id=player_id,
+                    group_id=group_id,
+                    **updates,
+                ))
 
         self.db.commit()
 
@@ -184,6 +221,7 @@ class ObservationService:
         )
 
     def get_events(self, session_id: uuid.UUID) -> list[ObservationEvent]:
+        """Return all raw event rows for a session (audit access)."""
         return (
             self.db.query(ObservationEvent)
             .filter(ObservationEvent.session_id == session_id)
