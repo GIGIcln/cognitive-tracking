@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { getGroup, updateGroupTargets, getGroupChangelog, getGroupAttendance } from '../api/groups'
+import { getGroup, updateGroupTargets, getGroupChangelog, getGroupAttendance, getGroupPlayerStats } from '../api/groups'
 import { deletePlayer } from '../api/players'
 import PlayerFormModal from '../components/PlayerFormModal'
 import { Pencil, Trash2 } from 'lucide-react'
 import { LEVEL_COLORS } from '../constants/domain'
 import { useAuth } from '../context/AuthContext'
+import {
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  Radar, ResponsiveContainer, Legend, Tooltip,
+} from 'recharts'
 
 const PARAMS = ['SR', 'DQI', 'AI', 'TRS', 'VCI']
 
@@ -152,6 +156,145 @@ function AttendanceGrid({ data, loading, limit, onLimitChange }) {
   )
 }
 
+const COMPARISON_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
+const METRICS = [
+  { key: 'avg_sr',  label: 'SR'  },
+  { key: 'avg_dqi', label: 'DQI' },
+  { key: 'avg_ai',  label: 'AI'  },
+  { key: 'avg_trs', label: 'TRS' },
+  { key: 'avg_vci', label: 'VCI' },
+]
+
+function ComparisonView({ stats, loading, selected, onToggle }) {
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="animate-spin rounded-full h-6 w-6 border-4 border-granata border-t-transparent" />
+      </div>
+    )
+  }
+  if (!stats.length) {
+    return <div className="text-center text-gray-400 py-12 text-sm">Nessun dato disponibile</div>
+  }
+
+  const selectedStats = stats.filter((p) => selected.includes(p.player_id))
+
+  const radarData = METRICS.map(({ key, label }) => {
+    const entry = { metric: label }
+    selectedStats.forEach((p) => {
+      entry[`${p.last_name} ${p.first_name}`] = p[key] !== null ? +p[key].toFixed(2) : null
+    })
+    return entry
+  })
+
+  return (
+    <div className="space-y-5">
+      {/* Player selector */}
+      <div>
+        <div className="text-xs text-gray-500 mb-2">Seleziona fino a 4 giocatori</div>
+        <div className="flex flex-wrap gap-2">
+          {stats.map((p, i) => {
+            const isSelected = selected.includes(p.player_id)
+            const colorIdx = selected.indexOf(p.player_id)
+            return (
+              <button
+                key={p.player_id}
+                onClick={() => onToggle(p.player_id)}
+                className="px-3 py-1.5 rounded-full text-xs font-medium border transition-all"
+                style={isSelected ? {
+                  backgroundColor: COMPARISON_COLORS[colorIdx],
+                  borderColor: COMPARISON_COLORS[colorIdx],
+                  color: '#fff',
+                } : {
+                  backgroundColor: '#fff',
+                  borderColor: '#d1d5db',
+                  color: '#6b7280',
+                  opacity: selected.length >= 4 ? 0.5 : 1,
+                }}
+                disabled={!isSelected && selected.length >= 4}
+              >
+                {p.last_name} {p.first_name}
+                <span className="ml-1.5 opacity-70">({p.session_count} ses.)</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {selectedStats.length < 2 ? (
+        <div className="text-center text-gray-400 py-8 text-sm">Seleziona almeno 2 giocatori</div>
+      ) : (
+        <>
+          {/* Radar chart */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <ResponsiveContainer width="100%" height={300}>
+              <RadarChart data={radarData}>
+                <PolarGrid />
+                <PolarAngleAxis dataKey="metric" tick={{ fontSize: 12 }} />
+                <PolarRadiusAxis domain={[0, 10]} tick={{ fontSize: 10 }} />
+                <Tooltip
+                  formatter={(v) => v !== null ? v.toFixed(2) : '—'}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {selectedStats.map((p, i) => (
+                  <Radar
+                    key={p.player_id}
+                    name={`${p.last_name} ${p.first_name}`}
+                    dataKey={`${p.last_name} ${p.first_name}`}
+                    fill={COMPARISON_COLORS[i]}
+                    fillOpacity={0.15}
+                    stroke={COMPARISON_COLORS[i]}
+                    strokeWidth={2}
+                  />
+                ))}
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Comparison table */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left px-4 py-2.5 text-gray-600 font-medium text-xs">Metrica</th>
+                  {selectedStats.map((p, i) => (
+                    <th key={p.player_id} className="text-center px-3 py-2.5 text-xs font-medium" style={{ color: COMPARISON_COLORS[i] }}>
+                      {p.last_name} {p.first_name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {METRICS.map(({ key, label }) => {
+                  const values = selectedStats.map((p) => p[key])
+                  const max = Math.max(...values.filter((v) => v !== null))
+                  return (
+                    <tr key={key}>
+                      <td className="px-4 py-2.5 font-semibold text-gray-700 text-xs">{label}</td>
+                      {selectedStats.map((p, i) => {
+                        const v = p[key]
+                        const isTop = v !== null && v === max && selectedStats.length > 1
+                        return (
+                          <td key={p.player_id} className="px-3 py-2.5 text-center">
+                            <span className={`text-sm font-medium ${isTop ? 'text-green-600' : 'text-gray-800'}`}>
+                              {v !== null ? v.toFixed(2) : '—'}
+                            </span>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function ChangelogTimeline({ entries, loading }) {
   if (loading) {
     return (
@@ -226,6 +369,9 @@ export default function GroupDetailPage() {
   const [attendance, setAttendance] = useState(null)
   const [attendanceLoading, setAttendanceLoading] = useState(false)
   const [attendanceLimit, setAttendanceLimit] = useState(20)
+  const [playerStats, setPlayerStats] = useState([])
+  const [playerStatsLoading, setPlayerStatsLoading] = useState(false)
+  const [selectedPlayers, setSelectedPlayers] = useState([])
   const { isAdmin } = useAuth()
 
   const load = () => {
@@ -264,6 +410,16 @@ export default function GroupDetailPage() {
       .catch(() => {})
       .finally(() => setAttendanceLoading(false))
   }, [activeTab, id, attendanceLimit])
+
+  useEffect(() => {
+    if (activeTab !== 'confronto') return
+    if (playerStats.length) return
+    setPlayerStatsLoading(true)
+    getGroupPlayerStats(id)
+      .then((res) => { setPlayerStats(res.data); setSelectedPlayers(res.data.slice(0, 2).map((p) => p.player_id)) })
+      .catch(() => {})
+      .finally(() => setPlayerStatsLoading(false))
+  }, [activeTab, id])
 
   const handleSaveTargets = async () => {
     setSaving(true)
@@ -335,6 +491,7 @@ export default function GroupDetailPage() {
           { key: 'targets', label: 'Target' },
           { key: 'sviluppo', label: 'Sviluppo' },
           { key: 'presenze', label: 'Presenze' },
+          { key: 'confronto', label: 'Confronto' },
         ].map(({ key, label }) => (
           <button
             key={key}
@@ -464,6 +621,18 @@ export default function GroupDetailPage() {
           loading={attendanceLoading}
           limit={attendanceLimit}
           onLimitChange={setAttendanceLimit}
+        />
+      )}
+
+      {/* Confronto tab */}
+      {activeTab === 'confronto' && (
+        <ComparisonView
+          stats={playerStats}
+          loading={playerStatsLoading}
+          selected={selectedPlayers}
+          onToggle={(id) => setSelectedPlayers((prev) =>
+            prev.includes(id) ? prev.filter((x) => x !== id) : prev.length < 4 ? [...prev, id] : prev
+          )}
         />
       )}
 

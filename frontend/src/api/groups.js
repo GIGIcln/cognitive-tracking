@@ -13,3 +13,4 @@ export const getGroupHistory = (groupId, limit = 60) =>
 export const getGroupChangelog = (groupId) => api.get(`/groups/${groupId}/changelog`)
 export const getGroupAttendance = (groupId, limit = 20) =>
   api.get(`/groups/${groupId}/attendance`, { params: { limit } })
+export const getGroupPlayerStats = (groupId) => api.get(`/groups/${groupId}/player_stats`)

@@ -20,6 +20,7 @@ from app.schemas.group import (
     GroupResponse,
     GroupUpdate,
     PlayerInGroupResponse,
+    PlayerStatsResponse,
     TargetResponse,
     TargetUpdateItem,
 )
@@ -70,6 +71,19 @@ def get_group_history(
 ):
     assert_group_access(current_user, group_id)
     return GroupService(db).get_history(group_id, skip, limit)
+
+
+@router.get("/{group_id}/player_stats", response_model=list[PlayerStatsResponse])
+def get_player_stats(
+    group_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    assert_group_access(current_user, group_id)
+    result = GroupService(db).get_player_stats(group_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Gruppo non trovato")
+    return [PlayerStatsResponse(**r) for r in result]
 
 
 @router.get("/{group_id}/attendance", response_model=GroupAttendanceResponse)

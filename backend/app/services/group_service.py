@@ -214,6 +214,47 @@ class GroupService:
             "records": records,
         }
 
+    def get_player_stats(self, group_id: uuid.UUID) -> list[dict] | None:
+        if not self.db.get(Group, group_id):
+            return None
+        rows = (
+            self.db.query(
+                Measurement.player_id,
+                Player.first_name,
+                Player.last_name,
+                func.count(Measurement.id).label("session_count"),
+                func.avg(Measurement.scanning_rate).label("avg_sr"),
+                func.avg(Measurement.decision_quality).label("avg_dqi"),
+                func.avg(Measurement.anticipation).label("avg_ai"),
+                func.avg(Measurement.transition_reset).label("avg_trs"),
+                func.avg(Measurement.verbal_comm).label("avg_vci"),
+            )
+            .join(Player, Player.id == Measurement.player_id)
+            .join(TrainingSession, TrainingSession.id == Measurement.session_id)
+            .filter(
+                TrainingSession.group_id == group_id,
+                TrainingSession.is_active.is_(True),
+                Measurement.is_absent.is_(False),
+            )
+            .group_by(Measurement.player_id, Player.first_name, Player.last_name)
+            .order_by(Player.last_name.asc(), Player.first_name.asc())
+            .all()
+        )
+        return [
+            {
+                "player_id": r.player_id,
+                "first_name": r.first_name,
+                "last_name": r.last_name,
+                "session_count": r.session_count,
+                "avg_sr": float(r.avg_sr) if r.avg_sr is not None else None,
+                "avg_dqi": float(r.avg_dqi) if r.avg_dqi is not None else None,
+                "avg_ai": float(r.avg_ai) if r.avg_ai is not None else None,
+                "avg_trs": float(r.avg_trs) if r.avg_trs is not None else None,
+                "avg_vci": float(r.avg_vci) if r.avg_vci is not None else None,
+            }
+            for r in rows
+        ]
+
     def update_targets(
         self, group_id: uuid.UUID, body: list[TargetUpdateItem]
     ) -> list[GroupTarget] | None:

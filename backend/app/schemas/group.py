@@ -100,6 +100,18 @@ class GroupAttendanceResponse(BaseModel):
     records: list[AttendanceRecord]
 
 
+class PlayerStatsResponse(BaseModel):
+    player_id: uuid.UUID
+    first_name: str
+    last_name: str
+    session_count: int
+    avg_sr: float | None
+    avg_dqi: float | None
+    avg_ai: float | None
+    avg_trs: float | None
+    avg_vci: float | None
+
+
 class GroupChangeLogResponse(BaseModel):
     id: uuid.UUID
     changed_at: datetime
