@@ -9,10 +9,12 @@ from app.database import get_db
 from app.rbac import assert_group_access, require_admin, require_auth
 from app.schemas.auth import UserContext
 from app.schemas.group import (
+    GroupChangeLogResponse,
     GroupCreate,
     GroupDetailResponse,
     GroupHistoryItemResponse,
     GroupResponse,
+    GroupUpdate,
     PlayerInGroupResponse,
     TargetResponse,
     TargetUpdateItem,
@@ -90,6 +92,33 @@ def create_group(
     group = GroupService(db).create(body)
     if group is None:
         raise HTTPException(status_code=404, detail="Nessuna stagione corrente trovata")
+    return GroupResponse.model_validate(group)
+
+
+@router.get("/{group_id}/changelog", response_model=list[GroupChangeLogResponse])
+def get_changelog(
+    group_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    assert_group_access(current_user, group_id)
+    logs = GroupService(db).get_changelog(group_id)
+    if logs is None:
+        raise HTTPException(status_code=404, detail="Gruppo non trovato")
+    return [GroupChangeLogResponse.model_validate(e) for e in logs]
+
+
+@router.patch("/{group_id}", response_model=GroupResponse)
+def update_group(
+    group_id: uuid.UUID,
+    body: GroupUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_admin),
+):
+    actor = current_user.full_name or current_user.email
+    group = GroupService(db).update(group_id, body, changed_by=actor)
+    if group is None:
+        raise HTTPException(status_code=404, detail="Gruppo non trovato")
     return GroupResponse.model_validate(group)
 
 

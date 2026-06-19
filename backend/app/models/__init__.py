@@ -8,6 +8,7 @@ from app.models.training_session import TrainingSession
 from app.models.measurement import Measurement
 from app.models.group_target import GroupTarget
 from app.models.observation_event import ObservationEvent
+from app.models.group_change_log import GroupChangeLog
 
 __all__ = [
     "Base",
@@ -20,4 +21,5 @@ __all__ = [
     "Measurement",
     "GroupTarget",
     "ObservationEvent",
+    "GroupChangeLog",
 ]

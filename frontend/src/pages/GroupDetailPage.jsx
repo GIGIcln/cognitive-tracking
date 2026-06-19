@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getGroup, updateGroupTargets } from '../api/groups'
+import { getGroup, updateGroupTargets, getGroupChangelog } from '../api/groups'
 import { deletePlayer } from '../api/players'
 import PlayerFormModal from '../components/PlayerFormModal'
 import { Pencil, Trash2 } from 'lucide-react'
@@ -8,6 +8,68 @@ import { LEVEL_COLORS } from '../constants/domain'
 import { useAuth } from '../context/AuthContext'
 
 const PARAMS = ['SR', 'DQI', 'AI', 'TRS', 'VCI']
+
+const FIELD_LABELS = {
+  level: 'Livello',
+  category: 'Categoria',
+  birth_year: 'Anno di nascita',
+  sub_group: 'Sottogruppo',
+  max_players: 'Max giocatori',
+  name: 'Nome',
+}
+
+function ChangelogTimeline({ entries, loading }) {
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="animate-spin rounded-full h-6 w-6 border-4 border-granata border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (!entries.length) {
+    return (
+      <div className="text-center text-gray-400 py-12 text-sm">
+        Nessuna modifica registrata
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative pl-6">
+      <div className="absolute left-2 top-0 bottom-0 w-px bg-gray-200" />
+      <div className="space-y-4">
+        {entries.map((entry) => (
+          <div key={entry.id} className="relative">
+            <div className="absolute -left-4 top-1.5 w-2.5 h-2.5 rounded-full bg-granata border-2 border-white" />
+            <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-granata uppercase tracking-wide">
+                  {FIELD_LABELS[entry.field] ?? entry.field}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {new Date(entry.changed_at).toLocaleDateString('it-IT', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                  })}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-500 line-through">{entry.old_value ?? '—'}</span>
+                <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="font-medium text-gray-900">{entry.new_value ?? '—'}</span>
+              </div>
+              {entry.changed_by && (
+                <div className="text-xs text-gray-400 mt-1">da {entry.changed_by}</div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function GroupDetailPage() {
   const { id } = useParams()
@@ -25,6 +87,8 @@ export default function GroupDetailPage() {
   const [editPlayer, setEditPlayer] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, player: null })
   const [deleting, setDeleting] = useState(false)
+  const [changelog, setChangelog] = useState([])
+  const [changelogLoading, setChangelogLoading] = useState(false)
   const { isAdmin } = useAuth()
 
   const load = () => {
@@ -45,6 +109,15 @@ export default function GroupDetailPage() {
   }
 
   useEffect(() => { load() }, [id])
+
+  useEffect(() => {
+    if (activeTab !== 'sviluppo') return
+    setChangelogLoading(true)
+    getGroupChangelog(id)
+      .then((res) => setChangelog(res.data))
+      .catch(() => {})
+      .finally(() => setChangelogLoading(false))
+  }, [activeTab, id])
 
   const handleSaveTargets = async () => {
     setSaving(true)
@@ -111,17 +184,21 @@ export default function GroupDetailPage() {
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-6">
-        {['players', 'targets'].map((tab) => (
+        {[
+          { key: 'players', label: 'Giocatori' },
+          { key: 'targets', label: 'Target' },
+          { key: 'sviluppo', label: 'Sviluppo' },
+        ].map(({ key, label }) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
+            key={key}
+            onClick={() => setActiveTab(key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              activeTab === tab
+              activeTab === key
                 ? 'border-granata text-granata'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            {tab === 'players' ? 'Giocatori' : 'Target'}
+            {label}
           </button>
         ))}
       </div>
@@ -223,6 +300,11 @@ export default function GroupDetailPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Sviluppo tab */}
+      {activeTab === 'sviluppo' && (
+        <ChangelogTimeline entries={changelog} loading={changelogLoading} />
       )}
 
       {/* Targets tab */}

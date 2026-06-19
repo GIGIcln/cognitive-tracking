@@ -7,11 +7,14 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.assignment import PlayerGroupAssignment
 from app.models.group import Group
+from app.models.group_change_log import GroupChangeLog
 from app.models.group_target import GroupTarget
 from app.models.measurement import Measurement
 from app.models.season import Season
 from app.models.training_session import TrainingSession
-from app.schemas.group import GroupCreate, TargetUpdateItem
+from app.schemas.group import GroupCreate, GroupUpdate, TargetUpdateItem
+
+TRACKED_FIELDS = {"level", "category", "birth_year", "sub_group", "max_players", "name"}
 
 
 class GroupService:
@@ -77,6 +80,35 @@ class GroupService:
         self.db.commit()
         self.db.refresh(group)
         return group
+
+    def update(self, group_id: uuid.UUID, body: GroupUpdate, changed_by: str | None = None) -> Group | None:
+        group = self.db.get(Group, group_id)
+        if not group or not group.is_active:
+            return None
+        for field, value in body.model_dump(exclude_unset=True).items():
+            old = getattr(group, field)
+            if old != value and field in TRACKED_FIELDS:
+                self.db.add(GroupChangeLog(
+                    group_id=group_id,
+                    field=field,
+                    old_value=str(old) if old is not None else None,
+                    new_value=str(value) if value is not None else None,
+                    changed_by=changed_by,
+                ))
+            setattr(group, field, value)
+        self.db.commit()
+        self.db.refresh(group)
+        return group
+
+    def get_changelog(self, group_id: uuid.UUID) -> list[GroupChangeLog] | None:
+        if not self.db.get(Group, group_id):
+            return None
+        return (
+            self.db.query(GroupChangeLog)
+            .filter(GroupChangeLog.group_id == group_id)
+            .order_by(GroupChangeLog.changed_at.desc())
+            .all()
+        )
 
     def delete(self, group_id: uuid.UUID) -> bool:
         group = self.db.get(Group, group_id)

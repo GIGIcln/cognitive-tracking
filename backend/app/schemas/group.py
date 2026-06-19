@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -25,6 +25,15 @@ class GroupCreate(BaseModel):
     level: str
     sub_group: str | None = None
     max_players: int = 18
+
+
+class GroupUpdate(BaseModel):
+    name: str | None = None
+    category: str | None = None
+    birth_year: int | None = None
+    level: str | None = None
+    sub_group: str | None = None
+    max_players: int | None = None
 
 
 class TargetResponse(BaseModel):
@@ -65,3 +74,14 @@ class GroupResponse(BaseModel):
 class GroupDetailResponse(GroupResponse):
     players: list[PlayerInGroupResponse]
     targets: list[TargetResponse]
+
+
+class GroupChangeLogResponse(BaseModel):
+    id: uuid.UUID
+    changed_at: datetime
+    field: str
+    old_value: str | None
+    new_value: str | None
+    changed_by: str | None
+
+    model_config = {"from_attributes": True}

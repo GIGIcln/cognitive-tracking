@@ -11,6 +11,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.assignment import PlayerGroupAssignment
+    from app.models.group_change_log import GroupChangeLog
     from app.models.group_target import GroupTarget
     from app.models.measurement import Measurement
     from app.models.season import Season
@@ -47,3 +48,6 @@ class Group(Base):
     )
     measurements: Mapped[list[Measurement]] = relationship("Measurement", back_populates="group")
     targets: Mapped[list[GroupTarget]] = relationship("GroupTarget", back_populates="group")
+    change_logs: Mapped[list[GroupChangeLog]] = relationship(
+        "GroupChangeLog", back_populates="group", order_by="GroupChangeLog.changed_at.desc()"
+    )
