@@ -11,7 +11,7 @@ from app.schemas.observation_event import ObservationEventResponse, ObservationE
 
 # Minimum denominator (or numerator for AI) before the data is considered reliable.
 _METRIC_MIN_N: dict[str, int] = {
-    "SR": 15,
+    "SR": 6,    # SR: numero di RICEZIONI (COUNT righe), non secondi.
     "DQI": 20,
     "TRS": 10,
     "VCI": 8,   # denominator = minutes observed
@@ -28,11 +28,9 @@ _METRIC_TO_FIELD: dict[str, str] = {
 }
 
 
-def reliability_flag(metric: str, numerator: int, denominator: int) -> str:
+def reliability_flag(metric: str, n: int) -> str:
     """Return 'insufficient' | 'low' | 'medium' | 'high'."""
     if metric == "AI":
-        # AI is count-only; reliability based on number of recognised moves
-        n = numerator
         if n < 3:  return "insufficient"
         if n < 6:  return "low"
         if n < 10: return "medium"
@@ -40,9 +38,9 @@ def reliability_flag(metric: str, numerator: int, denominator: int) -> str:
 
     min_n = _METRIC_MIN_N[metric]
     half = min_n // 2
-    if denominator < half:      return "insufficient"
-    if denominator < min_n:     return "low"
-    if denominator < min_n * 2: return "medium"
+    if n < half:      return "insufficient"
+    if n < min_n:     return "low"
+    if n < min_n * 2: return "medium"
     return "high"
 
 
@@ -83,8 +81,8 @@ def event_to_response(event: ObservationEvent) -> ObservationEventResponse:
     raw: float | None = (
         event.numerator / event.denominator if event.denominator > 0 else None
     )
-    # For AI, meaningful n is the numerator (count), not the denominator
-    n = event.numerator if event.metric_type == "AI" else event.denominator
+    # For AI: n = successes; for SR: n = 1 (single raw row = 1 reception); others: denominator
+    n = 1 if event.metric_type == "SR" else (event.numerator if event.metric_type == "AI" else event.denominator)
     return ObservationEventResponse(
         id=event.id,
         player_id=event.player_id,
@@ -95,7 +93,7 @@ def event_to_response(event: ObservationEvent) -> ObservationEventResponse:
         denominator=event.denominator,
         raw_rate=round(raw, 3) if raw is not None else None,
         n_events=n,
-        reliability_flag=reliability_flag(event.metric_type, event.numerator, event.denominator),
+        reliability_flag=reliability_flag(event.metric_type, n),
         normalized_score=normalized_score(event.metric_type, event.numerator, event.denominator),
         method=event.method,
         observer_notes=event.observer_notes,
@@ -117,7 +115,7 @@ def aggregate_events_to_responses(events: list[ObservationEvent]) -> list[Observ
         agg_num = sum(r.numerator for r in rows)
         agg_den = sum(r.denominator for r in rows)
         raw: float | None = agg_num / agg_den if agg_den > 0 else None
-        n = agg_num if metric_type == "AI" else agg_den
+        n = len(rows) if metric_type == "SR" else (agg_num if metric_type == "AI" else agg_den)
         last = rows[-1]
         responses.append(ObservationEventResponse(
             id=last.id,
@@ -129,7 +127,7 @@ def aggregate_events_to_responses(events: list[ObservationEvent]) -> list[Observ
             denominator=agg_den,
             raw_rate=round(raw, 3) if raw is not None else None,
             n_events=n,
-            reliability_flag=reliability_flag(metric_type, agg_num, agg_den),
+            reliability_flag=reliability_flag(metric_type, n),
             normalized_score=normalized_score(metric_type, agg_num, agg_den),
             method=last.method,
             observer_notes=last.observer_notes,

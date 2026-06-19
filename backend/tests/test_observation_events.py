@@ -6,6 +6,7 @@ features required.
 """
 
 import pytest
+from app.services.observation_service import reliability_flag
 
 _SESSION_BODY = {
     "session_date": "2025-10-15",
@@ -221,3 +222,83 @@ def test_events_get_returns_one_raw_row_per_event_not_aggregated(seeded):
     raw_dens = sorted(r["denominator"] for r in raw)
     assert raw_nums == [2, 3]
     assert raw_dens == [4, 6]
+
+
+# ── Test 7: SR RELIABILITY — COUNT-BASED ─────────────────────────────────────
+
+def test_sr_reliability_insufficient_when_few_events_many_seconds(seeded):
+    """Bug-pin: 2 ricezioni SR con molti secondi totali devono dare 'insufficient'.
+    Il denominator elevato (=secondi) NON deve salvare il flag — la reliability
+    è ora basata su COUNT(righe), non sulla somma dei secondi."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+
+    sid = _create_session(c, h, gid)
+    # den totale = 40 secondi, ma solo 2 righe → n=2 < half(3) → "insufficient"
+    res = _post_events(c, h, sid, [
+        {"player_id": pid, "metric_type": "SR", "numerator": 8, "denominator": 20},
+        {"player_id": pid, "metric_type": "SR", "numerator": 5, "denominator": 20},
+    ])
+    assert res.status_code == 200, res.json()
+    flag = res.json()[0]["reliability_flag"]
+    assert flag == "insufficient", (
+        f"2 ricezioni con den totale=40 deve dare 'insufficient', trovato '{flag}'"
+    )
+
+
+def test_sr_reliability_boundaries(seeded):
+    """Bande SR con min_n=6: <3 insufficient, 3-5 low, 6-11 medium, ≥12 high.
+    Copre tutti i confini di banda."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+
+    cases = [
+        (2,  "insufficient"),
+        (3,  "low"),
+        (5,  "low"),
+        (6,  "medium"),
+        (11, "medium"),
+        (12, "high"),
+    ]
+    for count, expected in cases:
+        sid = _create_session(c, h, gid)
+        res = _post_events(c, h, sid, [
+            {"player_id": pid, "metric_type": "SR", "numerator": 1, "denominator": 3}
+            for _ in range(count)
+        ])
+        assert res.status_code == 200, res.json()
+        flag = res.json()[0]["reliability_flag"]
+        assert flag == expected, (
+            f"{count} ricezioni deve dare '{expected}', trovato '{flag}'"
+        )
+
+
+# ── Test 8: NON-REGRESSIONE DQI/TRS/VCI/AI ───────────────────────────────────
+
+def test_reliability_non_regression_dqi_trs_vci_ai():
+    """DQI/TRS/VCI usano ancora denominator, AI usa ancora numerator.
+    Soglie immutate rispetto a prima della modifica SR."""
+
+    # DQI: min_n=20, half=10
+    assert reliability_flag("DQI", 9)  == "insufficient"  # 9 < 10
+    assert reliability_flag("DQI", 10) == "low"           # 10 < 20
+    assert reliability_flag("DQI", 25) == "medium"        # 20 ≤ 25 < 40
+    assert reliability_flag("DQI", 40) == "high"          # ≥ 40
+
+    # TRS: min_n=10, half=5
+    assert reliability_flag("TRS", 4)  == "insufficient"  # 4 < 5
+    assert reliability_flag("TRS", 5)  == "low"           # 5 < 10
+    assert reliability_flag("TRS", 15) == "medium"        # 10 ≤ 15 < 20
+    assert reliability_flag("TRS", 20) == "high"          # ≥ 20
+
+    # VCI: min_n=8, half=4
+    assert reliability_flag("VCI", 3)  == "insufficient"  # 3 < 4
+    assert reliability_flag("VCI", 4)  == "low"           # 4 < 8
+    assert reliability_flag("VCI", 10) == "medium"        # 8 ≤ 10 < 16
+    assert reliability_flag("VCI", 16) == "high"          # ≥ 16
+
+    # AI: soglie 3/6/10 invariate
+    assert reliability_flag("AI", 2)  == "insufficient"   # 2 < 3
+    assert reliability_flag("AI", 3)  == "low"            # 3 < 6
+    assert reliability_flag("AI", 6)  == "medium"         # 6 < 10
+    assert reliability_flag("AI", 10) == "high"           # ≥ 10
