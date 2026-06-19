@@ -4,10 +4,11 @@ import uuid
 from collections import defaultdict
 
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.measurement import Measurement
 from app.models.observation_event import ObservationEvent
+from app.models.player import Player
 from app.schemas.observation_event import ObservationEventResponse, ObservationEventsBatchInput
 
 # Minimum denominator (or numerator for AI) before the data is considered reliable.
@@ -156,6 +157,16 @@ class ObservationService:
         in the batch, then insert all incoming rows fresh.  Multiple rows per pair
         are supported — the table is now append-only with no UNIQUE constraint."""
 
+        # 0. Validate all player IDs exist in one batch query
+        player_ids = {ev.player_id for ev in batch.events}
+        found_ids = {
+            row.id
+            for row in self.db.query(Player.id).filter(Player.id.in_(player_ids)).all()
+        }
+        missing = sorted(str(pid) for pid in player_ids - found_ids)
+        if missing:
+            raise ValueError(f"Giocatori non trovati: {missing}")
+
         # 1. Delete previous rows only for the (player_id, metric_type) pairs in this batch
         keys = {(ev.player_id, ev.metric_type) for ev in batch.events}
         for player_id, metric_type in keys:
@@ -237,6 +248,7 @@ class ObservationService:
 
         return (
             self.db.query(ObservationEvent)
+            .options(joinedload(ObservationEvent.player))
             .filter(ObservationEvent.session_id == session_id)
             .all()
         )
@@ -245,6 +257,7 @@ class ObservationService:
         """Return all raw event rows for a session (audit access)."""
         return (
             self.db.query(ObservationEvent)
+            .options(joinedload(ObservationEvent.player))
             .filter(ObservationEvent.session_id == session_id)
             .all()
         )

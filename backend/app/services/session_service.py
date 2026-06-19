@@ -132,6 +132,7 @@ class SessionService:
 
         measurements = (
             self.db.query(Measurement)
+            .options(joinedload(Measurement.player))
             .filter(Measurement.session_id == session_id, Measurement.is_absent.is_(False))
             .all()
         )

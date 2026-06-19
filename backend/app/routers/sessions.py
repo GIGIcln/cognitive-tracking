@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.measurement import Measurement
-from app.models.player import Player
 from app.models.training_session import TrainingSession
 from app.rbac import assert_group_access, assert_write_access, require_admin, require_auth
 from app.schemas.auth import UserContext
@@ -182,12 +181,10 @@ def upsert_events(
     session = _get_session_or_404(db, session_id)
     assert_write_access(current_user, session.group_id)
 
-    player_ids = {ev.player_id for ev in body.events}
-    missing = [pid for pid in player_ids if db.get(Player, pid) is None]
-    if missing:
-        raise HTTPException(status_code=404, detail=f"Giocatori non trovati: {missing}")
-
-    events = ObservationService(db).upsert_events(session_id, session.group_id, body)
+    try:
+        events = ObservationService(db).upsert_events(session_id, session.group_id, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     return aggregate_events_to_responses(events)
 
 
