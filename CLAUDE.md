@@ -52,3 +52,11 @@
   - **Dove:** `backend/app/routers/sessions.py` / `groups.py`.
   - **Impatto:** Medio.
   - **Azione suggerita:** Per le pagine di report (es. `TeamReportPage`), le query che aggregano le `Measurements` storiche potrebbero diventare lente. Utilizzare funzioni di aggregazione SQL (es. `func.avg()`, `func.sum()`) a livello di DB invece di caricare tutti i record in memoria Python.
+
+## Observation events (metriche cognitive)
+- Modello **per-evento** (`observation_events`, append-only); salvataggio batch idempotente (delete-per-pair + insert), non upsert.
+- Derivazione: `normalized_score`/`reliability_flag` pure su scalari; aggrega (SUM righe) **poi** deriva.
+- Reliability `n`: SR = COUNT righe (ricezioni); DQI/TRS/VCI = `denominator`; AI = `numerator`. SR `min_n=6`; gate pubblicazione ≥ medium.
+- Ogni dato porta `codebook_version`; definizioni in `docs/codebook/codebook-v1.md` (congelate dal primo dato reale).
+- Validazione di dominio in Pydantic, niente CHECK/ENUM nel DB.
+- **Dettaglio, decisioni, invarianti e fili aperti:** [`docs/dev/observation-events.md`](docs/dev/observation-events.md) — leggilo prima di modificare questo sottosistema.
