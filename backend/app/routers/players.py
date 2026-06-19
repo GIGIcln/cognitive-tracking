@@ -12,7 +12,7 @@ from app.models.player import Player
 from app.rbac import assert_group_access, require_admin, require_auth
 from app.schemas.auth import UserContext
 from app.schemas.pagination import Page
-from app.schemas.player import AssignRequest, BulkAssignRequest, PlayerCreate, PlayerHistoryItemResponse, PlayerResponse, PlayerUpdate
+from app.schemas.player import AssignRequest, BulkAssignRequest, PlayerAssignmentResponse, PlayerCreate, PlayerHistoryItemResponse, PlayerResponse, PlayerUpdate
 from app.services.player_service import PlayerService
 
 router = APIRouter(prefix="/players", tags=["players"])
@@ -77,6 +77,21 @@ def get_player(
         raise HTTPException(status_code=404, detail="Giocatore non trovato")
     player, group_name = row
     return _to_response(player, group_name)
+
+
+@router.get("/{player_id}/assignments", response_model=list[PlayerAssignmentResponse])
+def get_player_assignments(
+    player_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    scope = current_user.read_scope()
+    if scope is not None and PlayerService(db).get_with_group(player_id, allowed_group_ids=scope) is None:
+        raise HTTPException(status_code=404, detail="Giocatore non trovato")
+    result = PlayerService(db).get_assignments(player_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Giocatore non trovato")
+    return result
 
 
 @router.get("/{player_id}/history", response_model=list[PlayerHistoryItemResponse])

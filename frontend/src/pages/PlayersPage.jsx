@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getPlayers, deletePlayer } from '../api/players'
 import { getGroups } from '../api/groups'
 import PlayerFormModal from '../components/PlayerFormModal'
@@ -16,6 +17,7 @@ export default function PlayersPage() {
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, player: null })
   const [deleting, setDeleting] = useState(false)
   const { isAdmin } = useAuth()
+  const navigate = useNavigate()
 
   const loadPlayers = (groupId) => {
     setLoading(true)
@@ -92,7 +94,8 @@ export default function PlayersPage() {
           {players.map((p) => (
             <div
               key={p.id}
-              className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between"
+              className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between hover:border-granata hover:shadow-sm transition-all cursor-pointer"
+              onClick={() => navigate(`/players/${p.id}`)}
             >
               <div>
                 <div className="flex items-center gap-2">
@@ -110,7 +113,7 @@ export default function PlayersPage() {
                 </div>
               </div>
               {isAdmin && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => setEditPlayer(p)}
                     className="p-1 text-gray-400 hover:text-granata transition-colors"

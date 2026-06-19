@@ -13,6 +13,7 @@ import SessionsPage from './pages/SessionsPage'
 
 const SessionDetailPage = lazy(() => import('./pages/SessionDetailPage'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
+const PlayerDetailPage = lazy(() => import('./pages/PlayerDetailPage'))
 const PlayerReportPage = lazy(() => import('./pages/PlayerReportPage'))
 const TeamReportPage = lazy(() => import('./pages/TeamReportPage'))
 const SeasonsPage = lazy(() => import('./pages/SeasonsPage'))
@@ -37,6 +38,10 @@ function App() {
             <Route path="/groups" element={<GroupsPage />} />
             <Route path="/groups/:id" element={<GroupDetailPage />} />
             <Route path="/players" element={<PlayersPage />} />
+            <Route
+              path="/players/:id"
+              element={<Suspense fallback={<PageLoader />}><PlayerDetailPage /></Suspense>}
+            />
             <Route path="/sessions" element={<SessionsPage />} />
             <Route
               path="/sessions/:id"

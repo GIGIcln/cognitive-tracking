@@ -312,6 +312,28 @@ class PlayerService:
 
         return result
 
+    def get_assignments(self, player_id: uuid.UUID) -> list[dict] | None:
+        if not self.db.get(Player, player_id):
+            return None
+        rows = (
+            self.db.query(PlayerGroupAssignment, Group.name)
+            .join(Group, Group.id == PlayerGroupAssignment.group_id)
+            .filter(PlayerGroupAssignment.player_id == player_id)
+            .order_by(PlayerGroupAssignment.start_date.desc())
+            .all()
+        )
+        return [
+            {
+                "id": a.id,
+                "group_id": a.group_id,
+                "group_name": name,
+                "start_date": a.start_date,
+                "end_date": a.end_date,
+                "is_current": a.is_current,
+            }
+            for a, name in rows
+        ]
+
     def assign_to_group(self, player_id: uuid.UUID, group_id: uuid.UUID) -> bool:
         """Returns False if player not found."""
         player = self.db.get(Player, player_id)

@@ -11,5 +11,6 @@ export const assignPlayer = (id, groupId) =>
   api.post(`/players/${id}/assign`, { group_id: groupId })
 export const deletePlayer = (id) => api.delete(`/players/${id}`)
 export const getPlayerHistory = (playerId, config) => api.get(`/players/${playerId}/history`, config)
+export const getPlayerAssignments = (playerId) => api.get(`/players/${playerId}/assignments`)
 export const getAtRiskPlayers = (minSessions = 3) =>
   api.get('/players/at-risk', { params: { min_sessions: minSessions } })

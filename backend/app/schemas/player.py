@@ -6,6 +6,17 @@ from datetime import date
 from pydantic import BaseModel
 
 
+class PlayerAssignmentResponse(BaseModel):
+    id: uuid.UUID
+    group_id: uuid.UUID
+    group_name: str
+    start_date: date
+    end_date: date | None
+    is_current: bool
+
+    model_config = {"from_attributes": True}
+
+
 class PlayerHistoryItemResponse(BaseModel):
     session_id: uuid.UUID
     session_date: date
