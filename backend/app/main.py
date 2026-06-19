@@ -1,5 +1,6 @@
 import json
 import logging
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
@@ -10,7 +11,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -61,35 +62,62 @@ class _LimitUploadSize(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class _RequestID(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
 app.add_middleware(_LimitUploadSize)
+app.add_middleware(_RequestID)
+
+
+def _rid(request: Request) -> str:
+    return getattr(request.state, "request_id", "-")
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    logger.debug("Validation error on %s %s: %s", request.method, request.url.path, exc.errors())
+    logger.debug("[%s] Validation error on %s %s: %s", _rid(request), request.method, request.url.path, exc.errors())
     # exc.errors() can contain non-JSON-serializable objects in the 'ctx' field (Pydantic v2).
     errors = json.loads(json.dumps(exc.errors(), default=str))
     return JSONResponse(
         status_code=422,
         content={"detail": errors},
+        headers={"X-Request-ID": _rid(request)},
+    )
+
+
+@app.exception_handler(OperationalError)
+async def operational_error_handler(request: Request, exc: OperationalError) -> JSONResponse:
+    logger.error("[%s] DB OperationalError on %s %s: %s", _rid(request), request.method, request.url.path, exc.orig)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Servizio temporaneamente non disponibile. Riprovare tra qualche istante."},
+        headers={"X-Request-ID": _rid(request), "Retry-After": "10"},
     )
 
 
 @app.exception_handler(IntegrityError)
 async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
-    logger.warning("IntegrityError on %s %s: %s", request.method, request.url.path, exc.orig)
+    logger.warning("[%s] IntegrityError on %s %s: %s", _rid(request), request.method, request.url.path, exc.orig)
     return JSONResponse(
         status_code=409,
         content={"detail": "Risorsa già esistente o vincolo di integrità violato."},
+        headers={"X-Request-ID": _rid(request)},
     )
 
 
 @app.exception_handler(Exception)
 async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    logger.exception("[%s] Unhandled error on %s %s", _rid(request), request.method, request.url.path)
     return JSONResponse(
         status_code=500,
         content={"detail": "Errore interno del server."},
+        headers={"X-Request-ID": _rid(request)},
     )
 
 app.add_middleware(
