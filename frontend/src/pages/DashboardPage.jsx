@@ -56,6 +56,16 @@ export default function DashboardPage() {
 
   const groupMap = Object.fromEntries(groups.map((g) => [g.id, g]))
 
+  const seasonLabel = (() => {
+    if (!season) return '—'
+    if (season.start_date && season.end_date) {
+      const y1 = new Date(season.start_date).getFullYear()
+      const y2 = new Date(season.end_date).getFullYear()
+      return y1 === y2 ? String(y1) : `${y1}/${String(y2).slice(2)}`
+    }
+    return season.name
+  })()
+
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
@@ -64,7 +74,7 @@ export default function DashboardPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Stagione" value={season?.name ?? '—'} loading={loading} />
+        <StatCard label="Stagione" value={seasonLabel} loading={loading} />
         <StatCard label="Gruppi attivi" value={groups.length} loading={loading} />
         <StatCard label="Giocatori" value={totalPlayers ?? '—'} loading={loading} />
         <StatCard label="Sessioni totali" value={totalSessions ?? '—'} loading={loading} />
