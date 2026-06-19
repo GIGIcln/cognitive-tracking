@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from app.models.player import Player
     from app.models.training_session import TrainingSession
 
-_SCORE = Numeric(3, 1)
+_SCORE = Numeric(4, 1)
 
 
 class Measurement(Base):

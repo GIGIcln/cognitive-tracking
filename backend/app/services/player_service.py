@@ -174,12 +174,15 @@ class PlayerService:
     def get_history(
         self,
         player_id: uuid.UUID,
+        skip: int = 0,
+        limit: int = 200,
         allowed_group_ids: set[uuid.UUID] | None = None,
     ) -> list[dict]:
         """
         allowed_group_ids=None → storia completa (admin/responsabile).
         allowed_group_ids=set  → solo sessioni nei gruppi dell'allenatore.
         Filtro applicato a livello DB, non in Python.
+        Esclude sessioni soft-deleted (is_active=False).
         """
         q = (
             self.db.query(Measurement, TrainingSession, Group)
@@ -188,25 +191,25 @@ class PlayerService:
             .filter(
                 Measurement.player_id == player_id,
                 Measurement.is_absent.is_(False),
+                TrainingSession.is_active.is_(True),
             )
         )
         if allowed_group_ids is not None:
             q = q.filter(TrainingSession.group_id.in_(allowed_group_ids))
 
-        rows = q.order_by(TrainingSession.session_date.asc()).all()
+        rows = q.order_by(TrainingSession.session_date.asc()).offset(skip).limit(limit).all()
         return [
             {
-                "session_id": str(m.session_id),
-                "session_date": str(ts.session_date),
+                "session_id": m.session_id,
+                "session_date": ts.session_date,
                 "session_type": ts.session_type,
-                "group_id": str(ts.group_id),
+                "group_id": ts.group_id,
                 "group_name": g.name,
                 "scanning_rate": float(m.scanning_rate) if m.scanning_rate is not None else None,
                 "decision_quality": float(m.decision_quality) if m.decision_quality is not None else None,
                 "anticipation": float(m.anticipation) if m.anticipation is not None else None,
                 "transition_reset": float(m.transition_reset) if m.transition_reset is not None else None,
                 "verbal_comm": float(m.verbal_comm) if m.verbal_comm is not None else None,
-                "is_absent": m.is_absent,
             }
             for m, ts, g in rows
         ]
@@ -335,3 +338,42 @@ class PlayerService:
         ))
         self.db.commit()
         return True
+
+    def bulk_assign_to_group(
+        self, player_ids: list[uuid.UUID], group_id: uuid.UUID
+    ) -> dict:
+        """Assign multiple players to a group in one commit.
+
+        Returns a dict with counts of assigned and not-found player IDs.
+        """
+        assigned, not_found = [], []
+        for pid in player_ids:
+            player = self.db.get(Player, pid)
+            if player is None:
+                not_found.append(str(pid))
+                continue
+
+            current = (
+                self.db.query(PlayerGroupAssignment)
+                .filter(
+                    PlayerGroupAssignment.player_id == pid,
+                    PlayerGroupAssignment.is_current.is_(True),
+                )
+                .first()
+            )
+            if current:
+                current.end_date = date.today()
+                current.is_current = False
+
+            self.db.add(PlayerGroupAssignment(
+                player_id=pid,
+                group_id=group_id,
+                start_date=date.today(),
+                is_current=True,
+            ))
+            assigned.append(str(pid))
+
+        if assigned:
+            self.db.commit()
+
+        return {"assigned": len(assigned), "not_found": not_found}

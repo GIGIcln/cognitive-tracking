@@ -11,6 +11,7 @@ from app.schemas.auth import UserContext
 from app.schemas.group import (
     GroupCreate,
     GroupDetailResponse,
+    GroupHistoryItemResponse,
     GroupResponse,
     PlayerInGroupResponse,
     TargetResponse,
@@ -53,15 +54,16 @@ def get_group(
     )
 
 
-@router.get("/{group_id}/history")
+@router.get("/{group_id}/history", response_model=list[GroupHistoryItemResponse])
 def get_group_history(
     group_id: uuid.UUID,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=60, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
-    limit: int = Query(default=60, ge=1, le=200),
 ):
     assert_group_access(current_user, group_id)
-    return GroupService(db).get_history(group_id, limit)
+    return GroupService(db).get_history(group_id, skip, limit)
 
 
 @router.get("/{group_id}/targets", response_model=list[TargetResponse])

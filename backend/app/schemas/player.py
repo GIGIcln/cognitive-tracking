@@ -1,8 +1,22 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 from pydantic import BaseModel
+
+
+class PlayerHistoryItemResponse(BaseModel):
+    session_id: uuid.UUID
+    session_date: date
+    session_type: str
+    group_id: uuid.UUID
+    group_name: str
+    scanning_rate: float | None
+    decision_quality: float | None
+    anticipation: float | None
+    transition_reset: float | None
+    verbal_comm: float | None
 
 
 class PlayerCreate(BaseModel):
@@ -37,4 +51,9 @@ class PlayerResponse(BaseModel):
 
 
 class AssignRequest(BaseModel):
+    group_id: uuid.UUID
+
+
+class BulkAssignRequest(BaseModel):
+    player_ids: list[uuid.UUID]
     group_id: uuid.UUID

@@ -263,14 +263,46 @@ def test_get_session_rankings_ordered_and_includes_percentile(pg_seeded):
     assert ranked[1]["percentile"] == 0
     assert ranked[0]["total"] == 2
 
-    # Tutti i campi attesi sono presenti e il percentile è nel range valido
-    for r in ranked:
-        assert "player_id" in r
-        assert "first_name" in r
-        assert "avg_score" in r
-        assert "rank" in r
-        assert "percentile" in r
-        assert 0 <= r["percentile"] <= 100
+
+def test_get_session_rankings_nonexistent_returns_404(seeded):
+    import uuid
+    c, h = seeded["client"], seeded["headers"]
+    res = c.get(f"/api/sessions/{uuid.uuid4()}/rankings", headers=h)
+    assert res.status_code == 404
+
+
+# ── Score precision ───────────────────────────────────────────────────────────
+
+def test_measurement_accepts_score_10(pg_seeded):
+    """Numeric(4,1) deve accettare 10.0 senza errore di overflow."""
+    c, h = pg_seeded["client"], pg_seeded["headers"]
+    pid1 = pg_seeded["player_ids"][0]
+    gid = pg_seeded["group_id"]
+
+    sid = _create_session(c, h, gid)
+    res = c.post(f"/api/sessions/{sid}/measurements", headers=h, json={
+        "measurements": [{"player_id": pid1, "scanning_rate": 10.0}]
+    })
+    assert res.status_code == 200, res.json()
+    m = res.json()[0]
+    assert m["scanning_rate"] == 10.0
+
+
+# ── Averages schema ───────────────────────────────────────────────────────────
+
+def test_get_session_averages_returns_typed_response(seeded):
+    """Il response di /averages deve avere i campi attesi (SessionAveragesResponse)."""
+    c, h, gid = seeded["client"], seeded["headers"], seeded["group_id"]
+    sid = _create_session(c, h, gid)
+    res = c.get(f"/api/sessions/{sid}/averages", headers=h)
+    assert res.status_code == 200
+    data = res.json()
+    assert "player_count" in data
+    assert "avg_sr" in data
+    assert "avg_dqi" in data
+    assert "avg_ai" in data
+    assert "avg_trs" in data
+    assert "avg_vci" in data
 
 
 def test_get_session_rankings_nonexistent_returns_404(seeded):

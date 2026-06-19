@@ -6,6 +6,15 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field
 
 
+class SessionAveragesResponse(BaseModel):
+    avg_sr: float | None
+    avg_dqi: float | None
+    avg_ai: float | None
+    avg_trs: float | None
+    avg_vci: float | None
+    player_count: int
+
+
 class SessionCreate(BaseModel):
     group_id: uuid.UUID
     session_date: date

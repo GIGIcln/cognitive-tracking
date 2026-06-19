@@ -1,8 +1,21 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 from pydantic import BaseModel
+
+
+class GroupHistoryItemResponse(BaseModel):
+    session_id: uuid.UUID
+    session_date: date
+    session_type: str
+    avg_sr: float | None
+    avg_dqi: float | None
+    avg_ai: float | None
+    avg_trs: float | None
+    avg_vci: float | None
+    player_count: int
 
 
 class GroupCreate(BaseModel):

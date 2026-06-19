@@ -12,7 +12,7 @@ from app.models.player import Player
 from app.rbac import assert_group_access, require_admin, require_auth
 from app.schemas.auth import UserContext
 from app.schemas.pagination import Page
-from app.schemas.player import AssignRequest, PlayerCreate, PlayerResponse, PlayerUpdate
+from app.schemas.player import AssignRequest, BulkAssignRequest, PlayerCreate, PlayerHistoryItemResponse, PlayerResponse, PlayerUpdate
 from app.services.player_service import PlayerService
 
 router = APIRouter(prefix="/players", tags=["players"])
@@ -54,7 +54,7 @@ def list_players(
 
 
 @router.get("/at-risk", response_model=list[dict[str, Any]])
-@limiter.limit("20/minute")
+@limiter.limit("60/minute")
 def get_at_risk_players(
     request: Request,
     min_sessions: int = Query(default=3, ge=2, le=10),
@@ -79,9 +79,11 @@ def get_player(
     return _to_response(player, group_name)
 
 
-@router.get("/{player_id}/history")
+@router.get("/{player_id}/history", response_model=list[PlayerHistoryItemResponse])
 def get_player_history(
     player_id: uuid.UUID,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=200, ge=1, le=1000),
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
@@ -89,7 +91,7 @@ def get_player_history(
     svc = PlayerService(db)
     if scope is not None and svc.get_with_group(player_id, allowed_group_ids=scope) is None:
         raise HTTPException(status_code=404, detail="Giocatore non trovato")
-    return svc.get_history(player_id, allowed_group_ids=scope)
+    return svc.get_history(player_id, skip=skip, limit=limit, allowed_group_ids=scope)
 
 
 # ── WRITE: solo admin ─────────────────────────────────────────────────────────
@@ -138,3 +140,12 @@ def assign_player(
     if not PlayerService(db).assign_to_group(player_id, body.group_id):
         raise HTTPException(status_code=404, detail="Giocatore non trovato")
     return {"message": "Giocatore assegnato con successo", "group_id": str(body.group_id)}
+
+
+@router.post("/bulk-assign")
+def bulk_assign_players(
+    body: BulkAssignRequest,
+    db: Session = Depends(get_db),
+    _: UserContext = Depends(require_admin),
+):
+    return PlayerService(db).bulk_assign_to_group(body.player_ids, body.group_id)

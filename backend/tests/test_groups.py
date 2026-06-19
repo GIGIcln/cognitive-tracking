@@ -97,3 +97,66 @@ def test_group_history_contains_session_after_creation(seeded):
     res = c.get(f"/api/groups/{gid}/history", headers=h)
     assert res.status_code == 200
     assert len(res.json()) >= 1
+
+
+def test_group_history_excludes_deleted_sessions(seeded):
+    """Sessioni soft-deleted non devono comparire nella history del gruppo."""
+    c, h, gid = seeded["client"], seeded["headers"], seeded["group_id"]
+
+    # Crea una sessione e poi la elimina (soft delete)
+    res = c.post("/api/sessions", headers=h, json={
+        "group_id": gid,
+        "session_date": "2025-11-01",
+        "session_type": "SSG",
+        "duration_min": 60,
+    })
+    assert res.status_code == 201
+    sid = res.json()["id"]
+
+    # Elimina la sessione
+    c.delete(f"/api/sessions/{sid}", headers=h)
+
+    # La history non deve includere la sessione eliminata
+    res = c.get(f"/api/groups/{gid}/history", headers=h)
+    assert res.status_code == 200
+    ids = [item["session_id"] for item in res.json()]
+    assert sid not in ids, "sessione soft-deleted non deve comparire in history"
+
+
+def test_group_history_pagination(seeded):
+    """skip e limit funzionano correttamente sulla history."""
+    c, h, gid = seeded["client"], seeded["headers"], seeded["group_id"]
+
+    # Crea 3 sessioni
+    for day in ("2025-10-01", "2025-10-08", "2025-10-15"):
+        c.post("/api/sessions", headers=h, json={
+            "group_id": gid,
+            "session_date": day,
+            "session_type": "Allenamento",
+            "duration_min": 90,
+        })
+
+    all_res = c.get(f"/api/groups/{gid}/history", headers=h).json()
+    assert len(all_res) >= 3
+
+    paged = c.get(f"/api/groups/{gid}/history", headers=h, params={"skip": 1, "limit": 1}).json()
+    assert len(paged) == 1
+    # L'item in posizione 1 della lista completa (ASC) deve corrispondere
+    assert paged[0]["session_date"] == all_res[1]["session_date"]
+
+
+def test_group_history_schema_fields(seeded):
+    """La risposta deve avere i campi del schema GroupHistoryItemResponse."""
+    c, h, gid = seeded["client"], seeded["headers"], seeded["group_id"]
+    c.post("/api/sessions", headers=h, json={
+        "group_id": gid,
+        "session_date": "2025-10-20",
+        "session_type": "Partita",
+        "duration_min": 90,
+    })
+    res = c.get(f"/api/groups/{gid}/history", headers=h)
+    assert res.status_code == 200
+    item = res.json()[0]
+    for field in ("session_id", "session_date", "session_type",
+                  "avg_sr", "avg_dqi", "avg_ai", "avg_trs", "avg_vci", "player_count"):
+        assert field in item, f"campo '{field}' mancante dalla history"

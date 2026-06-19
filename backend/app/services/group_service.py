@@ -86,7 +86,9 @@ class GroupService:
         self.db.commit()
         return True
 
-    def get_history(self, group_id: uuid.UUID, limit: int = 60) -> list[dict]:
+    def get_history(
+        self, group_id: uuid.UUID, skip: int = 0, limit: int = 60
+    ) -> list[dict]:
         rows = (
             self.db.query(
                 TrainingSession.id.label("session_id"),
@@ -104,20 +106,24 @@ class GroupService:
                 (Measurement.session_id == TrainingSession.id)
                 & Measurement.is_absent.is_(False),
             )
-            .filter(TrainingSession.group_id == group_id)
+            .filter(
+                TrainingSession.group_id == group_id,
+                TrainingSession.is_active.is_(True),
+            )
             .group_by(
                 TrainingSession.id,
                 TrainingSession.session_date,
                 TrainingSession.session_type,
             )
-            .order_by(TrainingSession.session_date.desc())
+            .order_by(TrainingSession.session_date.asc())
+            .offset(skip)
             .limit(limit)
             .all()
         )
         return [
             {
-                "session_id": str(r.session_id),
-                "session_date": str(r.session_date),
+                "session_id": r.session_id,
+                "session_date": r.session_date,
                 "session_type": r.session_type,
                 "avg_sr": float(r.avg_sr) if r.avg_sr is not None else None,
                 "avg_dqi": float(r.avg_dqi) if r.avg_dqi is not None else None,
@@ -126,7 +132,7 @@ class GroupService:
                 "avg_vci": float(r.avg_vci) if r.avg_vci is not None else None,
                 "player_count": r.player_count or 0,
             }
-            for r in reversed(rows)
+            for r in rows
         ]
 
     def update_targets(

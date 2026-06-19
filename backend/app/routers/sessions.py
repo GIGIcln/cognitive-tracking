@@ -16,6 +16,7 @@ from app.schemas.pagination import Page
 from app.schemas.session import (
     MeasurementResponse,
     MeasurementsBatchInput,
+    SessionAveragesResponse,
     SessionCreate,
     SessionRankingsItemResponse,
     SessionResponse,
@@ -91,7 +92,7 @@ def get_session(
     return data
 
 
-@router.get("/{session_id}/averages")
+@router.get("/{session_id}/averages", response_model=SessionAveragesResponse)
 def get_session_averages(
     session_id: uuid.UUID,
     db: Session = Depends(get_db),

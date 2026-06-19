@@ -174,3 +174,110 @@ def test_get_at_risk_detects_player_below_threshold(pg_seeded):
     assert match is not None, "Il giocatore sotto soglia non appare nella lista at-risk"
     assert match["avg_score_last_session"] < match["threshold"]
     assert match["consecutive_low_sessions"] == 3
+
+
+# ── Bulk assign ───────────────────────────────────────────────────────────────
+
+def test_bulk_assign_assigns_multiple_players(seeded):
+    """POST /players/bulk-assign assegna più giocatori a un gruppo in una chiamata."""
+    c, h, gid = seeded["client"], seeded["headers"], seeded["group_id"]
+
+    # Crea due nuovi giocatori
+    def _create(name):
+        r = c.post("/api/players", headers=h, json={
+            "first_name": name, "last_name": "Test", "birth_year": 2010
+        })
+        assert r.status_code == 201
+        return r.json()["id"]
+
+    pid1 = _create("Alpha")
+    pid2 = _create("Beta")
+
+    res = c.post("/api/players/bulk-assign", headers=h, json={
+        "player_ids": [pid1, pid2],
+        "group_id": gid,
+    })
+    assert res.status_code == 200, res.json()
+    data = res.json()
+    assert data["assigned"] == 2
+    assert data["not_found"] == []
+
+    # Entrambi devono comparire nel gruppo
+    players = c.get("/api/players", headers=h, params={"group_id": gid}).json()["items"]
+    names = [p["first_name"] for p in players]
+    assert "Alpha" in names
+    assert "Beta" in names
+
+
+def test_bulk_assign_reports_not_found(seeded):
+    """player_ids inesistenti vengono riportati in not_found senza errore globale."""
+    import uuid
+    c, h, gid = seeded["client"], seeded["headers"], seeded["group_id"]
+    fake = str(uuid.uuid4())
+    res = c.post("/api/players/bulk-assign", headers=h, json={
+        "player_ids": [fake],
+        "group_id": gid,
+    })
+    assert res.status_code == 200, res.json()
+    data = res.json()
+    assert data["assigned"] == 0
+    assert fake in data["not_found"]
+
+
+# ── Player history ────────────────────────────────────────────────────────────
+
+def test_player_history_excludes_deleted_sessions(seeded):
+    """Misurazioni in sessioni soft-deleted non compaiono nella history del giocatore."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+
+    # Assegna il giocatore al gruppo
+    c.post(f"/api/players/{pid}/assign", headers=h, json={"group_id": gid})
+
+    # Crea una sessione, aggiungi misurazione
+    sess = c.post("/api/sessions", headers=h, json={
+        "group_id": gid,
+        "session_date": "2025-11-10",
+        "session_type": "SSG",
+        "duration_min": 60,
+    })
+    sid = sess.json()["id"]
+    c.post(f"/api/sessions/{sid}/measurements", headers=h, json={
+        "measurements": [{"player_id": pid, "scanning_rate": 7.0}]
+    })
+
+    # Verifica che la history contenga la sessione prima dell'eliminazione
+    hist = c.get(f"/api/players/{pid}/history", headers=h).json()
+    assert any(item["session_id"] == sid for item in hist)
+
+    # Elimina la sessione
+    c.delete(f"/api/sessions/{sid}", headers=h)
+
+    # Ora la history non deve più includerla
+    hist_after = c.get(f"/api/players/{pid}/history", headers=h).json()
+    assert not any(item["session_id"] == sid for item in hist_after), (
+        "sessione soft-deleted non deve comparire in player history"
+    )
+
+
+def test_player_history_schema_fields(seeded):
+    """La risposta deve avere i campi del schema PlayerHistoryItemResponse."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+    c.post(f"/api/players/{pid}/assign", headers=h, json={"group_id": gid})
+    sess = c.post("/api/sessions", headers=h, json={
+        "group_id": gid, "session_date": "2025-11-15",
+        "session_type": "Allenamento", "duration_min": 90,
+    })
+    sid = sess.json()["id"]
+    c.post(f"/api/sessions/{sid}/measurements", headers=h, json={
+        "measurements": [{"player_id": pid, "scanning_rate": 6.5}]
+    })
+    res = c.get(f"/api/players/{pid}/history", headers=h)
+    assert res.status_code == 200
+    item = res.json()[0]
+    for field in ("session_id", "session_date", "session_type",
+                  "group_id", "group_name",
+                  "scanning_rate", "decision_quality",
+                  "anticipation", "transition_reset", "verbal_comm"):
+        assert field in item, f"campo '{field}' mancante dalla player history"
