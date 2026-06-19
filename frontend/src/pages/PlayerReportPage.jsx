@@ -171,7 +171,17 @@ export default function PlayerReportPage() {
   }
 
   if (error) {
-    return <div className="text-red-600 text-sm">{error}</div>
+    return (
+      <div className="text-center py-12">
+        <p className="text-red-600 text-sm mb-4">{error}</p>
+        <button
+          onClick={() => navigate(-1)}
+          className="text-sm text-granata hover:underline"
+        >
+          ← Torna indietro
+        </button>
+      </div>
+    )
   }
 
   return (

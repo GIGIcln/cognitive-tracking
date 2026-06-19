@@ -10,7 +10,7 @@ export const saveMeasurements = (sessionId, measurements) =>
   api.post(`/sessions/${sessionId}/measurements`, { measurements })
 export const getMeasurements = (sessionId) =>
   api.get(`/sessions/${sessionId}/measurements`)
-export const getSessionAverages = (sessionId) =>
-  api.get(`/sessions/${sessionId}/averages`)
-export const getSessionRankings = (sessionId) =>
-  api.get(`/sessions/${sessionId}/rankings`)
+export const getSessionAverages = (sessionId, config) =>
+  api.get(`/sessions/${sessionId}/averages`, config)
+export const getSessionRankings = (sessionId, config) =>
+  api.get(`/sessions/${sessionId}/rankings`, config)

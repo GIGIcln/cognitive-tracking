@@ -16,11 +16,14 @@ export function usePlayerReport(playerId) {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    const controller = new AbortController()
+    const signal = controller.signal
+
     const load = async () => {
       try {
         const [playerRes, historyRes] = await Promise.all([
-          getPlayer(playerId),
-          getPlayerHistory(playerId),
+          getPlayer(playerId, { signal }),
+          getPlayerHistory(playerId, { signal }),
         ])
 
         const hist = historyRes.data
@@ -35,9 +38,9 @@ export function usePlayerReport(playerId) {
         if (hist.length > 0) {
           const last = hist[hist.length - 1]
           const [targetsRes, avgRes, rankingsRes] = await Promise.all([
-            getGroupTargets(last.group_id),
-            getSessionAverages(last.session_id),
-            getSessionRankings(last.session_id).catch(() => ({ data: [] })),
+            getGroupTargets(last.group_id, { signal }),
+            getSessionAverages(last.session_id, { signal }),
+            getSessionRankings(last.session_id, { signal }).catch(() => ({ data: [] })),
           ])
           setTargets(targetsRes.data ?? [])
           setSessionAverages(avgRes.data)
@@ -45,13 +48,20 @@ export function usePlayerReport(playerId) {
           const mine = rankings.find((r) => r.player_id === playerId)
           setPlayerRanking(mine ?? null)
         }
-      } catch {
-        setError('Errore nel caricamento del report')
+      } catch (err) {
+        if (err.code === 'ERR_CANCELED') return
+        if (err.response?.status === 404) {
+          setError('Giocatore non trovato')
+        } else {
+          setError('Errore nel caricamento del report')
+        }
       } finally {
-        setLoading(false)
+        if (!signal.aborted) setLoading(false)
       }
     }
+
     load()
+    return () => controller.abort()
   }, [playerId])
 
   return {

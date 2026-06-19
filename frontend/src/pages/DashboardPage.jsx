@@ -9,6 +9,7 @@ export default function DashboardPage() {
   const [groups, setGroups] = useState([])
   const [season, setSeason] = useState(null)
   const [atRisk, setAtRisk] = useState([])
+  const [showAllRisk, setShowAllRisk] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const navigate = useNavigate()
@@ -66,7 +67,7 @@ export default function DashboardPage() {
             </span>
           </div>
           <div className="space-y-2">
-            {atRisk.map((p) => (
+            {(showAllRisk ? atRisk : atRisk.slice(0, 5)).map((p) => (
               <button
                 key={p.player_id}
                 onClick={() => navigate(`/reports/player/${p.player_id}`)}
@@ -84,6 +85,14 @@ export default function DashboardPage() {
               </button>
             ))}
           </div>
+          {atRisk.length > 5 && (
+            <button
+              onClick={() => setShowAllRisk((v) => !v)}
+              className="mt-3 text-xs text-red-600 hover:text-red-800 font-medium"
+            >
+              {showAllRisk ? 'Mostra meno' : `Mostra tutti (${atRisk.length})`}
+            </button>
+          )}
         </div>
       )}
 

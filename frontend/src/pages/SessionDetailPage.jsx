@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getSession, saveMeasurements } from '../api/sessions'
 import { getEvents, saveEvents } from '../api/events'
@@ -137,19 +137,19 @@ export default function SessionDetailPage() {
 
   // ── Score-mode handlers ─────────────────────────────────────────────────────
 
-  const handleChange = (playerId, field, value) => {
+  const handleChange = useCallback((playerId, field, value) => {
     setMeasurements((prev) => ({
       ...prev,
       [playerId]: { ...prev[playerId], [field]: value },
     }))
-  }
+  }, [])
 
-  const toggleAbsent = (playerId) => {
+  const toggleAbsent = useCallback((playerId) => {
     setMeasurements((prev) => ({
       ...prev,
       [playerId]: { ...prev[playerId], is_absent: !prev[playerId].is_absent },
     }))
-  }
+  }, [])
 
   const handleSaveScores = async () => {
     setSaving(true); setSaveOk(false); setError('')
@@ -179,16 +179,16 @@ export default function SessionDetailPage() {
 
   // ── Event-mode handlers ─────────────────────────────────────────────────────
 
-  const handleEventChange = (playerId, metricType, key, delta) => {
+  const handleEventChange = useCallback((playerId, metricType, key, delta) => {
     setEventData((prev) => {
       const playerData = prev[playerId] ?? {}
       const current = playerData[metricType] ?? emptyEventRow()
       const updated = { ...current, [key]: Math.max(0, current[key] + delta) }
       return { ...prev, [playerId]: { ...playerData, [metricType]: updated } }
     })
-  }
+  }, [])
 
-  const handleEventSet = (playerId, metricType, key, value) => {
+  const handleEventSet = useCallback((playerId, metricType, key, value) => {
     const num = parseInt(value, 10)
     if (isNaN(num) || num < 0) return
     setEventData((prev) => {
@@ -196,7 +196,7 @@ export default function SessionDetailPage() {
       const current = playerData[metricType] ?? emptyEventRow()
       return { ...prev, [playerId]: { ...playerData, [metricType]: { ...current, [key]: num } } }
     })
-  }
+  }, [])
 
   const handleSaveEvents = async () => {
     setSaving(true); setSaveOk(false); setError('')
