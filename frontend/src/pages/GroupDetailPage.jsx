@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { getGroup, updateGroupTargets, getGroupChangelog, getGroupAttendance } from '../api/groups'
 import { deletePlayer } from '../api/players'
 import PlayerFormModal from '../components/PlayerFormModal'
@@ -91,8 +91,10 @@ function AttendanceGrid({ data, loading, limit, onLimitChange }) {
                 let total = 0
                 return (
                   <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="sticky left-0 bg-white hover:bg-gray-50 px-3 py-2 font-medium text-gray-800 border-r border-gray-200 z-10">
-                      {p.last_name} {p.first_name}
+                    <td className="sticky left-0 bg-white hover:bg-gray-50 px-3 py-2 border-r border-gray-200 z-10">
+                      <Link to={`/players/${p.id}`} className="font-medium text-gray-800 hover:opacity-70 transition-opacity">
+                        {p.last_name} {p.first_name}
+                      </Link>
                     </td>
                     {sessions.map((s) => {
                       const sid = String(s.id)
@@ -369,12 +371,15 @@ export default function GroupDetailPage() {
                 key={p.id}
                 className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between"
               >
-                <div>
+                <Link
+                  to={`/players/${p.id}`}
+                  className="flex-1 min-w-0 hover:opacity-70 transition-opacity"
+                >
                   <div className="font-medium text-gray-900">{p.last_name} {p.first_name}</div>
                   {p.birth_year && (
                     <div className="text-xs text-gray-500 mt-0.5">Anno: {p.birth_year}</div>
                   )}
-                </div>
+                </Link>
                 {isAdmin && (
                   <div className="flex items-center gap-2">
                     <button
