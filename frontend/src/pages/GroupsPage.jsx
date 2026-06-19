@@ -106,8 +106,16 @@ export default function GroupsPage() {
     }
   }
 
-  const byCategory = (cat) => groups.filter((g) => g.category === cat)
-  const uncategorized = groups.filter((g) => !GROUP_CATEGORIES.includes(g.category))
+  const sortGroups = (list) =>
+    [...list].sort((a, b) => {
+      const ya = a.birth_year ?? Infinity
+      const yb = b.birth_year ?? Infinity
+      if (ya !== yb) return ya - yb
+      return (a.sub_group ?? '').localeCompare(b.sub_group ?? '', 'it')
+    })
+
+  const byCategory = (cat) => sortGroups(groups.filter((g) => g.category === cat))
+  const uncategorized = sortGroups(groups.filter((g) => !GROUP_CATEGORIES.includes(g.category)))
 
   const GroupCard = ({ g }) => (
     <div className="relative">
