@@ -17,6 +17,7 @@ from app.schemas.session import (
     MeasurementResponse,
     MeasurementsBatchInput,
     SessionCreate,
+    SessionRankingsItemResponse,
     SessionResponse,
 )
 from app.services.observation_service import (
@@ -105,43 +106,17 @@ def get_session_averages(
     return result
 
 
-@router.get("/{session_id}/rankings")
+@router.get("/{session_id}/rankings", response_model=list[SessionRankingsItemResponse])
 def get_session_rankings(
     session_id: uuid.UUID,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
     session = _get_session_or_404(db, session_id)
     assert_group_access(current_user, session.group_id)
-
-    _FIELDS = ("scanning_rate", "decision_quality", "anticipation", "transition_reset", "verbal_comm")
-
-    measurements = (
-        db.query(Measurement)
-        .filter(Measurement.session_id == session_id, Measurement.is_absent.is_(False))
-        .all()
-    )
-
-    ranked = []
-    for m in measurements:
-        vals = [float(getattr(m, f)) for f in _FIELDS if getattr(m, f) is not None]
-        if not vals:
-            continue
-        ranked.append({
-            "player_id": str(m.player_id),
-            "first_name": m.player.first_name,
-            "last_name": m.player.last_name,
-            "avg_score": round(sum(vals) / len(vals), 2),
-        })
-
-    ranked.sort(key=lambda x: x["avg_score"], reverse=True)
-    total = len(ranked)
-    for i, r in enumerate(ranked):
-        r["rank"] = i + 1
-        r["total"] = total
-        r["percentile"] = round((total - i - 1) / total * 100) if total > 1 else 100
-
-    return ranked
+    return SessionService(db).get_rankings(session_id, skip, limit)
 
 
 @router.get("/{session_id}/measurements", response_model=list[MeasurementResponse])

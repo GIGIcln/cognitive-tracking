@@ -6,6 +6,12 @@ from pydantic import BaseModel, Field, model_validator
 
 _VALID_METRIC_TYPES = {"SR", "DQI", "AI", "TRS", "VCI"}
 _VALID_METHODS = {"live", "video", "audio"}
+_VALID_CODEBOOK_VERSIONS = {"v1"}
+
+# SR/DQI/TRS are percentage metrics: numerator/denominator must be a valid ratio.
+_RATIO_METRICS = {"SR", "DQI", "TRS"}
+# All metrics except AI require a meaningful denominator (AI is a pure count).
+_DENOMINATOR_REQUIRED_METRICS = {"SR", "DQI", "TRS", "VCI"}
 
 
 class ObservationEventInput(BaseModel):
@@ -24,6 +30,17 @@ class ObservationEventInput(BaseModel):
             raise ValueError(f"metric_type deve essere uno di {sorted(_VALID_METRIC_TYPES)}")
         if self.method not in _VALID_METHODS:
             raise ValueError(f"method deve essere uno di {sorted(_VALID_METHODS)}")
+        if self.codebook_version not in _VALID_CODEBOOK_VERSIONS:
+            raise ValueError(f"codebook_version deve essere uno di {sorted(_VALID_CODEBOOK_VERSIONS)}")
+        if self.metric_type in _DENOMINATOR_REQUIRED_METRICS and self.denominator <= 0:
+            raise ValueError(
+                f"denominator deve essere > 0 per la metrica {self.metric_type}"
+            )
+        if self.metric_type in _RATIO_METRICS and self.numerator > self.denominator:
+            raise ValueError(
+                f"numerator ({self.numerator}) non può superare denominator ({self.denominator}) "
+                f"per la metrica {self.metric_type} (è una percentuale)"
+            )
         return self
 
 

@@ -58,3 +58,13 @@ class MeasurementResponse(BaseModel):
     notes: str | None
 
     model_config = {"from_attributes": True}
+
+
+class SessionRankingsItemResponse(BaseModel):
+    player_id: uuid.UUID
+    first_name: str
+    last_name: str
+    avg_score: float
+    rank: int
+    total: int
+    percentile: int

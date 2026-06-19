@@ -6,6 +6,7 @@ import { getPlayers } from '../api/players'
 import { getGroupTargets } from '../api/groups'
 import {
   COGNITIVE_PARAMS,
+  FIELD_TO_METRIC,
   METRIC_EVENT_CONFIG,
   RELIABILITY_META,
   deriveScore,
@@ -15,14 +16,6 @@ import { formatDateLong } from '../utils/dateUtils'
 import ToggleSwitch from '../components/ToggleSwitch'
 
 const PARAMS = COGNITIVE_PARAMS
-
-const FIELD_TO_METRIC = {
-  scanning_rate:    'SR',
-  decision_quality: 'DQI',
-  anticipation:     'AI',
-  transition_reset: 'TRS',
-  verbal_comm:      'VCI',
-}
 
 // ── Score-mode helpers ────────────────────────────────────────────────────────
 

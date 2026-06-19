@@ -72,6 +72,11 @@ export const METRIC_EVENT_CONFIG = {
   },
 }
 
+// Derived from COGNITIVE_PARAMS: maps Measurement field name → metric type string.
+export const FIELD_TO_METRIC = Object.fromEntries(
+  COGNITIVE_PARAMS.map(({ field, label }) => [field, label])
+)
+
 export const RELIABILITY_META = {
   insufficient: { label: 'Dati insufficienti', color: 'text-red-500',    bg: 'bg-red-50'    },
   low:          { label: 'Affid. bassa',        color: 'text-orange-500', bg: 'bg-orange-50' },

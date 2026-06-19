@@ -216,9 +216,10 @@ def test_events_aggregated_response_exposes_shared_codebook_version(seeded):
     assert agg["codebook_version"] == "v1", "versione unica deve essere esposta"
 
 
-def test_events_aggregated_codebook_version_none_when_mixed(seeded):
-    """POST con due righe della stessa coppia (player, metric) ma codebook_version
-    diverse: la response aggregata deve avere codebook_version=None."""
+def test_events_rejects_mixed_codebook_versions(seeded):
+    """POST con codebook_version sconosciuta ('v2') deve dare 422.
+    Le versioni miste sono impossibili perché ogni versione è validata in input:
+    solo versioni registrate in _VALID_CODEBOOK_VERSIONS sono accettate."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
@@ -229,11 +230,8 @@ def test_events_aggregated_codebook_version_none_when_mixed(seeded):
         {"player_id": pid, "metric_type": "SR", "numerator": 2, "denominator": 4,
          "codebook_version": "v2"},
     ])
-    assert res.status_code == 200, res.json()
-
-    agg = res.json()[0]
-    assert agg["codebook_version"] is None, (
-        f"versioni miste devono dare codebook_version=None, trovato '{agg['codebook_version']}'"
+    assert res.status_code == 422, (
+        f"codebook_version='v2' non riconosciuta deve dare 422, got {res.status_code}"
     )
 
 
@@ -347,3 +345,76 @@ def test_reliability_non_regression_dqi_trs_vci_ai():
     assert reliability_flag("AI", 3)  == "low"            # 3 < 6
     assert reliability_flag("AI", 6)  == "medium"         # 6 < 10
     assert reliability_flag("AI", 10) == "high"           # ≥ 10
+
+
+# ── Test 9: VALIDAZIONE INPUT ─────────────────────────────────────────────────
+
+def test_events_rejects_unknown_metric_type(seeded):
+    """Un metric_type non riconosciuto deve restituire 422."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+    sid = _create_session(c, h, gid)
+    res = _post_events(c, h, sid, [
+        {"player_id": pid, "metric_type": "XYZ", "numerator": 5, "denominator": 10},
+    ])
+    assert res.status_code == 422, res.json()
+
+
+def test_events_rejects_zero_denominator_for_ratio_metric(seeded):
+    """denominator=0 per una metrica percentuale (SR/DQI/TRS) deve dare 422."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+    sid = _create_session(c, h, gid)
+    for metric in ("SR", "DQI", "TRS", "VCI"):
+        res = _post_events(c, h, sid, [
+            {"player_id": pid, "metric_type": metric, "numerator": 0, "denominator": 0},
+        ])
+        assert res.status_code == 422, f"{metric}: atteso 422 con denominator=0, got {res.status_code}"
+
+
+def test_events_rejects_numerator_exceeds_denominator_for_ratio_metric(seeded):
+    """numerator > denominator per SR/DQI/TRS è fisicamente impossibile (è una %)."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+    sid = _create_session(c, h, gid)
+    for metric in ("SR", "DQI", "TRS"):
+        res = _post_events(c, h, sid, [
+            {"player_id": pid, "metric_type": metric, "numerator": 8, "denominator": 5},
+        ])
+        assert res.status_code == 422, f"{metric}: atteso 422 con num>den, got {res.status_code}"
+
+
+def test_events_rejects_unknown_codebook_version(seeded):
+    """Una codebook_version non riconosciuta deve dare 422."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+    sid = _create_session(c, h, gid)
+    res = _post_events(c, h, sid, [
+        {"player_id": pid, "metric_type": "SR", "numerator": 5, "denominator": 10,
+         "codebook_version": "v99"},
+    ])
+    assert res.status_code == 422, res.json()
+
+
+def test_events_accepts_vci_numerator_exceeding_denominator(seeded):
+    """VCI è frequenza (eventi/minuto): numerator > denominator è valido."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+    sid = _create_session(c, h, gid)
+    # 10 comunicazioni in 3 minuti = valido
+    res = _post_events(c, h, sid, [
+        {"player_id": pid, "metric_type": "VCI", "numerator": 10, "denominator": 3},
+    ])
+    assert res.status_code == 200, res.json()
+
+
+def test_events_accepts_ai_with_denominator_zero(seeded):
+    """AI è un conteggio puro: denominator=0 è accettato (AI non usa denominator)."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+    sid = _create_session(c, h, gid)
+    # AI count-only: il frontend manda denominator=1, ma 0 è ok per AI
+    res = _post_events(c, h, sid, [
+        {"player_id": pid, "metric_type": "AI", "numerator": 5, "denominator": 0},
+    ])
+    assert res.status_code == 200, res.json()

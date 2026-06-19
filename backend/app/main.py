@@ -1,3 +1,4 @@
+import json
 import logging
 from contextlib import asynccontextmanager
 
@@ -66,9 +67,11 @@ app.add_middleware(_LimitUploadSize)
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     logger.debug("Validation error on %s %s: %s", request.method, request.url.path, exc.errors())
+    # exc.errors() can contain non-JSON-serializable objects in the 'ctx' field (Pydantic v2).
+    errors = json.loads(json.dumps(exc.errors(), default=str))
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors()},
+        content={"detail": errors},
     )
 
 

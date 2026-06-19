@@ -122,6 +122,41 @@ class SessionService:
             "player_count": row.player_count or 0,
         }
 
+    def get_rankings(
+        self,
+        session_id: uuid.UUID,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[dict]:
+        _FIELDS = ("scanning_rate", "decision_quality", "anticipation", "transition_reset", "verbal_comm")
+
+        measurements = (
+            self.db.query(Measurement)
+            .filter(Measurement.session_id == session_id, Measurement.is_absent.is_(False))
+            .all()
+        )
+
+        ranked = []
+        for m in measurements:
+            vals = [float(getattr(m, f)) for f in _FIELDS if getattr(m, f) is not None]
+            if not vals:
+                continue
+            ranked.append({
+                "player_id": m.player_id,
+                "first_name": m.player.first_name,
+                "last_name": m.player.last_name,
+                "avg_score": round(sum(vals) / len(vals), 2),
+            })
+
+        ranked.sort(key=lambda x: x["avg_score"], reverse=True)
+        total = len(ranked)
+        for i, r in enumerate(ranked):
+            r["rank"] = i + 1
+            r["total"] = total
+            r["percentile"] = round((total - i - 1) / total * 100) if total > 1 else 100
+
+        return ranked[skip : skip + limit]
+
     def get_measurements(self, session_id: uuid.UUID) -> list[Measurement] | None:
         """Returns None if session not found, empty list if no measurements."""
         session = self.get(session_id)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.measurement import Measurement
@@ -209,12 +210,28 @@ class ObservationService:
                 for field, value in updates.items():
                     setattr(existing, field, value)
             else:
-                self.db.add(Measurement(
-                    session_id=session_id,
-                    player_id=player_id,
-                    group_id=group_id,
-                    **updates,
-                ))
+                # Use a SAVEPOINT so a concurrent INSERT (same session+player) rolls back
+                # only this sub-transaction and lets us fall through to an UPDATE instead.
+                try:
+                    with self.db.begin_nested():
+                        self.db.add(Measurement(
+                            session_id=session_id,
+                            player_id=player_id,
+                            group_id=group_id,
+                            **updates,
+                        ))
+                except IntegrityError:
+                    existing = (
+                        self.db.query(Measurement)
+                        .filter(
+                            Measurement.session_id == session_id,
+                            Measurement.player_id == player_id,
+                        )
+                        .first()
+                    )
+                    if existing:
+                        for field, value in updates.items():
+                            setattr(existing, field, value)
 
         self.db.commit()
 
