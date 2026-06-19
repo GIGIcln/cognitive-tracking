@@ -97,6 +97,8 @@ def event_to_response(event: ObservationEvent) -> ObservationEventResponse:
         normalized_score=normalized_score(event.metric_type, event.numerator, event.denominator),
         method=event.method,
         observer_notes=event.observer_notes,
+        video_ref=event.video_ref,
+        codebook_version=event.codebook_version,
     )
 
 
@@ -117,6 +119,8 @@ def aggregate_events_to_responses(events: list[ObservationEvent]) -> list[Observ
         raw: float | None = agg_num / agg_den if agg_den > 0 else None
         n = len(rows) if metric_type == "SR" else (agg_num if metric_type == "AI" else agg_den)
         last = rows[-1]
+        versions = {r.codebook_version for r in rows}
+        agg_codebook_version = next(iter(versions)) if len(versions) == 1 else None
         responses.append(ObservationEventResponse(
             id=last.id,
             player_id=player_id,
@@ -131,6 +135,8 @@ def aggregate_events_to_responses(events: list[ObservationEvent]) -> list[Observ
             normalized_score=normalized_score(metric_type, agg_num, agg_den),
             method=last.method,
             observer_notes=last.observer_notes,
+            video_ref=None,
+            codebook_version=agg_codebook_version,
         ))
     return responses
 

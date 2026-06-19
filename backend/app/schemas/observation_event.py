@@ -45,5 +45,7 @@ class ObservationEventResponse(BaseModel):
     normalized_score: float | None
     method: str
     observer_notes: str | None
+    video_ref: str | None = None
+    codebook_version: str | None = None
 
     model_config = {"from_attributes": True}

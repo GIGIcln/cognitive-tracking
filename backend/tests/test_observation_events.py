@@ -166,12 +166,8 @@ def test_events_writeback_score_matches_response_score(seeded):
 # ── Test 5: CAMPI NUOVI ───────────────────────────────────────────────────────
 
 def test_events_video_ref_and_codebook_version_accepted(seeded):
-    """video_ref e codebook_version vengono accettati dalla API senza errori.
-
-    NOTA: ObservationEventResponse non include questi campi, quindi non sono
-    verificabili via risposta HTTP — solo la persistenza è testabile a livello DB.
-    Qui verifichiamo che il POST restituisca 200 e che GET /events torni 1 riga
-    (prova che la riga è stata scritta nel DB)."""
+    """video_ref e codebook_version sono esposti nella response GET /events (audit)
+    e, per l'aggregato POST, video_ref=None e codebook_version='v1' (versione unica)."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
@@ -188,8 +184,57 @@ def test_events_video_ref_and_codebook_version_accepted(seeded):
     ])
     assert res.status_code == 200, res.json()
 
+    # POST response (aggregata): video_ref=None, codebook_version="v1" (versione unica)
+    agg = res.json()[0]
+    assert agg["video_ref"] is None
+    assert agg["codebook_version"] == "v1"
+
+    # GET response (audit): i campi originali devono essere presenti
     raw = _get_events(c, h, sid).json()
     assert len(raw) == 1, "la riga deve essere stata persistita"
+    assert raw[0]["video_ref"] == "match_2026-05-01_clip_03.mp4"
+    assert raw[0]["codebook_version"] == "v1"
+
+
+def test_events_aggregated_response_exposes_shared_codebook_version(seeded):
+    """POST con più righe che condividono la stessa codebook_version:
+    la response aggregata espone codebook_version='v1' e video_ref=None."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+
+    sid = _create_session(c, h, gid)
+    res = _post_events(c, h, sid, [
+        {"player_id": pid, "metric_type": "SR", "numerator": 3, "denominator": 6,
+         "codebook_version": "v1", "video_ref": "clip_a.mp4"},
+        {"player_id": pid, "metric_type": "SR", "numerator": 2, "denominator": 4,
+         "codebook_version": "v1", "video_ref": "clip_b.mp4"},
+    ])
+    assert res.status_code == 200, res.json()
+
+    agg = res.json()[0]
+    assert agg["video_ref"] is None, "video_ref aggregato deve essere None"
+    assert agg["codebook_version"] == "v1", "versione unica deve essere esposta"
+
+
+def test_events_aggregated_codebook_version_none_when_mixed(seeded):
+    """POST con due righe della stessa coppia (player, metric) ma codebook_version
+    diverse: la response aggregata deve avere codebook_version=None."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+
+    sid = _create_session(c, h, gid)
+    res = _post_events(c, h, sid, [
+        {"player_id": pid, "metric_type": "SR", "numerator": 3, "denominator": 6,
+         "codebook_version": "v1"},
+        {"player_id": pid, "metric_type": "SR", "numerator": 2, "denominator": 4,
+         "codebook_version": "v2"},
+    ])
+    assert res.status_code == 200, res.json()
+
+    agg = res.json()[0]
+    assert agg["codebook_version"] is None, (
+        f"versioni miste devono dare codebook_version=None, trovato '{agg['codebook_version']}'"
+    )
 
 
 # ── Test 6: AUDIT — righe grezze via GET ─────────────────────────────────────
