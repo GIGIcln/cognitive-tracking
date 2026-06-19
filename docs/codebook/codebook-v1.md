@@ -15,7 +15,7 @@
 ---
 
 ## TRS — Transition Reset Score
-*Stato: alta oggettività. Base: mia operazionalizzazione, ma fondata su una differenza di tempo (un fatto).*
+*Stato: alta oggettività (giudizio binario contro una soglia fissa). Base: operazionalizzazione.*
 
 **Cosa misura:** rapidità di riorganizzazione dopo un cambio di possesso.
 **Fase misurata (v1):** solo transizione NEGATIVA (la tua squadra perde palla). È la più netta.
@@ -26,12 +26,13 @@
 - **Conta:** il primo movimento *finalizzato* alla nuova fase.
 - **NON conta:** movimento già in corso per inerzia che non cambia in risposta alla transizione.
 
-**Registrazione:** una riga = una transizione. `count_value` = tempo di reazione (t1 − t0) in secondi; `opportunity_value` = 1.
-**Derivato:** tempo medio di reazione = AVG(count_value).
-⚠️ **Attenzione al verso:** qui PIÙ BASSO = MEGLIO (opposto a SR). Nel mapping a 1–10 il voto si inverte.
+**Soglia di reset (v1): 2 secondi** (calibrabile sui tuoi dati).
+**Registrazione:** una riga = una transizione. `numerator` = 1 se il reset avviene entro la soglia, 0 altrimenti; `denominator` = 1 (ogni riga è una transizione osservata).
+**Derivato:** % di transizioni con reset entro soglia = SUM(numerator)/SUM(denominator). PIÙ ALTO = MEGLIO, come le altre metriche: nessuna inversione del voto.
 
 **Esempi:**
-- *Conta:* palla persa; dopo 1,2s il giocatore inverte la corsa e ripiega → 1,2s.
+- *numerator = 1:* palla persa; entro ~1,2s il giocatore inverte la corsa e ripiega → reset entro soglia.
+- *numerator = 0:* palla persa; il giocatore reagisce solo dopo ~3s → reset fuori soglia.
 - *Scarta:* il giocatore era già in ripiegamento e prosegue uguale → ambiguo, non registrare.
 
 ---
@@ -46,8 +47,8 @@
 - **Conta come UNA scansione:** rotazione attiva della testa che porta lo sguardo via dalla palla (≥ ~45°) e ritorno.
 - **NON conta:** micro-movimenti del capo (<45°); seguire la palla con lo sguardo; girarsi solo per correre; qualsiasi scansione dopo il primo contatto.
 
-**Registrazione:** una riga = una ricezione. `count_value` = n° scansioni; `opportunity_value` = durata finestra in secondi.
-**Derivato:** scansioni/sec = SUM(count)/SUM(opportunity); scansioni/ricezione = AVG(count).
+**Registrazione:** una riga = una ricezione. `numerator` = n° scansioni; `denominator` = durata finestra in secondi.
+**Derivato:** scansioni/sec = SUM(numerator)/SUM(denominator); scansioni/ricezione = AVG(numerator).
 
 **Esempi:**
 - *Conta:* prima di ricevere gira la testa a destra, poi a sinistra → 2 scansioni.
@@ -67,7 +68,7 @@
 - **NON conta:** si muove solo dopo t0 (reazione); si muove prima ma nella direzione sbagliata.
 - **In dubbio sull'opportunità:** scarta. Conta solo le opportunità nette.
 
-**Registrazione:** `count_value` = anticipi riusciti; `opportunity_value` = opportunità osservate.
+**Registrazione:** `numerator` = anticipi riusciti; `denominator` = opportunità osservate.
 
 ---
 
@@ -81,7 +82,7 @@
 - **Valuta la lettura, NON il risultato.** Un passaggio fallito dopo una scelta giusta = decisione buona.
 - **In dubbio (50/50):** scarta. Non forzare.
 
-**Registrazione:** `count_value` = decisioni buone; `opportunity_value` = decisioni osservate.
+**Registrazione:** `numerator` = decisioni buone; `denominator` = decisioni osservate.
 
 ---
 
@@ -94,7 +95,7 @@
 
 - **NON conta:** rumore non comunicativo, lamentele, proteste.
 
-**Registrazione:** `count_value` = atti utili; `opportunity_value` = minuti osservati.
+**Registrazione:** `numerator` = atti utili; `denominator` = minuti osservati.
 
 ---
 
