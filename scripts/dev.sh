@@ -275,7 +275,7 @@ if command -v cloudflared &>/dev/null; then
 
   WAITED=0
   while [ "$WAITED" -lt 25 ]; do
-    TUNNEL_URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$TUNNEL_LOG" 2>/dev/null | head -1)
+    TUNNEL_URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$TUNNEL_LOG" 2>/dev/null | head -1 || true)
     [ -n "$TUNNEL_URL" ] && break
     sleep 1
     WAITED=$((WAITED + 1))
