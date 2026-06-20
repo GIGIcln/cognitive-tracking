@@ -15,30 +15,51 @@ make dev        # avvia tutto
 ### Avvio e spegnimento quotidiano
 
 ```bash
-make dev      # avvia tutto (backend + frontend)
+make dev      # avvia tutto: backend + frontend + tunnel remoto + URL/QR per smartphone
 ```
 
-`make dev` esegue in sequenza: check prerequisiti → check .env → **libera automaticamente le porte** 8000/5173 se occupate → wait database → attiva venv → pip install → `alembic upgrade head` →
-avvio Uvicorn su `0.0.0.0:8000` → avvio Vite su `5173`.
+`make dev` esegue in sequenza: check prerequisiti → check .env → **libera automaticamente le porte** 8000/5173 se occupate → wait database → attiva venv → pip install → `alembic upgrade head` → avvio Uvicorn su `0.0.0.0:8000` → avvio Vite su `5173` → Cloudflare Tunnel (se `cloudflared` è installato).
 
-> **Porte occupate:** `make dev` non blocca più — termina automaticamente il processo che occupa la porta e prosegue. `make stop` resta disponibile per uno shutdown esplicito.
+Al termine mostra tutti gli accessi disponibili:
+
+```
+  Backend API  → http://localhost:8000
+  Frontend App → http://localhost:5173
+
+  📱 Da smartphone (stessa rete WiFi):
+  Frontend     → http://192.168.x.x:5173
+
+  🌐 Da smartphone (qualsiasi rete):
+  Tunnel       → https://xxxx.trycloudflare.com
+```
+
+**Prerequisiti opzionali** (una volta sola):
+
+```bash
+brew install cloudflared   # accesso da rete esterna via tunnel
+brew install qrencode      # QR code nel terminale  (oppure: make mobile)
+```
+
+Con `cloudflared` installato, `make dev` avvia automaticamente un tunnel pubblico e ne mostra l'URL (e il QR code se `qrencode` è disponibile). L'URL cambia a ogni avvio — nessuna configurazione da modificare.
+
+> **Come funziona il tunnel:** basta un solo tunnel sul frontend (porta 5173). Il browser carica l'app via tunnel e le chiamate `/api` vengono inoltrate dal proxy Vite al backend locale — nessun `VITE_API_URL` da impostare.
+
+> **Porte occupate:** `make dev` non blocca — termina automaticamente il processo che occupa la porta e prosegue. `make stop` resta disponibile per uno shutdown esplicito.
 
 | Situazione | Comando |
 |------------|---------|
-| Avviare tutto | `make dev` |
+| Avviare tutto (backend + frontend + tunnel + QR) | `make dev` |
+| Come sopra + installa qrencode se mancante | `make mobile` |
 | Spegnere tutto (normale) | `Ctrl+C` nel terminale |
 | Spegnere tutto (terminale chiuso per errore) | `make stop` |
 | Verificare cosa è in esecuzione | `lsof -i :8000 -i :5173` |
-
-> **Accesso da altri device sulla rete locale:** il backend ascolta su `0.0.0.0`,
-> quindi è raggiungibile da qualsiasi device sulla stessa rete WiFi tramite
-> `http://<IP-del-mac>:8000`. Il frontend Vite è accessibile su `http://<IP-del-mac>:5173`.
 
 ### Tutti i comandi
 
 | Comando | Descrizione |
 |---------|-------------|
-| `make dev` | Avvia frontend + backend |
+| `make dev` | Avvia frontend + backend + mostra URL per smartphone |
+| `make mobile` | Come `make dev` + installa qrencode e mostra QR code |
 | `make stop` | Forza stop se i processi sono rimasti attivi |
 | `make setup` | Prima configurazione |
 | `make migrate` | Applica migrazioni DB |
@@ -552,31 +573,18 @@ L'URL del database viene letto da `os.environ["DATABASE_URL"]` in `alembic/env.p
 
 ### Locale / LAN
 
-Impostazione predefinita: backend su `0.0.0.0:8000`, frontend su `:5173`. Accessibile da qualsiasi device sulla stessa rete WiFi.
+`make dev` rileva automaticamente l'IP locale e lo mostra nel summary — aprire quell'URL sullo smartphone. Backend su `0.0.0.0:8000`, frontend su `:5173`.
 
-### Accesso remoto da smartphone (Cloudflare Tunnel)
+### Accesso remoto (Cloudflare Tunnel)
 
-Prerequisito: `brew install cloudflared`
-
-Servono due tunnel in parallelo, ognuno in un terminale separato:
+`make dev` avvia il tunnel automaticamente se `cloudflared` è installato:
 
 ```bash
-# Terminale 1 — backend
-cloudflared tunnel --url http://localhost:8000 2>&1 | grep trycloudflare
-
-# Terminale 2 — frontend
-cloudflared tunnel --url http://localhost:5173 2>&1 | grep trycloudflare
+brew install cloudflared   # una volta sola
+make dev                   # il tunnel parte insieme al resto
 ```
 
-Dopo aver avviato il Terminale 1, copiare l'URL ottenuto in `frontend/.env.local`:
-
-```
-VITE_API_URL=https://xxxx.trycloudflare.com
-```
-
-Poi riavviare `make dev`. L'URL del Terminale 2 è quello da aprire sullo smartphone.
-
-> **Nota:** gli URL cambiano a ogni riavvio dei tunnel. Per ottenere un URL nuovo (o se un tunnel è crashato): `pkill -f cloudflared`, poi riavviare entrambi i terminali e aggiornare `.env.local`. Tenere entrambi i terminali aperti finché si usa l'app da remoto.
+L'URL pubblico viene mostrato nel summary (es. `https://xxxx.trycloudflare.com`) — aprirlo sullo smartphone. Basta un solo tunnel sul frontend: le chiamate API vengono inoltrate dal proxy Vite al backend locale, senza bisogno di `VITE_API_URL` o configurazioni aggiuntive. L'URL cambia a ogni avvio.
 
 ### Cloud (Render + Vercel + Neon)
 
@@ -633,6 +641,12 @@ Aggiunto un secondo modo di inserimento dati basato su conteggi osservabili, in 
 - Coda offline su IndexedDB per misurazioni POST/PUT senza connessione.
 - Sincronizzazione automatica al ripristino rete con retry ogni 60 s.
 - `OfflineBanner` per feedback visivo dello stato di connessione.
+
+### 2026-06-20 — Accesso da smartphone e tunnel remoto integrati in `make dev`
+- `make dev` avvia automaticamente un Cloudflare Tunnel (se `cloudflared` è installato) e ne mostra l'URL nel summary — accesso da qualsiasi rete senza comandi separati.
+- Un solo tunnel basta: il proxy Vite inoltra `/api` al backend locale, nessun `VITE_API_URL` da impostare.
+- `make dev` rileva anche l'IP locale (en0/en1/fallback) per accesso su rete WiFi.
+- `make mobile` installa `qrencode` (brew, una volta sola) e stampa QR code per entrambi gli URL (WiFi e tunnel).
 
 ### 2026-06-15 — Automazione avvio sviluppo
 - Aggiunto `Makefile` e `scripts/dev.sh` con check prerequisiti, wait-for-DB e log colorati.

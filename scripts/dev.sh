@@ -34,11 +34,15 @@ ENV_FILE="$BACKEND_DIR/.env"
 # PID dei processi figli (popolati più avanti)
 BACKEND_PID=""
 FRONTEND_PID=""
+TUNNEL_PID=""
+TUNNEL_URL=""
+TUNNEL_LOG="/tmp/ct_tunnel.log"
 
 # ── Shutdown pulito ───────────────────────────────────────────────────────────
 cleanup() {
   echo ""
   log_sys "Shutdown in corso — arresto di tutti i servizi..."
+  [ -n "$TUNNEL_PID" ]   && kill "$TUNNEL_PID"   2>/dev/null && log_sys   "Tunnel cloudflared fermato (PID $TUNNEL_PID)"
   [ -n "$BACKEND_PID" ]  && kill "$BACKEND_PID"  2>/dev/null && log_back  "Uvicorn fermato (PID $BACKEND_PID)"
   [ -n "$FRONTEND_PID" ] && kill "$FRONTEND_PID" 2>/dev/null && log_front "Vite fermato (PID $FRONTEND_PID)"
   [ -n "$BACKEND_PID" ]  && wait "$BACKEND_PID"  2>/dev/null || true
@@ -260,8 +264,52 @@ FRONTEND_PID=$!
 log_front "Vite avviato (PID $FRONTEND_PID) → http://localhost:5173"
 
 # =============================================================================
-#  9. RIEPILOGO E ATTESA
+#  9. CLOUDFLARE TUNNEL (opzionale — accesso remoto da qualsiasi rete)
 # =============================================================================
+echo ""
+if command -v cloudflared &>/dev/null; then
+  log_sys "Avvio Cloudflare Tunnel (accesso remoto)..."
+  rm -f "$TUNNEL_LOG"
+  cloudflared tunnel --url http://localhost:5173 > "$TUNNEL_LOG" 2>&1 &
+  TUNNEL_PID=$!
+
+  WAITED=0
+  while [ "$WAITED" -lt 25 ]; do
+    TUNNEL_URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$TUNNEL_LOG" 2>/dev/null | head -1)
+    [ -n "$TUNNEL_URL" ] && break
+    sleep 1
+    WAITED=$((WAITED + 1))
+    printf "\r  ${YELLOW}Attendo URL tunnel... %ds${RESET}" "$WAITED"
+  done
+  [ "$WAITED" -gt 0 ] && echo ""
+
+  if [ -n "$TUNNEL_URL" ]; then
+    log_ok "Tunnel pronto: $TUNNEL_URL"
+  else
+    log_sys "Tunnel avviato (PID $TUNNEL_PID) — URL non ancora disponibile"
+  fi
+else
+  log_sys "cloudflared non trovato — solo accesso rete locale. Installa con: brew install cloudflared"
+fi
+
+# =============================================================================
+#  10. RIEPILOGO E ATTESA
+# =============================================================================
+
+# Rileva IP locale per accesso da smartphone (prova en0, poi en1, poi primo IP non-loopback)
+LOCAL_IP=""
+for iface in en0 en1 wlan0 eth0; do
+  IP=$(ipconfig getifaddr "$iface" 2>/dev/null || true)
+  if [ -n "$IP" ]; then
+    LOCAL_IP="$IP"
+    break
+  fi
+done
+# fallback: primo indirizzo IPv4 non-loopback
+if [ -z "$LOCAL_IP" ]; then
+  LOCAL_IP=$(ifconfig 2>/dev/null | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $2}' | head -1 || true)
+fi
+
 echo ""
 echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${CYAN}${BOLD}  ✅ Tutti i servizi avviati!${RESET}"
@@ -269,6 +317,29 @@ echo ""
 echo -e "  ${BLUE}Backend API${RESET}  → ${BOLD}http://localhost:8000${RESET}"
 echo -e "  ${BLUE}API Docs${RESET}     → ${BOLD}http://localhost:8000/docs${RESET}"
 echo -e "  ${GREEN}Frontend App${RESET} → ${BOLD}http://localhost:5173${RESET}"
+if [ -n "$LOCAL_IP" ]; then
+  echo ""
+  echo -e "  ${YELLOW}📱 Da smartphone (stessa rete WiFi):${RESET}"
+  echo -e "  ${GREEN}Frontend${RESET}     → ${BOLD}http://${LOCAL_IP}:5173${RESET}"
+  if command -v qrencode &>/dev/null; then
+    echo ""
+    echo -e "  ${YELLOW}QR — rete locale:${RESET}"
+    qrencode -t ANSIUTF8 "http://${LOCAL_IP}:5173"
+  fi
+fi
+if [ -n "$TUNNEL_URL" ]; then
+  echo ""
+  echo -e "  ${YELLOW}🌐 Da smartphone (qualsiasi rete):${RESET}"
+  echo -e "  ${GREEN}Tunnel${RESET}       → ${BOLD}${TUNNEL_URL}${RESET}"
+  if command -v qrencode &>/dev/null; then
+    echo ""
+    echo -e "  ${YELLOW}QR — tunnel remoto:${RESET}"
+    qrencode -t ANSIUTF8 "$TUNNEL_URL"
+  fi
+elif [ -n "$TUNNEL_PID" ]; then
+  echo ""
+  echo -e "  ${YELLOW}🌐 Tunnel remoto:${RESET} avviato, URL in arrivo (controlla il log sopra)"
+fi
 echo ""
 echo -e "  ${YELLOW}Premi Ctrl+C per fermare tutti i servizi${RESET}"
 echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"

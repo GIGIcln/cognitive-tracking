@@ -4,7 +4,7 @@
 #  Richiede: Python 3, Node.js, PostgreSQL (installati su macOS)
 # =============================================================================
 
-.PHONY: dev setup migrate seed clean help
+.PHONY: dev mobile setup migrate seed clean help
 
 SHELL := /bin/bash
 BACKEND_DIR := backend
@@ -24,8 +24,14 @@ RESET  := \033[0m
 #  TARGET PRINCIPALE
 # =============================================================================
 
-## dev: Avvia frontend + backend + check DB con un solo comando
+## dev: Avvia frontend + backend + mostra URL per smartphone (stessa rete WiFi)
 dev:
+	@chmod +x scripts/dev.sh
+	@scripts/dev.sh
+
+## mobile: Installa qrencode (QR code nel terminale) poi avvia come 'make dev'
+mobile:
+	@command -v qrencode &>/dev/null || (echo "Installazione qrencode..." && brew install qrencode -q)
 	@chmod +x scripts/dev.sh
 	@scripts/dev.sh
 
