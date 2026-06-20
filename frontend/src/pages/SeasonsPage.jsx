@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getSeasons, createSeason } from '../api/seasons'
+import { getSeasons, createSeason, getSeasonStats } from '../api/seasons'
 
 function formatDate(d) {
   if (!d) return '—'
@@ -13,13 +13,22 @@ export default function SeasonsPage() {
   const [form, setForm] = useState({ name: '', start_date: '', end_date: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [stats, setStats] = useState(null)
 
   const current = seasons.find((s) => s.is_current) ?? null
   const archived = seasons.filter((s) => !s.is_current)
 
   useEffect(() => {
     getSeasons()
-      .then((res) => setSeasons(res.data))
+      .then((res) => {
+        setSeasons(res.data)
+        const cur = res.data.find((s) => s.is_current)
+        if (cur) {
+          getSeasonStats(cur.id)
+            .then((r) => setStats(r.data))
+            .catch(() => {})
+        }
+      })
       .catch(() => setError('Errore nel caricamento delle stagioni'))
       .finally(() => setLoading(false))
   }, [])
@@ -156,6 +165,41 @@ export default function SeasonsPage() {
           <div className="text-xs text-gray-500">
             {formatDate(current.start_date)} — {formatDate(current.end_date)}
           </div>
+
+          {stats && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                {[
+                  ['Sessioni', stats.total_sessions],
+                  ['Giocatori', stats.total_players],
+                  ['Gruppi', stats.total_groups],
+                ].map(([label, value]) => (
+                  <div key={label} className="text-center">
+                    <div className="text-2xl font-bold text-granata">{value ?? '—'}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+                  </div>
+                ))}
+              </div>
+              {stats.total_sessions > 0 && (
+                <div className="grid grid-cols-5 gap-2 text-center">
+                  {[
+                    ['SR',  stats.avg_sr],
+                    ['DQI', stats.avg_dqi],
+                    ['AI',  stats.avg_ai],
+                    ['TRS', stats.avg_trs],
+                    ['VCI', stats.avg_vci],
+                  ].map(([label, val]) => (
+                    <div key={label} className="bg-gray-50 rounded-lg py-2">
+                      <div className="text-sm font-bold text-gray-800">
+                        {val != null ? val.toFixed(1) : '—'}
+                      </div>
+                      <div className="text-[10px] text-gray-400">{label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-700">

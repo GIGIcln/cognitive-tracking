@@ -43,6 +43,61 @@ def create_season(
     return SeasonResponse.model_validate(season)
 
 
+@router.get("/{season_id}/stats")
+def get_season_stats(
+    season_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: UserContext = Depends(require_auth),
+):
+    from app.models.training_session import TrainingSession
+    from app.models.measurement import Measurement
+    from sqlalchemy import func, distinct
+
+    session_ids = [
+        s.id
+        for s in db.query(TrainingSession.id).filter(
+            TrainingSession.season_id == season_id,
+            TrainingSession.is_active.is_(True),
+        ).all()
+    ]
+    total_sessions = len(session_ids)
+
+    if not session_ids:
+        return {
+            "total_sessions": 0, "total_players": 0, "total_groups": 0,
+            "avg_sr": None, "avg_dqi": None, "avg_ai": None,
+            "avg_trs": None, "avg_vci": None,
+        }
+
+    agg = db.query(
+        func.count(distinct(Measurement.player_id)).label("total_players"),
+        func.avg(Measurement.scanning_rate).label("avg_sr"),
+        func.avg(Measurement.decision_quality).label("avg_dqi"),
+        func.avg(Measurement.anticipation).label("avg_ai"),
+        func.avg(Measurement.transition_reset).label("avg_trs"),
+        func.avg(Measurement.verbal_comm).label("avg_vci"),
+    ).filter(
+        Measurement.session_id.in_(session_ids),
+        Measurement.is_absent.is_(False),
+    ).first()
+
+    total_groups = db.query(func.count(distinct(TrainingSession.group_id))).filter(
+        TrainingSession.season_id == season_id,
+        TrainingSession.is_active.is_(True),
+    ).scalar() or 0
+
+    def f(v): return round(float(v), 2) if v is not None else None
+
+    return {
+        "total_sessions": total_sessions,
+        "total_players": agg.total_players or 0,
+        "total_groups": total_groups,
+        "avg_sr": f(agg.avg_sr), "avg_dqi": f(agg.avg_dqi),
+        "avg_ai": f(agg.avg_ai), "avg_trs": f(agg.avg_trs),
+        "avg_vci": f(agg.avg_vci),
+    }
+
+
 @router.put("/{season_id}/archive", response_model=SeasonResponse)
 def archive_season(
     season_id: uuid.UUID,
