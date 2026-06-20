@@ -302,14 +302,22 @@ export default function TeamReportPage() {
                     {playerRankings.map((m, i) => (
                       <tr
                         key={m.player_id}
-                        className={i === 0 ? 'bg-amber-50' : i % 2 === 1 ? 'bg-gray-50/50' : ''}
+                        className={
+                          i === 0 ? 'bg-amber-50' :
+                          i === 1 ? 'bg-slate-50' :
+                          i === 2 ? 'bg-orange-50' :
+                          i % 2 === 1 ? 'bg-gray-50/50' : ''
+                        }
                       >
-                        <td className="py-2">
-                          <div className="flex items-center justify-center">
-                            <span className={i === 0 ? 'text-sm font-black text-amber-500' : 'text-xs text-gray-400'}>
-                              {i === 0 ? '★' : i + 1}
-                            </span>
-                          </div>
+                        <td className="py-2 text-center">
+                          <span className={
+                            i === 0 ? 'text-sm font-black text-amber-500' :
+                            i === 1 ? 'text-sm font-black text-slate-400' :
+                            i === 2 ? 'text-sm font-black text-orange-400' :
+                            'text-xs text-gray-400'
+                          }>
+                            {i + 1}
+                          </span>
                         </td>
                         <td className="py-2 font-semibold text-gray-800 pl-2 whitespace-nowrap">
                           {m.last_name} {m.first_name}
