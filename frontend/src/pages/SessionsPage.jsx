@@ -7,6 +7,118 @@ import { SESSION_TYPES } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
 import { useAuth } from '../context/AuthContext'
 
+const SESSION_TYPE_COLOR = {
+  'SSG':            'bg-blue-500',
+  'Partita a tema': 'bg-amber-500',
+  'Partita':        'bg-red-500',
+}
+const SESSION_TYPE_ABBR = {
+  'SSG':            'SSG',
+  'Partita a tema': 'P.T.',
+  'Partita':        'Par',
+}
+
+const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
+
+function buildCalendarGrid(year, month, sessions) {
+  const firstDay = new Date(year, month, 1)
+  const startOffset = (firstDay.getDay() + 6) % 7
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const byDate = {}
+  sessions.forEach((s) => {
+    byDate[s.session_date] ??= []
+    byDate[s.session_date].push(s)
+  })
+  const cells = Array.from({ length: startOffset }, () => ({ day: null, iso: null, sessions: [] }))
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    cells.push({ day: d, iso, sessions: byDate[iso] ?? [] })
+  }
+  return cells
+}
+
+function CalendarView({ sessions, calMonth, setCalMonth, navigate }) {
+  const year = calMonth.getFullYear()
+  const month = calMonth.getMonth()
+  const cells = buildCalendarGrid(year, month, sessions)
+  const today = new Date().toISOString().split('T')[0]
+  const monthLabel = calMonth.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+
+  return (
+    <div>
+      {/* Month navigation */}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => setCalMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1))}
+          className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+        >
+          ←
+        </button>
+        <span className="font-semibold text-gray-900 capitalize">{monthLabel}</span>
+        <button
+          onClick={() => setCalMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1))}
+          className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+        >
+          →
+        </button>
+      </div>
+
+      {/* Day-of-week header */}
+      <div className="grid grid-cols-7 mb-1">
+        {DAY_LABELS.map((d) => (
+          <div key={d} className="text-center text-[11px] font-medium text-gray-400 py-1">{d}</div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-xl overflow-hidden border border-gray-100">
+        {cells.map((cell, i) => (
+          <div
+            key={i}
+            className={`bg-white min-h-[72px] p-1.5 ${!cell.day ? 'opacity-0 pointer-events-none' : ''}`}
+          >
+            {cell.day && (
+              <>
+                <div className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1 ${
+                  cell.iso === today
+                    ? 'bg-granata text-white'
+                    : 'text-gray-500'
+                }`}>
+                  {cell.day}
+                </div>
+                <div className="space-y-0.5">
+                  {cell.sessions.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => navigate(`/sessions/${s.id}`)}
+                      className={`w-full text-left px-1 py-0.5 rounded text-[10px] font-semibold text-white truncate transition-opacity hover:opacity-80 ${
+                        SESSION_TYPE_COLOR[s.session_type] ?? 'bg-gray-400'
+                      }`}
+                      title={`${s.session_type}${s.duration_min ? ` · ${s.duration_min} min` : ''}`}
+                    >
+                      {SESSION_TYPE_ABBR[s.session_type] ?? s.session_type}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="flex gap-3 mt-3 flex-wrap">
+        {Object.entries(SESSION_TYPE_ABBR).map(([type, abbr]) => (
+          <span key={type} className="flex items-center gap-1 text-xs text-gray-500">
+            <span className={`w-2.5 h-2.5 rounded-sm inline-block ${SESSION_TYPE_COLOR[type]}`} />
+            {type}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function SessionsPage() {
   const [sessions, setSessions] = useState([])
   const [groups, setGroups] = useState([])
@@ -24,6 +136,8 @@ export default function SessionsPage() {
     notes: '',
   })
   const [seasonRange, setSeasonRange] = useState({ min: '', max: '' })
+  const [viewMode, setViewMode] = useState('list')
+  const [calMonth, setCalMonth] = useState(() => new Date())
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
 
@@ -115,7 +229,7 @@ export default function SessionsPage() {
         )}
       </div>
 
-      <div className="mb-5">
+      <div className="mb-5 flex items-center gap-3 flex-wrap">
         <select
           value={selectedGroup}
           onChange={handleGroupFilter}
@@ -126,6 +240,20 @@ export default function SessionsPage() {
             <option key={g.id} value={g.id}>{g.name}</option>
           ))}
         </select>
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-medium ml-auto">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-2 ${viewMode === 'list' ? 'bg-granata text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+          >
+            Lista
+          </button>
+          <button
+            onClick={() => setViewMode('calendar')}
+            className={`px-3 py-2 ${viewMode === 'calendar' ? 'bg-granata text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+          >
+            Calendario
+          </button>
+        </div>
       </div>
 
       {error && !showModal && <div className="text-red-600 text-sm mb-4">{error}</div>}
@@ -134,6 +262,13 @@ export default function SessionsPage() {
         <div className="flex justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-4 border-granata border-t-transparent" />
         </div>
+      ) : viewMode === 'calendar' ? (
+        <CalendarView
+          sessions={sessions}
+          calMonth={calMonth}
+          setCalMonth={setCalMonth}
+          navigate={navigate}
+        />
       ) : (
         <div className="space-y-2">
           {sessions.map((s) => {
