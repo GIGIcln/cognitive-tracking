@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getPlayers, deletePlayer } from '../api/players'
+import { getPlayers, deletePlayer, bulkAssignPlayers } from '../api/players'
 import { getGroups } from '../api/groups'
 import PlayerFormModal from '../components/PlayerFormModal'
 import { useAuth } from '../context/AuthContext'
@@ -17,6 +17,9 @@ export default function PlayersPage() {
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, player: null })
   const [deleting, setDeleting] = useState(false)
   const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState(new Set())
+  const [targetGroup, setTargetGroup] = useState('')
+  const [assigning, setAssigning] = useState(false)
   const { isAdmin } = useAuth()
   const navigate = useNavigate()
 
@@ -49,6 +52,21 @@ export default function PlayersPage() {
     const q = query.toLowerCase()
     return p.first_name.toLowerCase().includes(q) || p.last_name.toLowerCase().includes(q)
   })
+
+  const handleBulkAssign = async () => {
+    if (!targetGroup || selected.size === 0) return
+    setAssigning(true)
+    try {
+      await bulkAssignPlayers([...selected], targetGroup)
+      setSelected(new Set())
+      setTargetGroup('')
+      loadPlayers(selectedGroup)
+    } catch {
+      setError('Errore durante lo spostamento')
+    } finally {
+      setAssigning(false)
+    }
+  }
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -104,26 +122,43 @@ export default function PlayersPage() {
           <div className="animate-spin rounded-full h-8 w-8 border-4 border-granata border-t-transparent" />
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className={`space-y-2 ${selected.size > 0 ? 'pb-24' : ''}`}>
           {filtered.map((p) => (
             <div
               key={p.id}
               className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between hover:border-granata hover:shadow-sm transition-all cursor-pointer"
               onClick={() => navigate(`/players/${p.id}`)}
             >
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-900">{p.last_name} {p.first_name}</span>
-                  {p.position && (
-                    <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
-                      {p.position}
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {p.birth_year && `${p.birth_year}`}
-                  {p.birth_year && ' · '}
-                  {p.current_group_name || '—'}
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {isAdmin && (
+                  <input
+                    type="checkbox"
+                    checked={selected.has(p.id)}
+                    onChange={(e) => {
+                      setSelected((prev) => {
+                        const next = new Set(prev)
+                        e.target.checked ? next.add(p.id) : next.delete(p.id)
+                        return next
+                      })
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="accent-granata w-4 h-4 shrink-0"
+                  />
+                )}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900">{p.last_name} {p.first_name}</span>
+                    {p.position && (
+                      <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
+                        {p.position}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    {p.birth_year && `${p.birth_year}`}
+                    {p.birth_year && ' · '}
+                    {p.current_group_name || '—'}
+                  </div>
                 </div>
               </div>
               {isAdmin && (
@@ -151,6 +186,35 @@ export default function PlayersPage() {
               {query ? `Nessun risultato per "${query}"` : 'Nessun giocatore trovato'}
             </div>
           )}
+        </div>
+      )}
+
+      {isAdmin && selected.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-white border-t border-gray-200 p-3 flex items-center gap-3 z-30 shadow-lg">
+          <span className="text-sm text-gray-600 shrink-0">
+            {selected.size} giocator{selected.size === 1 ? 'e' : 'i'} selezionat{selected.size === 1 ? 'o' : 'i'}
+          </span>
+          <select
+            value={targetGroup}
+            onChange={(e) => setTargetGroup(e.target.value)}
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
+          >
+            <option value="">Sposta in gruppo…</option>
+            {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+          <button
+            onClick={handleBulkAssign}
+            disabled={!targetGroup || assigning}
+            className="bg-granata text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+          >
+            {assigning ? 'Spostando…' : 'Sposta'}
+          </button>
+          <button
+            onClick={() => { setSelected(new Set()); setTargetGroup('') }}
+            className="text-gray-400 hover:text-gray-600 text-sm px-2"
+          >
+            ✕
+          </button>
         </div>
       )}
 

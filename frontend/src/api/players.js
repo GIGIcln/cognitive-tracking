@@ -15,3 +15,5 @@ export const getPlayerAssignments = (playerId) => api.get(`/players/${playerId}/
 export const getAtRiskPlayers = (minSessions = 3) =>
   api.get('/players/at-risk', { params: { min_sessions: minSessions } })
 export const getPlayerStreak = (playerId) => api.get(`/players/${playerId}/streak`)
+export const bulkAssignPlayers = (playerIds, groupId) =>
+  api.post('/players/bulk-assign', { player_ids: playerIds, group_id: groupId })
