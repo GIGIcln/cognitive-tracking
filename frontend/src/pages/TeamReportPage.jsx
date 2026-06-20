@@ -306,22 +306,9 @@ export default function TeamReportPage() {
                       >
                         <td className="py-2">
                           <div className="flex items-center justify-center">
-                            {i === 0 ? (
-                              <span style={{
-                                display: 'inline-block',
-                                width: '20px',
-                                height: '20px',
-                                borderRadius: '50%',
-                                backgroundColor: '#FBBF24',
-                                color: '#fff',
-                                fontSize: '10px',
-                                fontWeight: '900',
-                                textAlign: 'center',
-                                lineHeight: '20px',
-                              }}>1</span>
-                            ) : (
-                              <span className="text-xs text-gray-400">{i + 1}</span>
-                            )}
+                            <span className={i === 0 ? 'text-sm font-black text-amber-500' : 'text-xs text-gray-400'}>
+                              {i === 0 ? '★' : i + 1}
+                            </span>
                           </div>
                         </td>
                         <td className="py-2 font-semibold text-gray-800 pl-2 whitespace-nowrap">
