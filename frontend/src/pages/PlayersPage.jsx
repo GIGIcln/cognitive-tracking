@@ -16,6 +16,7 @@ export default function PlayersPage() {
   const [editPlayer, setEditPlayer] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, player: null })
   const [deleting, setDeleting] = useState(false)
+  const [query, setQuery] = useState('')
   const { isAdmin } = useAuth()
   const navigate = useNavigate()
 
@@ -40,8 +41,14 @@ export default function PlayersPage() {
 
   const handleGroupChange = (e) => {
     setSelectedGroup(e.target.value)
+    setQuery('')
     loadPlayers(e.target.value)
   }
+
+  const filtered = players.filter((p) => {
+    const q = query.toLowerCase()
+    return p.first_name.toLowerCase().includes(q) || p.last_name.toLowerCase().includes(q)
+  })
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -70,7 +77,7 @@ export default function PlayersPage() {
         )}
       </div>
 
-      <div className="mb-5">
+      <div className="mb-5 flex flex-wrap gap-3">
         <select
           value={selectedGroup}
           onChange={handleGroupChange}
@@ -81,6 +88,13 @@ export default function PlayersPage() {
             <option key={g.id} value={g.id}>{g.name}</option>
           ))}
         </select>
+        <input
+          type="search"
+          placeholder="Cerca giocatore…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full max-w-xs focus:outline-none focus:ring-2 focus:ring-granata"
+        />
       </div>
 
       {error && <div className="text-red-600 text-sm mb-4">{error}</div>}
@@ -91,7 +105,7 @@ export default function PlayersPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {players.map((p) => (
+          {filtered.map((p) => (
             <div
               key={p.id}
               className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between hover:border-granata hover:shadow-sm transition-all cursor-pointer"
@@ -132,9 +146,9 @@ export default function PlayersPage() {
               )}
             </div>
           ))}
-          {!players.length && (
+          {!filtered.length && (
             <div className="text-center text-gray-400 py-8 text-sm">
-              Nessun giocatore trovato
+              {query ? `Nessun risultato per "${query}"` : 'Nessun giocatore trovato'}
             </div>
           )}
         </div>
