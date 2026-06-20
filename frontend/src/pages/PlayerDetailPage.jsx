@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { getPlayer, getPlayerHistory, getPlayerAssignments } from '../api/players'
+import { getPlayer, getPlayerHistory, getPlayerAssignments, getPlayerStreak } from '../api/players'
 
 const METRICS = [
   { key: 'scanning_rate',    label: 'SR',  color: '#8b5cf6' },
@@ -170,10 +170,17 @@ export default function PlayerDetailPage() {
   const [assignmentsLoading, setAssignmentsLoading] = useState(false)
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [streak, setStreak] = useState(null)
 
   useEffect(() => {
-    getPlayer(id)
-      .then((res) => setPlayer(res.data))
+    Promise.all([
+      getPlayer(id),
+      getPlayerStreak(id),
+    ])
+      .then(([playerRes, streakRes]) => {
+        setPlayer(playerRes.data)
+        setStreak(streakRes.data.streak)
+      })
       .catch(() => setError('Giocatore non trovato'))
       .finally(() => setLoading(false))
   }, [id])
@@ -251,6 +258,11 @@ export default function PlayerDetailPage() {
       {/* Anagrafica */}
       {activeTab === 'anagrafica' && (
         <div className="space-y-3">
+          {streak >= 2 && (
+            <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
+              🔥 {streak} sessioni ottimo consecutive
+            </div>
+          )}
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             {[
               { label: 'Nome', value: `${player.last_name} ${player.first_name}` },

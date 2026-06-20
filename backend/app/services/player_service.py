@@ -334,6 +334,33 @@ class PlayerService:
             for a, name in rows
         ]
 
+    def get_streak(self, player_id: uuid.UUID) -> dict:
+        rows = (
+            self.db.query(Measurement, TrainingSession.session_date)
+            .join(TrainingSession, Measurement.session_id == TrainingSession.id)
+            .filter(
+                Measurement.player_id == player_id,
+                Measurement.is_absent.is_(False),
+                TrainingSession.is_active.is_(True),
+            )
+            .order_by(TrainingSession.session_date.desc())
+            .limit(30)
+            .all()
+        )
+
+        OTTIMO_MIN = 8.0
+        streak = 0
+        for m, _ in rows:
+            vals = [float(getattr(m, f)) for f in _PARAM_FIELDS if getattr(m, f) is not None]
+            if not vals:
+                break
+            if sum(vals) / len(vals) >= OTTIMO_MIN:
+                streak += 1
+            else:
+                break
+
+        return {"streak": streak, "sessions_checked": len(rows)}
+
     def assign_to_group(self, player_id: uuid.UUID, group_id: uuid.UUID) -> bool:
         """Returns False if player not found."""
         player = self.db.get(Player, player_id)

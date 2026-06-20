@@ -14,3 +14,4 @@ export const getPlayerHistory = (playerId, config) => api.get(`/players/${player
 export const getPlayerAssignments = (playerId) => api.get(`/players/${playerId}/assignments`)
 export const getAtRiskPlayers = (minSessions = 3) =>
   api.get('/players/at-risk', { params: { min_sessions: minSessions } })
+export const getPlayerStreak = (playerId) => api.get(`/players/${playerId}/streak`)

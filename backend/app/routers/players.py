@@ -94,6 +94,18 @@ def get_player_assignments(
     return result
 
 
+@router.get("/{player_id}/streak")
+def get_player_streak(
+    player_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    scope = current_user.read_scope()
+    if scope is not None and PlayerService(db).get_with_group(player_id, allowed_group_ids=scope) is None:
+        raise HTTPException(status_code=404, detail="Giocatore non trovato")
+    return PlayerService(db).get_streak(player_id)
+
+
 @router.get("/{player_id}/history", response_model=list[PlayerHistoryItemResponse])
 def get_player_history(
     player_id: uuid.UUID,
