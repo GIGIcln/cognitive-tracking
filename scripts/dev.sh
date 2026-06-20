@@ -37,6 +37,7 @@ FRONTEND_PID=""
 TUNNEL_PID=""
 TUNNEL_URL=""
 TUNNEL_LOG="/tmp/ct_tunnel.log"
+NTFY_TOPIC=""
 
 # ── Shutdown pulito ───────────────────────────────────────────────────────────
 cleanup() {
@@ -52,6 +53,21 @@ cleanup() {
 }
 
 trap cleanup SIGINT SIGTERM
+
+# ── Notifica ntfy ─────────────────────────────────────────────────────────────
+send_ntfy_notification() {
+  local url="$1"
+  if [ -z "$NTFY_TOPIC" ]; then return 0; fi
+  if curl -s --max-time 10 \
+      -H "Title: Cognitive Tracking" \
+      -d "Tunnel online: $url" \
+      "https://ntfy.sh/${NTFY_TOPIC}" \
+      >/dev/null 2>&1; then
+    log_ok "Notifica ntfy inviata"
+  else
+    log_sys "Notifica ntfy non riuscita (ignoro)"
+  fi
+}
 
 # =============================================================================
 #  1. CHECK PREREQUISITI
@@ -108,6 +124,8 @@ if [ -z "$DB_URL" ]; then
   log_err "DATABASE_URL non trovata nel file .env"
   exit 1
 fi
+
+NTFY_TOPIC=$(grep -E '^NTFY_TOPIC=' "$ENV_FILE" | cut -d'=' -f2- | tr -d '"' | tr -d "'" 2>/dev/null || true)
 
 # =============================================================================
 #  3. CHECK PORTE GIÀ OCCUPATE
@@ -285,6 +303,7 @@ if command -v cloudflared &>/dev/null; then
 
   if [ -n "$TUNNEL_URL" ]; then
     log_ok "Tunnel pronto: $TUNNEL_URL"
+    send_ntfy_notification "$TUNNEL_URL"
   else
     log_sys "Tunnel avviato (PID $TUNNEL_PID) — URL non ancora disponibile"
   fi

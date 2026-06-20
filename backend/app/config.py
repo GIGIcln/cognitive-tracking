@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     app_env: str = "development"
     allowed_origins: str = "http://localhost:5173"
+    ntfy_topic: str = ""
 
     @property
     def origins_list(self) -> list[str]:

@@ -37,8 +37,25 @@ function Log-Err   { param([string]$M) Write-Host "[ERROR]    $M" -ForegroundCol
 # -- Variabili processi (per cleanup) ----------------------------------------
 $script:BackendJob  = $null
 $script:FrontendJob = $null
-$script:TunnelProc  = $null
-$script:pythonCmd   = $null
+$script:TunnelProc      = $null
+$script:pythonCmd       = $null
+$script:NtfyTopic = ""
+
+# -- Notifica ntfy ------------------------------------------------------------
+function Send-Ntfy {
+    param([string]$Url)
+    if (-not $script:NtfyTopic) { return }
+    try {
+        Invoke-WebRequest "https://ntfy.sh/$($script:NtfyTopic)" `
+            -Method Post `
+            -Headers @{ Title = "Cognitive Tracking" } `
+            -Body "Tunnel online: $Url" `
+            -UseBasicParsing -TimeoutSec 10 | Out-Null
+        Log-Ok "Notifica ntfy inviata"
+    } catch {
+        Log-Sys "Notifica ntfy non riuscita (ignoro)"
+    }
+}
 
 # -- Libera tutti i processi in ascolto su una porta -------------------------
 function Stop-PortProcess {
@@ -147,6 +164,9 @@ Log-Ok ".env trovato"
 $dbUrlLine = Get-Content $EnvFile | Where-Object { $_ -match '^DATABASE_URL=' }
 if (-not $dbUrlLine) { Log-Err "DATABASE_URL non trovata nel .env"; exit 1 }
 $dbUrl = ($dbUrlLine -split '=', 2)[1].Trim('"').Trim("'")
+
+$ntfyLine = Get-Content $EnvFile | Where-Object { $_ -match '^NTFY_TOPIC=' }
+$script:NtfyTopic = if ($ntfyLine) { ($ntfyLine -split '=', 2)[1].Trim('"').Trim("'") } else { "" }
 
 # ============================================================================
 #  3. CHECK PORTE
@@ -304,8 +324,12 @@ if (Get-Command "cloudflared" -ErrorAction SilentlyContinue) {
     }
     Write-Host ""
 
-    if ($tunnelUrl) { Log-Ok "Tunnel pronto: $tunnelUrl" }
-    else            { Log-Sys "Tunnel avviato - URL non ancora disponibile" }
+    if ($tunnelUrl) {
+        Log-Ok "Tunnel pronto: $tunnelUrl"
+        Send-Ntfy -Url $tunnelUrl
+    } else {
+        Log-Sys "Tunnel avviato - URL non ancora disponibile"
+    }
 } else {
     Log-Sys "cloudflared non trovato - solo rete locale."
     Log-Sys "Installa con: winget install Cloudflare.cloudflared"

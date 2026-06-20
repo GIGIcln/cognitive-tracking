@@ -393,6 +393,7 @@ Il proxy Vite redirige `/api/*` → `http://localhost:8000` (vedi `vite.config.j
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Durata token | `60` (default) |
 | `APP_ENV` | Ambiente | `development` / `production` |
 | `ALLOWED_ORIGINS` | CORS origins (comma-separated) | `http://localhost:5173` |
+| `NTFY_TOPIC` | Topic ntfy.sh per notifiche push (opzionale) | `cognitive-luigi-dev` |
 
 ### Frontend — `frontend/.env.local` (partire da `frontend/.env.example`)
 
@@ -683,6 +684,8 @@ make dev                   # il tunnel parte insieme al resto
 
 L'URL pubblico viene mostrato nel summary (es. `https://xxxx.trycloudflare.com`) — aprirlo sullo smartphone. Basta un solo tunnel sul frontend: le chiamate API vengono inoltrate dal proxy Vite al backend locale, senza bisogno di `VITE_API_URL` o configurazioni aggiuntive. L'URL cambia a ogni avvio.
 
+**Notifica push automatica (opzionale):** installa l'app [ntfy](https://ntfy.sh) sul telefono, iscriviti a un topic a tua scelta e imposta `NTFY_TOPIC=<topic>` nel `.env`. Non appena il tunnel è pronto, ricevi una notifica push con il link direttamente sul telefono — senza bisogno di guardare il terminale.
+
 ### Cloud (Render + Vercel + Neon)
 
 | Servizio | Componente |
@@ -706,6 +709,13 @@ Passi chiave:
 ---
 
 ## Changelog
+
+### 2026-06-20 — Notifica push automatica URL tunnel (ntfy.sh)
+
+- `make dev` invia ora una notifica push al telefono non appena il tunnel Cloudflare è pronto, tramite [ntfy.sh](https://ntfy.sh) — nessun account richiesto.
+- Funziona sia su macOS (`dev.sh`) sia su Windows (`dev.ps1`): `curl` su bash, `Invoke-WebRequest` su PowerShell.
+- Configurazione: `NTFY_TOPIC=<topic>` in `backend/.env`. Se la variabile è assente, il comportamento è identico a prima — nessun errore.
+- Aggiunto `ntfy_topic` come campo opzionale in `backend/app/config.py` (Settings Pydantic) per evitare `extra_forbidden` al caricamento.
 
 ### 2026-06-19 — Modalità Conteggio Eventi (Event-Based Entry)
 
