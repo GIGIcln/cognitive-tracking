@@ -53,7 +53,7 @@ function scoreBadgeClass(score, targetsMap, field) {
 }
 
 const emptyMeasurement = () =>
-  PARAMS.reduce((acc, { field }) => ({ ...acc, [field]: '' }), { is_absent: false })
+  PARAMS.reduce((acc, { field }) => ({ ...acc, [field]: '' }), { is_absent: false, notes: '' })
 
 const emptyEventRow = () => ({ numerator: 0, denominator: 0, method: 'live' })
 
@@ -174,6 +174,7 @@ export default function SessionDetailPage() {
               transition_reset: m.transition_reset ?? '',
               verbal_comm:      m.verbal_comm ?? '',
               is_absent:        m.is_absent ?? false,
+              notes:            m.notes ?? '',
             }
           }
         })
@@ -231,6 +232,7 @@ export default function SessionDetailPage() {
           anticipation:     absent ? null : (m.anticipation     !== '' ? parseFloat(m.anticipation)     : null),
           transition_reset: absent ? null : (m.transition_reset !== '' ? parseFloat(m.transition_reset) : null),
           verbal_comm:      absent ? null : (m.verbal_comm      !== '' ? parseFloat(m.verbal_comm)      : null),
+          notes:            absent ? null : (m.notes || null),
         }
       })
       await saveMeasurements(id, payload)
@@ -598,6 +600,19 @@ export default function SessionDetailPage() {
                 ))}
               </div>
             )}
+
+            {!currentM.is_absent && (
+              <div className="mt-4">
+                <label className="text-xs text-gray-500 mb-1 block">Note giocatore</label>
+                <textarea
+                  value={currentM.notes ?? ''}
+                  onChange={(e) => handleChange(currentPlayer.id, 'notes', e.target.value)}
+                  placeholder="Osservazioni facoltative…"
+                  rows={2}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata resize-none"
+                />
+              </div>
+            )}
           </div>
         ) : (
           !total && (
@@ -756,6 +771,18 @@ export default function SessionDetailPage() {
                     {PARAMS.map(({ field }) => (
                       <EventParamRow key={field} field={field} playerId={p.id} compact />
                     ))}
+                  </div>
+                )}
+
+                {!m.is_absent && (
+                  <div className="mt-3">
+                    <textarea
+                      value={m.notes ?? ''}
+                      onChange={(e) => handleChange(p.id, 'notes', e.target.value)}
+                      placeholder="Note giocatore…"
+                      rows={1}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-granata resize-none"
+                    />
                   </div>
                 )}
               </div>
