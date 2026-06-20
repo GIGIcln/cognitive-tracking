@@ -102,6 +102,113 @@ export function exportPlayerCSV(playerName, history, targets) {
   URL.revokeObjectURL(url)
 }
 
+export function exportSessionTeamCSV(session, groupName, playerRankings, averages, targets) {
+  const paramLabels = {
+    SR: 'Scanning Rate', DQI: 'Decision Quality',
+    AI: 'Anticipazione', TRS: 'Trans. Reset', VCI: 'Comunicazione',
+  }
+
+  const sessionDate = session?.session_date ? new Date(session.session_date).toLocaleDateString('it-IT') : ''
+
+  const rankHeaders = ['Pos.', 'Giocatore', 'SR', 'DQI', 'AI', 'TRS', 'VCI', 'Media']
+  const rankRows = playerRankings.map((p, i) => [
+    i + 1,
+    `${p.last_name} ${p.first_name}`,
+    p.scanning_rate?.toFixed(1) ?? '',
+    p.decision_quality?.toFixed(1) ?? '',
+    p.anticipation?.toFixed(1) ?? '',
+    p.transition_reset?.toFixed(1) ?? '',
+    p.verbal_comm?.toFixed(1) ?? '',
+    p.avg?.toFixed(1) ?? '',
+  ])
+
+  const avgRow = averages
+    ? ['', 'MEDIA SQUADRA',
+        averages.avg_sr?.toFixed(1) ?? '',
+        averages.avg_dqi?.toFixed(1) ?? '',
+        averages.avg_ai?.toFixed(1) ?? '',
+        averages.avg_trs?.toFixed(1) ?? '',
+        averages.avg_vci?.toFixed(1) ?? '',
+        '',
+      ]
+    : null
+
+  const targetHeaders = ['Parametro', 'Max Insufficiente', 'Min Ottimo']
+  const targetRows = targets.map((t) => [paramLabels[t.parameter] ?? t.parameter, t.insufficient_max, t.ottimo_min])
+
+  const sections = [
+    [`REPORT SESSIONE — ${groupName}`],
+    [`Data: ${sessionDate}  Tipo: ${session?.session_type ?? ''}  Giocatori: ${averages?.player_count ?? ''}`],
+    [`Generato il: ${new Date().toLocaleDateString('it-IT')}`],
+    [],
+    ['--- CLASSIFICA GIOCATORI ---'],
+    rankHeaders,
+    ...rankRows,
+    ...(avgRow ? [avgRow] : []),
+    [],
+    ['--- VALORI TARGET ---'],
+    targetHeaders,
+    ...targetRows,
+  ]
+
+  const csvContent = sections
+    .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+
+  const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `report_sessione_${groupName.replace(/\s/g, '_')}_${session?.session_date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export function exportSessionPlayerCSV(playerLastName, playerFirstName, session, groupName, measurement, averages, targets) {
+  const params = [
+    { key: 'scanning_rate', avgKey: 'avg_sr', label: 'Scanning Rate', code: 'SR' },
+    { key: 'decision_quality', avgKey: 'avg_dqi', label: 'Decision Quality', code: 'DQI' },
+    { key: 'anticipation', avgKey: 'avg_ai', label: 'Anticipazione', code: 'AI' },
+    { key: 'transition_reset', avgKey: 'avg_trs', label: 'Trans. Reset', code: 'TRS' },
+    { key: 'verbal_comm', avgKey: 'avg_vci', label: 'Comunicazione', code: 'VCI' },
+  ]
+
+  const sessionDate = session?.session_date ? new Date(session.session_date).toLocaleDateString('it-IT') : ''
+
+  const headers = ['Parametro', 'Giocatore', 'Media squadra', 'Max Insufficiente', 'Min Ottimo']
+  const rows = params.map((p) => {
+    const t = targets.find((t) => t.parameter === p.code)
+    return [
+      p.label,
+      measurement?.[p.key]?.toFixed(1) ?? '',
+      averages?.[p.avgKey]?.toFixed(1) ?? '',
+      t?.insufficient_max ?? '',
+      t?.ottimo_min ?? '',
+    ]
+  })
+
+  const sections = [
+    [`REPORT SESSIONE — ${playerLastName} ${playerFirstName}`],
+    [`Data: ${sessionDate}  Tipo: ${session?.session_type ?? ''}  Gruppo: ${groupName}`],
+    [`Generato il: ${new Date().toLocaleDateString('it-IT')}`],
+    [],
+    headers,
+    ...rows,
+  ]
+
+  const csvContent = sections
+    .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+
+  const blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `report_sessione_${playerLastName}_${playerFirstName}_${session?.session_date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export function exportTeamCSV(groupName, history, rankings, targets) {
   const historyHeaders = [
     'Data', 'Tipo sessione', 'N. giocatori',

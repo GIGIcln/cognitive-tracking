@@ -16,6 +16,8 @@ const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 const PlayerDetailPage = lazy(() => import('./pages/PlayerDetailPage'))
 const PlayerReportPage = lazy(() => import('./pages/PlayerReportPage'))
 const TeamReportPage = lazy(() => import('./pages/TeamReportPage'))
+const SessionTeamReportPage = lazy(() => import('./pages/SessionTeamReportPage'))
+const SessionPlayerReportPage = lazy(() => import('./pages/SessionPlayerReportPage'))
 const SeasonsPage = lazy(() => import('./pages/SeasonsPage'))
 
 function PageLoader() {
@@ -58,6 +60,14 @@ function App() {
             <Route
               path="/reports/group/:groupId"
               element={<Suspense fallback={<PageLoader />}><TeamReportPage /></Suspense>}
+            />
+            <Route
+              path="/reports/session/:sessionId"
+              element={<Suspense fallback={<PageLoader />}><SessionTeamReportPage /></Suspense>}
+            />
+            <Route
+              path="/reports/session/:sessionId/player/:playerId"
+              element={<Suspense fallback={<PageLoader />}><SessionPlayerReportPage /></Suspense>}
             />
             <Route
               path="/seasons"

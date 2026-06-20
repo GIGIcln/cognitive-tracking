@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { getSessions, createSession, deleteSession } from '../api/sessions'
 import { getGroups } from '../api/groups'
 import { getCurrentSeason } from '../api/seasons'
-import { SESSION_TYPES } from '../constants/domain'
+import { SESSION_TYPES, GROUP_CATEGORIES } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
 import { useAuth } from '../context/AuthContext'
 
@@ -37,7 +37,12 @@ function buildCalendarGrid(year, month, sessions) {
   return cells
 }
 
-function CalendarView({ sessions, calMonth, setCalMonth, navigate }) {
+function CalendarView({ sessions, groups, calMonth, setCalMonth, navigate }) {
+  const groupMap = Object.fromEntries(groups.map((g) => {
+    const cat = GROUP_CATEGORIES.find((c) => g.name.toLowerCase().startsWith(c.toLowerCase()))
+    const shortName = cat ? g.name.slice(cat.length).trim() : g.name
+    return [g.id, shortName]
+  }))
   const year = calMonth.getFullYear()
   const month = calMonth.getMonth()
   const cells = buildCalendarGrid(year, month, sessions)
@@ -94,9 +99,9 @@ function CalendarView({ sessions, calMonth, setCalMonth, navigate }) {
                       className={`w-full text-left px-1 py-0.5 rounded text-[10px] font-semibold text-white truncate transition-opacity hover:opacity-80 ${
                         SESSION_TYPE_COLOR[s.session_type] ?? 'bg-gray-400'
                       }`}
-                      title={`${s.session_type}${s.duration_min ? ` · ${s.duration_min} min` : ''}`}
+                      title={`${groupMap[s.group_id] ?? '–'} · ${s.session_type}${s.duration_min ? ` · ${s.duration_min} min` : ''}`}
                     >
-                      {SESSION_TYPE_ABBR[s.session_type] ?? s.session_type}
+                      {groupMap[s.group_id] ?? '–'}
                     </button>
                   ))}
                 </div>
@@ -265,6 +270,7 @@ export default function SessionsPage() {
       ) : viewMode === 'calendar' ? (
         <CalendarView
           sessions={sessions}
+          groups={groups}
           calMonth={calMonth}
           setCalMonth={setCalMonth}
           navigate={navigate}

@@ -490,7 +490,7 @@ export default function SessionDetailPage() {
           </div>
 
           {/* Mode toggle */}
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs text-gray-500">Modalità inserimento</span>
             <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-medium">
               <button
@@ -502,6 +502,16 @@ export default function SessionDetailPage() {
                 className={`px-3 py-1.5 ${entryMode === 'event' ? 'bg-granata text-white' : 'bg-white text-gray-600'}`}
               >Conteggio eventi</button>
             </div>
+          </div>
+
+          {/* Report link — mobile */}
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={() => navigate(`/reports/session/${id}`)}
+              className="text-xs font-bold text-granata border border-granata/30 rounded-lg px-3 py-1.5 hover:bg-granata/5 transition-colors"
+            >
+              Report sessione →
+            </button>
           </div>
 
           {/* Note sessione — mobile */}
@@ -680,6 +690,15 @@ export default function SessionDetailPage() {
               className={`px-4 py-2 ${entryMode === 'event' ? 'bg-granata text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
             >Conteggio eventi</button>
           </div>
+        </div>
+        {/* Report link — desktop */}
+        <div className="flex justify-end mb-4 -mt-2">
+          <button
+            onClick={() => navigate(`/reports/session/${id}`)}
+            className="text-sm font-bold text-granata border border-granata/30 rounded-lg px-3 py-1.5 hover:bg-granata/5 transition-colors"
+          >
+            Report sessione →
+          </button>
         </div>
 
         {error && (
