@@ -12,6 +12,8 @@ make seed       # popola stagione, gruppi e target
 make dev        # avvia tutto
 ```
 
+> **Windows 11:** sostituisci ogni `make <target>` con `.\make.ps1 <target>` (o `make <target>` dal prompt cmd.exe tramite `make.bat`). Vedi [Prerequisiti Windows 11](#prerequisiti-windows-11).
+
 ### Avvio e spegnimento quotidiano
 
 ```bash
@@ -76,6 +78,101 @@ brew install python node postgresql@15
 brew services start postgresql@15
 createdb cognitive_tracking   # solo prima volta
 ```
+
+### Prerequisiti Windows 11
+
+**1. Installa i prerequisiti** (una volta sola, da PowerShell):
+
+```powershell
+winget install Python.Python.3.13    # o la versione più recente disponibile
+winget install OpenJS.NodeJS
+winget install PostgreSQL.PostgreSQL.17
+```
+
+Se un ID non viene trovato, cerca la versione esatta con `winget search python` o `winget search postgresql`.
+
+Dopo l'installazione di PostgreSQL **riapri il terminale** (il PATH si aggiorna solo alla riapertura). Verifica:
+
+```powershell
+psql --version
+```
+
+Se `psql` non viene trovato anche dopo la riapertura, aggiungilo manualmente al PATH:
+
+```powershell
+$env:PATH += ";C:\Program Files\PostgreSQL\17\bin"
+[System.Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";C:\Program Files\PostgreSQL\17\bin", "User")
+```
+
+**Solo per database locale:** avvia il servizio PostgreSQL e crea il database:
+
+```cmd
+net start postgresql-x64-17
+psql -U postgres -c "CREATE DATABASE cognitive_tracking;"
+```
+
+> Se usi un database remoto (Supabase, Neon, ecc.) questo passaggio non serve — basta avere `psql` installato come client.
+
+**2. Abilita gli script PowerShell** (una volta sola):
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+> Se compare un avviso che la policy corrente è già "Bypass", va bene — è ancora più permissiva e gli script funzioneranno ugualmente.
+
+**3. Setup iniziale:**
+
+```powershell
+.\make.ps1 setup
+```
+
+Crea il file `.env` con il comando `copy` (non usare Notepad o PowerShell `Out-File` che aggiungono un BOM incompatibile con python-dotenv):
+
+```powershell
+copy backend\.env.example backend\.env
+```
+
+Poi apri `backend\.env` con VS Code e imposta `DATABASE_URL` e `SECRET_KEY`.
+
+**4. Crea `users.json`** (file credenziali, non incluso in git):
+
+```powershell
+copy backend\users.example.json backend\users.json
+```
+
+Modifica `backend\users.json` con email, nome e hash della password reale. Per generare l'hash bcrypt:
+
+```powershell
+backend\.venv\Scripts\python.exe -c "import bcrypt; print(bcrypt.hashpw('TUAPASSWORD'.encode(), bcrypt.gensalt()).decode())"
+```
+
+**5. Workflow quotidiano:**
+
+```powershell
+.\make.ps1 dev        # avvia tutto (backend + frontend + tunnel se cloudflared è installato)
+.\make.ps1 stop       # ferma backend e frontend (porte 8000 e 5173)
+.\make.ps1 migrate    # applica nuove migrazioni DB
+.\make.ps1 seed       # popola dati iniziali
+```
+
+> **Da cmd.exe:** il file `make.bat` rilancia lo script PowerShell automaticamente — puoi usare `make dev`, `make stop`, ecc. dal prompt tradizionale.
+
+> **Terminale chiuso senza Ctrl+C:** lancia `.\make.ps1 stop` in un nuovo terminale per liberare le porte.
+
+**Tool opzionali:**
+
+```powershell
+winget install Cloudflare.cloudflared   # tunnel pubblico per accesso da rete esterna
+```
+
+Con `cloudflared` installato, `.\make.ps1 dev` avvia automaticamente il tunnel e mostra l'URL pubblico. Per fermarlo quando si chiude il terminale senza Ctrl+C:
+
+```powershell
+Stop-Process -Name "cloudflared" -Force -ErrorAction SilentlyContinue
+```
+
+> `qrencode` non è disponibile via winget: i QR code nel terminale sono omessi su Windows, ma l'URL del tunnel viene comunque mostrato in chiaro.
 
 ---
 
