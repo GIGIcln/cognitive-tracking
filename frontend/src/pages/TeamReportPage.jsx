@@ -304,14 +304,16 @@ export default function TeamReportPage() {
                         key={m.player_id}
                         className={i === 0 ? 'bg-amber-50' : i % 2 === 1 ? 'bg-gray-50/50' : ''}
                       >
-                        <td className="py-2 text-center">
-                          {i === 0 ? (
-                            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-400 text-white text-[10px] font-black">
-                              1
-                            </span>
-                          ) : (
-                            <span className="text-xs text-gray-400">{i + 1}</span>
-                          )}
+                        <td className="py-2">
+                          <div className="flex items-center justify-center">
+                            {i === 0 ? (
+                              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-400 text-white text-[10px] font-black leading-none">
+                                1
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400">{i + 1}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2 font-semibold text-gray-800 pl-2 whitespace-nowrap">
                           {m.last_name} {m.first_name}
