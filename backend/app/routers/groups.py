@@ -98,7 +98,7 @@ def get_attendance(
     if data is None:
         raise HTTPException(status_code=404, detail="Gruppo non trovato")
     return GroupAttendanceResponse(
-        sessions=[AttendanceSessionInfo.model_validate(s) for s in data["sessions"]],
+        sessions=[AttendanceSessionInfo(id=s.id, session_date=s.session_date, session_type=s.session_type) for s in data["sessions"]],
         players=[AttendancePlayerInfo(id=p.id, first_name=p.first_name, last_name=p.last_name) for p in data["players"]],
         records=[AttendanceRecord(**r) for r in data["records"]],
     )
