@@ -55,7 +55,7 @@ function scoreBadgeClass(score, targetsMap, field) {
 const emptyMeasurement = () =>
   PARAMS.reduce((acc, { field }) => ({ ...acc, [field]: '' }), { is_absent: false, notes: '' })
 
-const emptyEventRow = () => ({ numerator: 0, denominator: 0, method: 'live' })
+const emptyEventRow = () => ({ numerator: 0, denominator: 0, method: 'video' })
 
 function NotesBlock({ notes, editing, value, saving, onChange, onEdit, onSave, onCancel }) {
   const { isAdmin } = useAuth()
