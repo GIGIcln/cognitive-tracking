@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { getGroup, updateGroupTargets, getGroupChangelog, getGroupAttendance, getGroupPlayerStats, getGroupHistory } from '../api/groups'
+import { getSessions } from '../api/sessions'
 import { deletePlayer } from '../api/players'
 import PlayerFormModal from '../components/PlayerFormModal'
 import { Pencil, Trash2 } from 'lucide-react'
@@ -428,6 +429,8 @@ export default function GroupDetailPage() {
   const [playerStats, setPlayerStats] = useState([])
   const [playerStatsLoading, setPlayerStatsLoading] = useState(false)
   const [selectedPlayers, setSelectedPlayers] = useState([])
+  const [groupSessions, setGroupSessions] = useState([])
+  const [groupSessionsLoading, setGroupSessionsLoading] = useState(false)
   const { isAdmin } = useAuth()
 
   const load = () => {
@@ -482,6 +485,15 @@ export default function GroupDetailPage() {
       .then((res) => { setPlayerStats(res.data); setSelectedPlayers(res.data.slice(0, 2).map((p) => p.player_id)) })
       .catch(() => {})
       .finally(() => setPlayerStatsLoading(false))
+  }, [activeTab, id])
+
+  useEffect(() => {
+    if (activeTab !== 'sessioni') return
+    setGroupSessionsLoading(true)
+    getSessions(id, 200)
+      .then((res) => setGroupSessions(res.data.items ?? []))
+      .catch(() => {})
+      .finally(() => setGroupSessionsLoading(false))
   }, [activeTab, id])
 
   const handleSaveTargets = async () => {
@@ -552,6 +564,7 @@ export default function GroupDetailPage() {
         {[
           { key: 'players', label: 'Giocatori' },
           { key: 'targets', label: 'Target' },
+          { key: 'sessioni', label: 'Sessioni' },
           { key: 'sviluppo', label: 'Sviluppo' },
           { key: 'presenze', label: 'Presenze' },
           { key: 'confronto', label: 'Confronto' },
@@ -701,6 +714,47 @@ export default function GroupDetailPage() {
             prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
           )}
         />
+      )}
+
+      {/* Sessioni tab */}
+      {activeTab === 'sessioni' && (
+        <div>
+          {groupSessionsLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-6 w-6 border-4 border-granata border-t-transparent" />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {groupSessions.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => navigate(`/sessions/${s.id}`)}
+                  className="w-full bg-white rounded-xl border border-gray-200 px-4 py-3 text-left hover:border-granata hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {new Date(s.session_date).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {s.session_type}{s.duration_min ? ` · ${s.duration_min} min` : ''}
+                      </div>
+                      {s.notes && (
+                        <div className="text-xs text-gray-400 mt-1 truncate max-w-xs">{s.notes}</div>
+                      )}
+                    </div>
+                    <span className="text-gray-400">›</span>
+                  </div>
+                </button>
+              ))}
+              {!groupSessions.length && (
+                <div className="text-center text-gray-400 py-12 text-sm">
+                  Nessuna sessione registrata
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Targets tab */}
