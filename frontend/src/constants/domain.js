@@ -35,7 +35,7 @@ export const METRIC_EVENT_CONFIG = {
     numerator_label:   'Check pre-tocco',
     denominator_label: 'Ricezioni in pressione',
     rate_label:        'SR%',
-    min_n:             15,
+    min_n:             6,
     count_only:        false,
   },
   decision_quality: {
