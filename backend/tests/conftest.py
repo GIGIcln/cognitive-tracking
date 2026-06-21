@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 # Must be set before any app module is imported so get_settings() (lru_cached) picks them up.
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_setup.db")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production")
+os.environ.setdefault("ALLOW_MANUAL_SCORES", "true")  # test esistenti usano POST /measurements
 
 import uuid
 from datetime import date

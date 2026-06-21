@@ -310,3 +310,53 @@ def test_get_session_rankings_nonexistent_returns_404(seeded):
     c, h = seeded["client"], seeded["headers"]
     res = c.get(f"/api/sessions/{uuid.uuid4()}/rankings", headers=h)
     assert res.status_code == 404
+
+
+# ── Gate allow_manual_scores ──────────────────────────────────────────────────
+
+def test_upsert_measurements_blocked_when_flag_off(pg_seeded, monkeypatch):
+    """POST /measurements deve rispondere 403 quando allow_manual_scores=False."""
+    from app.config import Settings
+    from unittest.mock import MagicMock
+
+    locked_settings = MagicMock(spec=Settings)
+    locked_settings.allow_manual_scores = False
+    monkeypatch.setattr("app.routers.sessions.get_settings", lambda: locked_settings)
+
+    c, h = pg_seeded["client"], pg_seeded["headers"]
+    pid = pg_seeded["player_ids"][0]
+    gid = pg_seeded["group_id"]
+
+    sid = _create_session(c, h, gid)
+    res = c.post(f"/api/sessions/{sid}/measurements", headers=h, json={
+        "measurements": [{"player_id": pid, "scanning_rate": 7.0}]
+    })
+    assert res.status_code == 403
+    assert "Conteggio" in res.json()["detail"]
+
+
+def test_events_endpoint_unaffected_by_flag_off(pg_seeded, monkeypatch):
+    """POST /events deve restare 200 indipendentemente da allow_manual_scores."""
+    from app.config import Settings
+    from unittest.mock import MagicMock
+
+    locked_settings = MagicMock(spec=Settings)
+    locked_settings.allow_manual_scores = False
+    monkeypatch.setattr("app.routers.sessions.get_settings", lambda: locked_settings)
+
+    c, h = pg_seeded["client"], pg_seeded["headers"]
+    pid = pg_seeded["player_ids"][0]
+    gid = pg_seeded["group_id"]
+
+    sid = _create_session(c, h, gid)
+    res = c.post(f"/api/sessions/{sid}/events", headers=h, json={
+        "events": [{
+            "player_id": pid,
+            "metric_type": "TRS",
+            "numerator": 3,
+            "denominator": 5,
+            "method": "video",
+            "codebook_version": "v1",
+        }]
+    })
+    assert res.status_code == 200
