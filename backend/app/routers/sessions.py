@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.models.measurement import Measurement
 from app.models.training_session import TrainingSession
@@ -162,6 +163,12 @@ def upsert_measurements(
 ):
     session = _get_session_or_404(db, session_id)
     assert_write_access(current_user, session.group_id)
+
+    if not get_settings().allow_manual_scores:
+        raise HTTPException(
+            status_code=403,
+            detail="Inserimento punteggi manuali disabilitato: usare la modalità Conteggio (events).",
+        )
 
     try:
         measurements = SessionService(db).upsert_measurements(session, body)
