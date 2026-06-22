@@ -207,15 +207,16 @@ class ObservationService:
             if score is not None:
                 player_updates[player_id][_METRIC_TO_FIELD[metric_type]] = score
 
+        existing_map: dict[uuid.UUID, Measurement] = {
+            m.player_id: m
+            for m in self.db.query(Measurement).filter(
+                Measurement.session_id == session_id,
+                Measurement.player_id.in_(player_updates.keys()),
+            ).all()
+        }
+
         for player_id, updates in player_updates.items():
-            existing = (
-                self.db.query(Measurement)
-                .filter(
-                    Measurement.session_id == session_id,
-                    Measurement.player_id == player_id,
-                )
-                .first()
-            )
+            existing = existing_map.get(player_id)
             if existing:
                 for field, value in updates.items():
                     setattr(existing, field, value)
