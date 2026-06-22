@@ -83,10 +83,11 @@ def get_session(
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
-    session = _get_session_or_404(db, session_id)
-    assert_group_access(current_user, session.group_id)
-
     full = SessionService(db).get(session_id)
+    if full is None or not full.is_active:
+        raise HTTPException(status_code=404, detail="Sessione non trovata")
+    assert_group_access(current_user, full.group_id)
+
     measurements = [_measurement_to_response(m) for m in full.measurements]
     data = SessionResponse.model_validate(full).model_dump()
     data["measurements"] = [m.model_dump() for m in measurements]
@@ -127,13 +128,11 @@ def get_measurements(
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
-    session = _get_session_or_404(db, session_id)
-    assert_group_access(current_user, session.group_id)
-
-    measurements = SessionService(db).get_measurements(session_id)
-    if measurements is None:
+    full = SessionService(db).get(session_id)
+    if full is None or not full.is_active:
         raise HTTPException(status_code=404, detail="Sessione non trovata")
-    return [_measurement_to_response(m) for m in measurements]
+    assert_group_access(current_user, full.group_id)
+    return [_measurement_to_response(m) for m in full.measurements]
 
 
 # ── WRITE: admin (tutto) + allenatore (propri gruppi) ────────────────────────
