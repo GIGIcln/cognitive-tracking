@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 
+from sqlalchemy import tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -168,13 +169,11 @@ class ObservationService:
             raise ValueError(f"Giocatori non trovati: {missing}")
 
         # 1. Delete previous rows only for the (player_id, metric_type) pairs in this batch
-        keys = {(ev.player_id, ev.metric_type) for ev in batch.events}
-        for player_id, metric_type in keys:
-            self.db.query(ObservationEvent).filter(
-                ObservationEvent.session_id == session_id,
-                ObservationEvent.player_id == player_id,
-                ObservationEvent.metric_type == metric_type,
-            ).delete(synchronize_session=False)
+        pairs = list({(ev.player_id, ev.metric_type) for ev in batch.events})
+        self.db.query(ObservationEvent).filter(
+            ObservationEvent.session_id == session_id,
+            tuple_(ObservationEvent.player_id, ObservationEvent.metric_type).in_(pairs),
+        ).delete(synchronize_session=False)
 
         # 2. Insert all incoming rows as new events
         for ev in batch.events:
