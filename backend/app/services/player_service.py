@@ -116,19 +116,17 @@ class PlayerService:
     def create(self, body: PlayerCreate) -> Player:
         player = Player(**body.model_dump(exclude={"group_id"}))
         self.db.add(player)
-        self.db.commit()
-        self.db.refresh(player)
-
         if body.group_id:
-            assignment = PlayerGroupAssignment(
+            # flush within the transaction so player.id is populated before building the FK
+            self.db.flush()
+            self.db.add(PlayerGroupAssignment(
                 player_id=player.id,
                 group_id=body.group_id,
                 start_date=date.today(),
                 is_current=True,
-            )
-            self.db.add(assignment)
-            self.db.commit()
-
+            ))
+        self.db.commit()
+        self.db.refresh(player)
         return player
 
     def get(self, player_id: uuid.UUID) -> Player | None:
@@ -394,30 +392,38 @@ class PlayerService:
         """Assign multiple players to a group in one commit.
 
         Returns a dict with counts of assigned and not-found player IDs.
+        Uses two batch queries instead of O(n) per-player queries.
         """
+        found_players = {
+            p.id
+            for p in self.db.query(Player.id).filter(Player.id.in_(player_ids)).all()
+        }
+        current_assignments = {
+            a.player_id: a
+            for a in self.db.query(PlayerGroupAssignment)
+            .filter(
+                PlayerGroupAssignment.player_id.in_(player_ids),
+                PlayerGroupAssignment.is_current.is_(True),
+            )
+            .all()
+        }
+
         assigned, not_found = [], []
+        today = date.today()
         for pid in player_ids:
-            player = self.db.get(Player, pid)
-            if player is None:
+            if pid not in found_players:
                 not_found.append(str(pid))
                 continue
 
-            current = (
-                self.db.query(PlayerGroupAssignment)
-                .filter(
-                    PlayerGroupAssignment.player_id == pid,
-                    PlayerGroupAssignment.is_current.is_(True),
-                )
-                .first()
-            )
+            current = current_assignments.get(pid)
             if current:
-                current.end_date = date.today()
+                current.end_date = today
                 current.is_current = False
 
             self.db.add(PlayerGroupAssignment(
                 player_id=pid,
                 group_id=group_id,
-                start_date=date.today(),
+                start_date=today,
                 is_current=True,
             ))
             assigned.append(str(pid))
