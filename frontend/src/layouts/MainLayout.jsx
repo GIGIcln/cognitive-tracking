@@ -1,17 +1,17 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import OfflineBanner from '../components/OfflineBanner'
-import { LayoutDashboard, Users, User, ClipboardList, BarChart2, Calendar } from 'lucide-react'
+import { LayoutDashboard, Users, User, ClipboardList, Calendar, Settings } from 'lucide-react'
 
 const baseNavItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/groups', label: 'Gruppi', icon: Users },
+  { to: '/', label: 'Home', icon: LayoutDashboard, end: true },
+  { to: '/groups', label: 'Rosa', icon: Users },
   { to: '/players', label: 'Giocatori', icon: User },
-  { to: '/sessions', label: 'Sessioni', icon: ClipboardList },
-  { to: '/reports', label: 'Report', icon: BarChart2 },
+  { to: '/sessions', label: 'Allenamenti', icon: ClipboardList },
+  { to: '/impostazioni', label: 'Impostazioni', icon: Settings },
 ]
 
-const adminNavItems = [
+const staffNavItems = [
   { to: '/seasons', label: 'Stagioni', icon: Calendar },
 ]
 
@@ -22,8 +22,8 @@ const roleLabel = (role) => ({
 }[role] ?? role)
 
 export default function MainLayout() {
-  const { user, logout, isAdmin } = useAuth()
-  const navItems = isAdmin ? [...baseNavItems, ...adminNavItems] : baseNavItems
+  const { user, logout, isAdmin, isStaff } = useAuth()
+  const navItems = isStaff ? [...baseNavItems, ...staffNavItems] : baseNavItems
 
   return (
     <div className="min-h-screen flex bg-gray-50">

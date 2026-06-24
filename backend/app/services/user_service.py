@@ -28,6 +28,7 @@ class UserService:
             hashed_password=hash_password(body.password),
             full_name=body.full_name,
             is_active=body.is_active,
+            status=body.status,
             roles=body.roles,
             assigned_group_ids=[str(gid) for gid in body.assigned_group_ids],
         )
@@ -50,7 +51,11 @@ class UserService:
             user.roles = body.roles
         if body.assigned_group_ids is not None:
             user.assigned_group_ids = [str(gid) for gid in body.assigned_group_ids]
-        if body.is_active is not None:
+        if body.status is not None:
+            user.status = body.status
+            # status e is_active rimangono in sync
+            user.is_active = body.status == "active"
+        elif body.is_active is not None:
             user.is_active = body.is_active
         self.db.commit()
         self.db.refresh(user)

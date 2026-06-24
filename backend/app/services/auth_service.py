@@ -34,6 +34,7 @@ def create_access_token(user: User) -> str:
         "full_name": user.full_name,
         "roles": user.roles or [],
         "group_ids": user.assigned_group_ids or [],
+        "status": getattr(user, "status", "active"),
         "exp": datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes),
     }
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
@@ -74,4 +75,5 @@ def get_current_user(
         roles=payload.get("roles", []),
         group_ids=payload.get("group_ids", []),
         is_active=True,
+        status=payload.get("status", "active"),
     )

@@ -5,6 +5,7 @@ import uuid
 from pydantic import BaseModel, EmailStr
 
 VALID_ROLES = frozenset({"admin", "responsabile_tecnico", "allenatore"})
+VALID_STATUSES = frozenset({"pending", "active", "suspended"})
 
 
 class UserCreate(BaseModel):
@@ -14,6 +15,7 @@ class UserCreate(BaseModel):
     roles: list[str] = []
     assigned_group_ids: list[uuid.UUID] = []
     is_active: bool = True
+    status: str = "active"
 
 
 class UserUpdate(BaseModel):
@@ -23,6 +25,7 @@ class UserUpdate(BaseModel):
     roles: list[str] | None = None
     assigned_group_ids: list[uuid.UUID] | None = None
     is_active: bool | None = None
+    status: str | None = None
 
 
 class UserOut(BaseModel):
@@ -30,6 +33,7 @@ class UserOut(BaseModel):
     email: str
     full_name: str | None
     is_active: bool
+    status: str
     roles: list[str]
     assigned_group_ids: list[str]
 

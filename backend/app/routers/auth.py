@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import get_db
 from app.limiter import limiter
-from app.schemas.auth import LoginRequest, TokenResponse, UserContext, UserResponse
+from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserContext, UserResponse
+from app.schemas.user import UserCreate
 from app.services.auth_service import (
     create_access_token,
     get_current_user,
@@ -65,6 +66,7 @@ def login(
             email=user.email,
             full_name=user.full_name,
             is_active=user.is_active,
+            status=getattr(user, "status", "active"),
             roles=user.roles or [],
         ),
     )
@@ -83,6 +85,35 @@ def logout(response: Response):
     return {"message": "Logout effettuato"}
 
 
+@router.post("/register", response_model=UserResponse, status_code=201)
+@limiter.limit("5/minute")
+def register(
+    request: Request,
+    body: RegisterRequest,
+    db: Session = Depends(get_db),
+):
+    """Registrazione pubblica per allenatori. Account creato in stato pending."""
+    svc = UserService(db)
+    if svc.get_by_email(body.email):
+        raise HTTPException(status_code=409, detail="Email già in uso")
+    user = svc.create(UserCreate(
+        email=body.email,
+        password=body.password,
+        full_name=body.full_name,
+        roles=["allenatore"],
+        is_active=False,
+        status="pending",
+    ))
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        status=user.status,
+        roles=user.roles or [],
+    )
+
+
 @router.get("/me", response_model=UserResponse)
 def me(current_user: UserContext = Depends(get_current_user)):
     return UserResponse(
@@ -90,5 +121,6 @@ def me(current_user: UserContext = Depends(get_current_user)):
         email=current_user.email,
         full_name=current_user.full_name,
         is_active=current_user.is_active,
+        status=current_user.status,
         roles=current_user.roles,
     )

@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const justRegistered = searchParams.get('registered') === '1'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -37,6 +39,11 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {justRegistered && (
+            <div className="bg-green-50 text-green-700 text-sm p-3 rounded-lg border border-green-200">
+              Registrazione completata. Accedi e attendi che l'amministratore attivi il tuo account.
+            </div>
+          )}
           {error && (
             <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg border border-red-200">
               {error}
@@ -72,6 +79,12 @@ export default function LoginPage() {
             {loading ? 'Accesso in corso…' : 'Accedi'}
           </button>
         </form>
+        <p className="text-center text-sm text-gray-500 mt-6">
+          Sei un allenatore?{' '}
+          <Link to="/register" className="text-granata font-medium hover:underline">
+            Crea account
+          </Link>
+        </p>
       </div>
     </div>
   )

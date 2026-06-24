@@ -1,15 +1,18 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import ProtectedRoute from './components/ProtectedRoute'
 import MainLayout from './layouts/MainLayout'
 import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import GroupsPage from './pages/GroupsPage'
 import GroupDetailPage from './pages/GroupDetailPage'
 import PlayersPage from './pages/PlayersPage'
 import SessionsPage from './pages/SessionsPage'
+import SettingsPage from './pages/SettingsPage'
+import ProfilePage from './pages/ProfilePage'
 
 const SessionDetailPage = lazy(() => import('./pages/SessionDetailPage'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
@@ -19,6 +22,7 @@ const TeamReportPage = lazy(() => import('./pages/TeamReportPage'))
 const SessionTeamReportPage = lazy(() => import('./pages/SessionTeamReportPage'))
 const SessionPlayerReportPage = lazy(() => import('./pages/SessionPlayerReportPage'))
 const SeasonsPage = lazy(() => import('./pages/SeasonsPage'))
+const UsersAdminPage = lazy(() => import('./pages/UsersAdminPage'))
 
 function PageLoader() {
   return (
@@ -34,6 +38,7 @@ function App() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<MainLayout />}>
             <Route path="/" element={<DashboardPage />} />
@@ -73,6 +78,14 @@ function App() {
               path="/seasons"
               element={<Suspense fallback={<PageLoader />}><SeasonsPage /></Suspense>}
             />
+            <Route path="/impostazioni" element={<SettingsPage />}>
+              <Route index element={<Navigate to="/impostazioni/profilo" replace />} />
+              <Route path="profilo" element={<ProfilePage />} />
+              <Route
+                path="utenti"
+                element={<Suspense fallback={<PageLoader />}><UsersAdminPage /></Suspense>}
+              />
+            </Route>
           </Route>
         </Route>
       </Routes>
