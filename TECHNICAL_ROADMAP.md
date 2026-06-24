@@ -66,9 +66,8 @@ _File:_ `frontend/src/constants/domain.js:38`, `backend/app/services/observation
 La pagina gestisce contemporaneamente: caricamento di sessione, giocatori, target e misurazioni; due modalità di input (score vs event); calcolo affidabilità in-page con 3 helper locali; dirty tracking + `useBlocker` + `beforeunload`; rendering mobile (≈590 linee) e desktop (≈270 linee). `EventParamRow` (113 righe) e `NotesBlock` (60 righe) sono funzioni inline anziché componenti. Non è un problema urgente, ma rende la pagina difficile da testare e modificare in sicurezza.  
 _File:_ `frontend/src/pages/SessionDetailPage.jsx`
 
-**[TD-14] Offline queue senza tetto di retry e cleanup**  
-`offlineQueue.js` accoda mutation offline con retry esponenziale, ma non ha un limite massimo di tentativi né un meccanismo di discard per item bloccati. Un evento corrotto può restare in coda IndexedDB indefinitamente, consumare storage e continuare a ritentare ad ogni online event. L'interceptor in `axios.js` non propaga al componente il caso di errore permanente.  
-_File:_ `frontend/src/utils/offlineQueue.js`, `frontend/src/api/axios.js`
+**~~[TD-14] Offline queue senza tetto di retry e cleanup~~** ✅ Risolto  
+Il cap di retry era già implementato in `OfflineContext.jsx` (magic number `3`). Fix applicata: estratto `MAX_RETRIES = 5` come costante, aggiunto `MAX_AGE_MS = 7 giorni` per scartare item stantii al prossimo sync. Item 4xx già rimossi immediatamente; `syncError` segnala al banner quando item vengono scartati. 2 nuovi test: expiry + item valido non filtrato.
 
 ### 🟢 Bassa Priorità
 

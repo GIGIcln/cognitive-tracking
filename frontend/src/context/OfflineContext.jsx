@@ -8,6 +8,9 @@ import {
   incrementRetry,
 } from '../utils/offlineQueue';
 
+const MAX_RETRIES = 5
+const MAX_AGE_MS  = 7 * 24 * 60 * 60 * 1000  // 7 giorni
+
 const OfflineContext = createContext(null);
 
 export function OfflineContextProvider({ children }) {
@@ -48,7 +51,18 @@ export function OfflineContextProvider({ children }) {
 
     try {
       const now = Date.now();
-      const items = (await getAllItems()).filter((i) => (i.nextRetryAt ?? 0) <= now);
+      const allItems = await getAllItems();
+
+      // Scarta item troppo vecchi senza tentare il retry
+      for (const item of allItems) {
+        if (now - (item.timestamp ?? 0) > MAX_AGE_MS) {
+          await removeItem(item.id);
+          setSyncError('Sincronizzazione fallita: alcuni dati in coda sono scaduti e sono stati rimossi.');
+          console.warn(`[OfflineSync] Item ${item.id} scaduto (> 7 giorni). Rimosso.`);
+        }
+      }
+
+      const items = allItems.filter((i) => (i.nextRetryAt ?? 0) <= now && now - (i.timestamp ?? 0) <= MAX_AGE_MS);
       for (const item of items) {
         // Delay inter-request con piccolo jitter per evitare burst sincronizzati
         const delay = 500 + Math.random() * 300
@@ -72,7 +86,7 @@ export function OfflineContextProvider({ children }) {
           } else {
             // Errore server (5xx) → incrementa retry
             await incrementRetry(item.id);
-            if (item.retries + 1 >= 3) {
+            if (item.retries + 1 >= MAX_RETRIES) {
               await removeItem(item.id);
               setSyncError('Sincronizzazione fallita: alcuni dati non sono stati inviati al server.');
               console.error(
@@ -82,7 +96,7 @@ export function OfflineContextProvider({ children }) {
           }
         } catch {
           await incrementRetry(item.id);
-          if (item.retries + 1 >= 3) {
+          if (item.retries + 1 >= MAX_RETRIES) {
             await removeItem(item.id);
             setSyncError('Sincronizzazione fallita: alcuni dati non sono stati inviati al server.');
           }

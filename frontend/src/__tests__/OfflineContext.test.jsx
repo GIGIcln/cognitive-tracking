@@ -63,7 +63,7 @@ describe('OfflineContext', () => {
   it('syncNow con item → 4xx → rimuove item senza retry (errore client permanente)', async () => {
     const item = {
       id: 42, url: '/sessions', method: 'POST',
-      body: { group_id: 'g1' }, retries: 0, nextRetryAt: 0,
+      body: { group_id: 'g1' }, retries: 0, nextRetryAt: 0, timestamp: Date.now(),
     }
     offlineQueue.getAllItems.mockResolvedValue([item])
     offlineQueue.getCount.mockResolvedValue(0)
@@ -81,10 +81,10 @@ describe('OfflineContext', () => {
     vi.unstubAllGlobals()
   })
 
-  it('syncNow con item → 5xx → chiama incrementRetry, non rimuove (< 3 retry)', async () => {
+  it('syncNow con item → 5xx → chiama incrementRetry, non rimuove (< MAX_RETRIES)', async () => {
     const item = {
       id: 99, url: '/sessions', method: 'POST',
-      body: { group_id: 'g1' }, retries: 0, nextRetryAt: 0,
+      body: { group_id: 'g1' }, retries: 0, nextRetryAt: 0, timestamp: Date.now(),
     }
     offlineQueue.getAllItems.mockResolvedValue([item])
     const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 503 })
@@ -101,10 +101,10 @@ describe('OfflineContext', () => {
     vi.unstubAllGlobals()
   })
 
-  it('syncNow → 5xx con retries=2 (max raggiunto) → rimuove item e imposta syncError', async () => {
+  it('syncNow → 5xx con retries=4 (max raggiunto) → rimuove item e imposta syncError', async () => {
     const item = {
       id: 55, url: '/sessions', method: 'POST',
-      body: {}, retries: 2, nextRetryAt: 0,
+      body: {}, retries: 4, nextRetryAt: 0, timestamp: Date.now(),
     }
     offlineQueue.getAllItems.mockResolvedValue([item])
     offlineQueue.getCount.mockResolvedValue(0)
@@ -141,10 +141,33 @@ describe('OfflineContext', () => {
     vi.unstubAllGlobals()
   })
 
+  it('syncNow con item scaduto (> 7 giorni) → rimuove senza fetch e imposta syncError', async () => {
+    const staleItem = {
+      id: 77, url: '/sessions', method: 'POST',
+      body: {}, retries: 0, nextRetryAt: 0,
+      timestamp: Date.now() - 8 * 24 * 60 * 60 * 1000,  // 8 giorni fa
+    }
+    offlineQueue.getAllItems.mockResolvedValue([staleItem])
+    offlineQueue.getCount.mockResolvedValue(0)
+    const mockFetch = vi.fn()
+    vi.stubGlobal('fetch', mockFetch)
+
+    const { result } = renderHook(() => useOffline(), { wrapper })
+    await waitFor(() => expect(result.current.pendingCount).toBe(0))
+
+    await act(async () => { await result.current.syncNow() })
+
+    expect(offlineQueue.removeItem).toHaveBeenCalledWith(77)
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(result.current.syncError).toBeTruthy()
+
+    vi.unstubAllGlobals()
+  })
+
   it('syncNow con item → invia fetch con credentials:include e rimuove item se ok', async () => {
     const item = {
       id: 1, url: '/sessions', method: 'POST',
-      body: { group_id: 'g1' }, retries: 0, nextRetryAt: 0,
+      body: { group_id: 'g1' }, retries: 0, nextRetryAt: 0, timestamp: Date.now(),
     }
     offlineQueue.getAllItems.mockResolvedValue([item])
     offlineQueue.getCount.mockResolvedValue(0)
@@ -170,6 +193,27 @@ describe('OfflineContext', () => {
   })
 
   // ── Sync automatica al ripristino della connessione ────────────────────
+
+  it('syncNow con item valido → non viene filtrato dalla expiry', async () => {
+    const item = {
+      id: 88, url: '/sessions', method: 'POST',
+      body: {}, retries: 0, nextRetryAt: 0, timestamp: Date.now(),
+    }
+    offlineQueue.getAllItems.mockResolvedValue([item])
+    offlineQueue.getCount.mockResolvedValue(0)
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const { result } = renderHook(() => useOffline(), { wrapper })
+    await waitFor(() => expect(result.current.pendingCount).toBe(0))
+
+    await act(async () => { await result.current.syncNow() })
+
+    expect(mockFetch).toHaveBeenCalled()
+    expect(offlineQueue.removeItem).toHaveBeenCalledWith(88)
+
+    vi.unstubAllGlobals()
+  })
 
   it('tornare online innesca syncNow automaticamente', async () => {
     // Parte offline
