@@ -8,28 +8,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from app.codebook import METRIC_MIN_N as _METRIC_MIN_N, METRIC_TO_FIELD as _METRIC_TO_FIELD
 from app.models.measurement import Measurement
 from app.models.observation_event import ObservationEvent
 from app.models.player import Player
 from app.schemas.observation_event import ObservationEventResponse, ObservationEventsBatchInput
-
-# Minimum denominator (or numerator for AI) before the data is considered reliable.
-_METRIC_MIN_N: dict[str, int] = {
-    "SR": 6,    # SR: numero di RICEZIONI (COUNT righe), non secondi.
-    "DQI": 20,
-    "TRS": 10,
-    "VCI": 8,   # denominator = minutes observed
-    # AI uses numerator as sample size; thresholds set in reliability_flag below
-}
-
-# Maps metric label → Measurement column name
-_METRIC_TO_FIELD: dict[str, str] = {
-    "SR": "scanning_rate",
-    "DQI": "decision_quality",
-    "AI": "anticipation",
-    "TRS": "transition_reset",
-    "VCI": "verbal_comm",
-}
 
 
 def reliability_flag(metric: str, n: int) -> str:

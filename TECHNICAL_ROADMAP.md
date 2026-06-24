@@ -179,15 +179,12 @@ Il codebook v1 specifica `una riga = una ricezione` per SR (denominator = durata
 Sforzo medio. Pre-requisito: nessun dato reale ancora registrato (le definizioni sono congelate al primo dato).  
 _File:_ `frontend/src/constants/domain.js`, `frontend/src/pages/SessionDetailPage.jsx`
 
-### OL-08 — Fonte unica di verità per le definizioni di metrica
+### ~~OL-08 — Fonte unica di verità per le definizioni di metrica~~ ✅ Backend completato
 
-Consolidare le 5 definizioni sparse di SR/DQI/AI/TRS/VCI in una sola sorgente:
-- **Frontend:** `domain.js` diventa l'unico owner di `field`, `label`, `min_n`, `avgKey`, `color`, `metric_type`. Eliminare le definizioni inline in `PlayerDetailPage`, `GroupDetailPage`, `exportUtils.js`.
-- **Backend:** `_METRIC_MIN_N` e `_METRIC_TO_FIELD` in `observation_service.py` rimangono come authoritative source lato Python, ma vengono esposti tramite un endpoint `/api/meta/metrics` (JSON) per permettere al frontend di leggere le soglie live anziché duplicarle.
-- Risultato: un cambio di soglia richiede una modifica in un solo file Python; il frontend si adegua automaticamente.
-
-Sforzo medio; sblocca una più facile gestione di future versioni del codebook (v2+).  
-_File:_ `backend/app/services/observation_service.py`, `frontend/src/constants/domain.js`, pagine interessate
+- **Frontend** consolidato in TD-11: `domain.js` è l'unico owner; definizioni duplicate rimosse da `PlayerDetailPage`, `GroupDetailPage`, `exportUtils.js`.
+- **Backend** ora usa `backend/app/codebook.py` come unica fonte: `METRIC_DEFINITIONS` (lista completa con field, label, min_n, reliability_n_basis, ecc.), `METRIC_MIN_N` e `METRIC_TO_FIELD` derivati. `observation_service.py` importa da qui invece di ridefinire i suoi dict.
+- **`GET /api/meta/metrics`** (pubblico) serve `METRIC_DEFINITIONS` completo: consumer esterni e futuri frontend possono sincronizzarsi senza hardcoding locale. 6 test backend coprono l'endpoint e la coerenza dei derived dicts.
+- **Passo successivo opzionale:** far sì che `domain.js` carichi `min_n` dall'endpoint al boot (richiede gestione loading state e cache — da valutare con OL-09).
 
 ---
 
