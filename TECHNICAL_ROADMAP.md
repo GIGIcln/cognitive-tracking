@@ -36,9 +36,9 @@ _File:_ `backend/app/database.py`
 **[TD-03] Nessun sistema di CI/CD**  
 Non esiste `.github/workflows/` o equivalente. I test vengono eseguiti solo manualmente. Un push rotto sul branch main non viene rilevato automaticamente.
 
-**[TD-04] Rankings calcolati in Python, non in SQL**  
-`SessionService.get_rankings()` carica tutti i `Measurement` della sessione in memoria, calcola la media in Python, e poi ordina. Con sessioni di 30+ giocatori e 5 metriche, è accettabile. Ma è il pattern sbagliato da propagare.  
-_File:_ `backend/app/services/session_service.py:135-168`
+**~~[TD-04] Rankings calcolati in Python, non in SQL~~** ✅ Risolto  
+Riscritto con aggregazione SQL-side (`func.coalesce`, `cast`, `desc`): il DB calcola la media riga-per-riga sui campi non-NULL e ordina; Python riceve solo la lista già ordinata.  
+_File:_ `backend/app/services/session_service.py`
 
 ### 🟡 Media Priorità
 
@@ -48,8 +48,8 @@ Tutto il frontend è in `.jsx`/`.js`. La logica di `reportUtils.js`, `domain.js`
 **[TD-06] Gestione stato globale assente (oltre all'auth)**  
 Non esiste uno store globale (Redux, Zustand, React Query). Ogni pagina fa fetch indipendente degli stessi dati (es. lista gruppi recuperata sia in `GroupsPage` che in `SessionsPage`). Nessuna cache, nessun `stale-while-revalidate`.
 
-**[TD-07] No containerizzazione**  
-Non c'è `Dockerfile` né `docker-compose.yml`. L'onboarding richiede installazione locale di Python, Node e PostgreSQL. Il `Makefile` mitiga, ma non elimina la dipendenza dall'ambiente host.
+**~~[TD-07] No containerizzazione~~** ✅ Risolto  
+`docker-compose.yml` con servizi `db` (postgres:15), `backend` e `frontend`. Hot-reload su entrambi; `alembic upgrade head` eseguito automaticamente all'avvio del backend.
 
 **~~[TD-08] Rate limiting non applicato ai router~~** ✅ Risolto  
 `@limiter.limit("5/minute")` applicato su `/auth/login`; `60/minute` su list endpoint players e sessions; `120/minute` su endpoints di scrittura. Brute-force protetto.
@@ -66,47 +66,26 @@ Quando una response aggregata mescola eventi con versioni diverse del codebook, 
 
 ## 3. Obiettivi a Breve Termine (1–3 mesi)
 
-### OB-01 — CI/CD con GitHub Actions
+### ~~OB-01 — CI/CD con GitHub Actions~~ ✅ Completato
 
-Creare `.github/workflows/ci.yml` che esegua:
-1. `pytest tests/` con un PostgreSQL effimero (service container)
-2. `npm test` nel frontend
-3. Linting: `ruff` (backend) + `eslint` (frontend)
-4. Build del frontend (`npm run build`) come smoke test
-
-Beneficio immediato: ogni PR è validata automaticamente. Zero effort per i test esistenti (già scritti).
+`.github/workflows/ci.yml` con due job paralleli: `backend` (ruff + pytest con PostgreSQL 15 reale) e `frontend` (eslint + vitest + build). Eseguito ad ogni push su `main`/`feat/**` e su ogni PR.
 
 ### ~~OB-02 — Rate Limiting attivo~~ ✅ Completato
 
 `@limiter.limit("5/minute")` su `/auth/login`; 60/minute su list endpoint; 120/minute su mutation. Applicato a `auth.py`, `players.py`, `sessions.py`.
 
-### OB-03 — UI di `reliability_flag`
+### ~~OB-03 — UI di `reliability_flag`~~ ✅ Completato
 
-Mostrare il badge di affidabilità (`insufficient/low/medium/high`) nell'UI di inserimento eventi e nei report. Mappare i valori su colori (rosso/arancio/giallo/verde). Bloccare la pubblicazione se `insufficient`.  
-_Reference:_ `docs/dev/observation-events.md` § Fili aperti.
+Badge per metrica già presenti in `EventParamRow` (colore + label da `RELIABILITY_META`). Gate di pubblicazione aggiunto in `SessionDetailPage`: `hasInsufficientMetric()` + `insufficientGateCount` bloccano il bottone "Salva" se almeno un giocatore ha una metrica con reliability `insufficient`. Warning ambra (⚠) rimane per `low`.
 
-### OB-04 — Rankings in SQL
+### ~~OB-04 — Rankings in SQL~~ ✅ Completato
 
-Riscrivere `get_rankings()` usando `func.avg()` + `ORDER BY` SQL-side:
+`get_rankings()` riscritto con aggregazione SQL-side (`func.coalesce`, `cast`, `desc`). Il DB calcola la media riga-per-riga sui campi non-NULL e ordina; Python riceve solo la lista già ordinata per il ranking denso e il percentile.  
+_File:_ `backend/app/services/session_service.py`
 
-```python
-from sqlalchemy import case, func, nullslast
+### ~~OB-05 — Docker Compose per sviluppo locale~~ ✅ Completato
 
-db.query(
-    Player.id,
-    Player.first_name,
-    Player.last_name,
-    func.avg(
-        (Measurement.scanning_rate + Measurement.decision_quality + ...) / 5
-    ).label("avg_score"),
-).join(...).group_by(Player.id).order_by(nullslast(desc("avg_score")))
-```
-
-_File target:_ `backend/app/services/session_service.py`
-
-### OB-05 — Docker Compose per sviluppo locale
-
-`docker-compose.yml` con servizi `db` (postgres:15), `backend` e `frontend`. Elimina i prerequisiti locali e uniforma l'ambiente tra sviluppatori.
+`docker-compose.yml` con servizi `db` (postgres:15), `backend` e `frontend`. Hot-reload su entrambi; `alembic upgrade head` eseguito automaticamente ad ogni `docker compose up`. Il proxy Vite legge `API_TARGET` per raggiungere il backend nel network interno Docker.
 
 ---
 
@@ -180,7 +159,7 @@ Aggiungere test E2E per i flussi critici:
 | **Pool DB** | `pool_size=10`, `max_overflow=20`, `pool_pre_ping=True` | ✅ Adeguato per uso attuale |
 | **Indici DB** | Migrazioni 0002 e 0003 aggiungono indici performance | ✅ Presenti |
 | **Aggregazioni SQL** | `func.avg()` usato in `get_averages()` | ✅ Corretto |
-| **Rankings** | Calcolo Python in memoria | ⚠️ Riscrivere SQL (OB-04) |
+| **Rankings** | `func.coalesce` + `desc` SQL-side in `get_rankings()` | ✅ SQL-side (OB-04) |
 | **GZip** | Attivo per response > 1KB | ✅ Presente |
 | **Frontend lazy loading** | Pagine pesanti (report, SessionDetail) caricate on-demand | ✅ Presente |
 | **PDF export** | `html2canvas` è lento su DOM complesso | Valutare generazione server-side (WeasyPrint) |

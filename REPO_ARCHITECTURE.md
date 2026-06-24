@@ -346,6 +346,19 @@ make stop        # Killa i processi su 5173 e 8000
 make clean       # Rimuove __pycache__ e .pyc
 ```
 
+### Sviluppo con Docker Compose (alternativa a `make dev`)
+
+```bash
+# Prerequisito: Docker Desktop installato
+# Assicurarsi che backend/users.json esista (copiare da users.example.json)
+docker compose up --build
+```
+
+I servizi partono nell'ordine corretto (`db → backend → frontend`). `alembic upgrade head` viene eseguito automaticamente all'avvio del backend. Il proxy Vite instraderà `/api/*` verso il container backend tramite la variabile `API_TARGET`.
+
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8000`
+
 ### Gestione DB
 
 ```bash
@@ -365,15 +378,17 @@ APP_ENV=development          # "production" disabilita /docs e /redoc
 ALLOWED_ORIGINS=http://localhost:5173
 ```
 
-### Test
+### Test e CI
 
 ```bash
-# Backend (richiede PostgreSQL locale configurato in conftest.py)
+# Backend (richiede PostgreSQL locale)
 cd backend && .venv/bin/pytest tests/ -v
 
 # Frontend
 cd frontend && npm test
 ```
+
+La pipeline CI (`.github/workflows/ci.yml`) esegue automaticamente ruff + pytest (con PostgreSQL 15 reale) + eslint + vitest + build ad ogni push su `main`/`feat/**` e su ogni PR.
 
 ### Produzione
 
