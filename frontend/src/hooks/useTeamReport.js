@@ -1,40 +1,49 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { getGroup, getGroupHistory, getGroupTargets } from '../api/groups'
 import { getMeasurements } from '../api/sessions'
 
 export function useTeamReport(groupId) {
-  const [groupName, setGroupName] = useState('')
-  const [history, setHistory] = useState([])
-  const [targets, setTargets] = useState([])
-  const [measurements, setMeasurements] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const groupQuery = useQuery({
+    queryKey: ['group', groupId],
+    queryFn: () => getGroup(groupId).then((r) => r.data),
+  })
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [gr, hist, tgt] = await Promise.all([
-          getGroup(groupId),
-          getGroupHistory(groupId),
-          getGroupTargets(groupId),
-        ])
-        const histData = hist.data ?? []
-        setGroupName(gr.data.name)
-        setHistory(histData)
-        setTargets(tgt.data ?? [])
-        if (histData.length > 0) {
-          const lastSessionId = histData[histData.length - 1].session_id
-          const measRes = await getMeasurements(lastSessionId)
-          setMeasurements(measRes.data ?? [])
-        }
-      } catch {
-        setError('Errore nel caricamento del report')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [groupId])
+  const historyQuery = useQuery({
+    queryKey: ['group-history', groupId],
+    queryFn: () => getGroupHistory(groupId).then((r) => r.data ?? []),
+  })
 
-  return { groupName, history, targets, measurements, loading, error }
+  const targetsQuery = useQuery({
+    queryKey: ['group-targets', groupId],
+    queryFn: () => getGroupTargets(groupId).then((r) => r.data ?? []),
+  })
+
+  const history = historyQuery.data ?? []
+  const lastSessionId = history[history.length - 1]?.session_id ?? null
+
+  const measQuery = useQuery({
+    queryKey: ['session-measurements', lastSessionId],
+    queryFn: () => getMeasurements(lastSessionId).then((r) => r.data ?? []),
+    enabled: !!lastSessionId,
+  })
+
+  const loading =
+    groupQuery.isPending ||
+    historyQuery.isPending ||
+    targetsQuery.isPending ||
+    (!!lastSessionId && measQuery.isPending)
+
+  const error =
+    groupQuery.isError || historyQuery.isError || targetsQuery.isError || measQuery.isError
+      ? 'Errore nel caricamento del report'
+      : ''
+
+  return {
+    groupName: groupQuery.data?.name ?? '',
+    history,
+    targets: targetsQuery.data ?? [],
+    measurements: measQuery.data ?? [],
+    loading,
+    error,
+  }
 }
