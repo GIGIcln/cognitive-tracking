@@ -1,20 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate, useBlocker } from 'react-router-dom'
-import { getSession, saveMeasurements, updateSession } from '../api/sessions'
-import { getEvents, saveEvents } from '../api/events'
-import { getPlayers } from '../api/players'
-import { getGroupTargets } from '../api/groups'
-import {
-  COGNITIVE_PARAMS,
-  FIELD_TO_METRIC,
-  METRIC_EVENT_CONFIG,
-  RELIABILITY_META,
-  deriveScore,
-  deriveReliability,
-} from '../constants/domain'
+import { useParams, useNavigate } from 'react-router-dom'
+import { COGNITIVE_PARAMS, FIELD_TO_METRIC } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
 import ToggleSwitch from '../components/ToggleSwitch'
-import { useAuth } from '../context/AuthContext'
+import NotesBlock from '../components/NotesBlock'
+import EventParamRow from '../components/EventParamRow'
+import { useSessionForm } from '../hooks/useSessionForm'
 
 const PARAMS = COGNITIVE_PARAMS
 
@@ -41,429 +31,35 @@ function getMobileBtnClass(n, selectedValue, targetsMap, field) {
   return 'bg-granata text-white scale-105 ring-2 ring-yellow-400 ring-offset-1'
 }
 
-// ── Event-mode helpers ────────────────────────────────────────────────────────
-
-function scoreBadgeClass(score, targetsMap, field) {
-  const param = FIELD_TO_METRIC[field]
-  const t = targetsMap[param]
-  if (!t || score == null) return 'bg-gray-100 text-gray-500'
-  if (score <= t.insufficient_max) return 'bg-red-100 text-red-700'
-  if (score >= t.ottimo_min)       return 'bg-green-100 text-green-700'
-  return 'bg-yellow-100 text-yellow-700'
-}
-
-const emptyMeasurement = () =>
-  PARAMS.reduce((acc, { field }) => ({ ...acc, [field]: '' }), { is_absent: false, notes: '' })
-
-const emptyEventRow = () => ({ numerator: 0, denominator: 0, method: 'video' })
-
-function NotesBlock({ notes, editing, value, saving, onChange, onEdit, onSave, onCancel }) {
-  const { isAdmin } = useAuth()
-
-  if (editing) {
-    return (
-      <div className="mt-2">
-        <textarea
-          autoFocus
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Aggiungi note sulla sessione…"
-          rows={3}
-          className="w-full border border-granata rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata resize-none"
-        />
-        <div className="flex gap-2 mt-1.5">
-          <button
-            onClick={onCancel}
-            className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1 border border-gray-200 rounded-lg"
-          >
-            Annulla
-          </button>
-          <button
-            onClick={onSave}
-            disabled={saving}
-            className="text-xs text-white bg-granata hover:bg-granata-dark px-3 py-1 rounded-lg disabled:opacity-60"
-          >
-            {saving ? 'Salvataggio…' : 'Salva note'}
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (notes) {
-    return (
-      <div
-        className={`mt-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 whitespace-pre-wrap leading-relaxed ${isAdmin ? 'cursor-pointer hover:bg-gray-100 transition-colors' : ''}`}
-        onClick={isAdmin ? onEdit : undefined}
-        title={isAdmin ? 'Clicca per modificare' : undefined}
-      >
-        {notes}
-      </div>
-    )
-  }
-
-  if (!isAdmin) return null
-
+function ReliabilityChip({ ok, total }) {
+  let cls
+  if (ok >= total)                     cls = 'bg-green-100 text-green-700'
+  else if (ok >= Math.ceil(total / 2)) cls = 'bg-yellow-100 text-yellow-700'
+  else                                 cls = 'bg-red-100 text-red-700'
   return (
-    <button
-      onClick={onEdit}
-      className="mt-2 text-xs text-gray-400 hover:text-granata transition-colors flex items-center gap-1"
-    >
-      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-      </svg>
-      Aggiungi note
-    </button>
+    <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${cls}`}>
+      {ok}/{total}
+    </span>
   )
-}
-
-function EventParamRow({ field, playerId, compact = false, eventData, targetsMap, onEventChange, onEventSet }) {
-    const metricType = FIELD_TO_METRIC[field]
-    const cfg = METRIC_EVENT_CONFIG[field]
-    const ev = eventData[playerId]?.[metricType] ?? emptyEventRow()
-    const score = deriveScore(metricType, ev.numerator, ev.denominator)
-    const rel = deriveReliability(metricType, ev.numerator, ev.denominator)
-    const relMeta = RELIABILITY_META[rel]
-    const badgeClass = scoreBadgeClass(score, targetsMap, field)
-    const param = COGNITIVE_PARAMS.find((p) => p.field === field)
-
-    const CounterBtn = ({ counterKey, delta }) => (
-      <button
-        onClick={() => onEventChange(playerId, metricType, counterKey, delta)}
-        className={`w-7 h-7 rounded-md font-bold text-sm flex items-center justify-center shrink-0 ${
-          delta > 0
-            ? 'bg-granata text-white active:opacity-80'
-            : 'bg-gray-100 text-gray-600 active:bg-gray-200'
-        }`}
-      >{delta > 0 ? '+' : '−'}</button>
-    )
-
-    const CounterInput = ({ counterKey }) => (
-      <input
-        type="number"
-        min="0"
-        value={ev[counterKey]}
-        onChange={(e) => onEventSet(playerId, metricType, counterKey, e.target.value)}
-        className="w-11 text-center text-sm font-semibold border border-gray-300 rounded-md py-1 focus:outline-none focus:ring-2 focus:ring-granata"
-      />
-    )
-
-    if (compact) {
-      return (
-        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-          <div className="flex items-center gap-2 mb-2 min-w-0">
-            <span className="text-xs font-semibold text-gray-800 shrink-0">
-              {param.label}
-            </span>
-            <span className="text-xs text-gray-400 truncate">{param.italianLabel}</span>
-            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-              {score != null && (
-                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${badgeClass}`}>
-                  {score.toFixed(1)}
-                </span>
-              )}
-              <span className={`text-xs font-medium whitespace-nowrap ${relMeta.color}`}>
-                {relMeta.label}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] text-gray-400 shrink-0 w-4">N</span>
-              <CounterBtn counterKey="numerator" delta={-1} />
-              <CounterInput counterKey="numerator" />
-              <CounterBtn counterKey="numerator" delta={1} />
-            </div>
-            {!cfg.count_only && (
-              <>
-                <span className="text-gray-300 font-light select-none">/</span>
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-gray-400 shrink-0 w-4">D</span>
-                  <CounterBtn counterKey="denominator" delta={-1} />
-                  <CounterInput counterKey="denominator" />
-                  <CounterBtn counterKey="denominator" delta={1} />
-                </div>
-              </>
-            )}
-          </div>
-          <div className="mt-1.5 text-[10px] text-gray-400 leading-tight">
-            N: {cfg.numerator_label}
-            {!cfg.count_only && <span>  ·  D: {cfg.denominator_label}</span>}
-          </div>
-        </div>
-      )
-    }
-
-    return (
-      <div className="mb-5">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-sm font-medium text-gray-700">
-            {param.label} <span className="text-gray-400 font-normal">· {param.italianLabel}</span>
-          </span>
-          <div className="flex items-center gap-2 shrink-0 ml-2">
-            {score != null && (
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeClass}`}>
-                {score.toFixed(1)}
-              </span>
-            )}
-            <span className={`text-xs ${relMeta.color}`}>{relMeta.label}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs text-gray-500 w-36 shrink-0">{cfg.numerator_label}</span>
-          <div className="flex items-center gap-1.5">
-            <button onClick={() => onEventChange(playerId, metricType, 'numerator', -1)} className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 font-bold text-base flex items-center justify-center active:bg-gray-200">−</button>
-            <input type="number" min="0" value={ev.numerator} onChange={(e) => onEventSet(playerId, metricType, 'numerator', e.target.value)} className="w-14 text-center text-sm font-semibold border border-gray-300 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-granata" />
-            <button onClick={() => onEventChange(playerId, metricType, 'numerator', 1)} className="w-8 h-8 rounded-lg bg-granata text-white font-bold text-base flex items-center justify-center active:opacity-80">+</button>
-          </div>
-        </div>
-        {!cfg.count_only && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 w-36 shrink-0">{cfg.denominator_label}</span>
-            <div className="flex items-center gap-1.5">
-              <button onClick={() => onEventChange(playerId, metricType, 'denominator', -1)} className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 font-bold text-base flex items-center justify-center active:bg-gray-200">−</button>
-              <input type="number" min="0" value={ev.denominator} onChange={(e) => onEventSet(playerId, metricType, 'denominator', e.target.value)} className="w-14 text-center text-sm font-semibold border border-gray-300 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-granata" />
-              <button onClick={() => onEventChange(playerId, metricType, 'denominator', 1)} className="w-8 h-8 rounded-lg bg-granata text-white font-bold text-base flex items-center justify-center active:opacity-80">+</button>
-            </div>
-          </div>
-        )}
-      </div>
-    )
 }
 
 export default function SessionDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
 
-  const [session, setSession]       = useState(null)
-  const [players, setPlayers]       = useState([])
-  const [targetsMap, setTargetsMap] = useState({})
-  const [measurements, setMeasurements] = useState({})
-  const [eventData, setEventData]   = useState({})   // { [playerId]: { [metricType]: { numerator, denominator, method } } }
-
-  const [entryMode, setEntryMode]   = useState('event')  // 'score' | 'event'
-  const [loading, setLoading]       = useState(true)
-  const [saving, setSaving]         = useState(false)
-  const [error, setError]           = useState('')
-  const [saveOk, setSaveOk]         = useState(false)
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [editingNotes, setEditingNotes] = useState(false)
-  const [notesValue, setNotesValue] = useState('')
-  const [savingNotes, setSavingNotes] = useState(false)
-  const [isDirty, setIsDirty] = useState(false)
-  const [mixedVersionWarning, setMixedVersionWarning] = useState(false)
-
-  const blocker = useBlocker(isDirty)
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (!isDirty) return
-      e.preventDefault()
-      e.returnValue = ''
-    }
-    window.addEventListener('beforeunload', handler)
-    return () => window.removeEventListener('beforeunload', handler)
-  }, [isDirty])
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const sRes = await getSession(id)
-        const s = sRes.data
-        setSession(s)
-        setNotesValue(s.notes ?? '')
-
-        const [pRes, tRes, eRes] = await Promise.all([
-          getPlayers(s.group_id),
-          getGroupTargets(s.group_id),
-          getEvents(id),
-        ])
-
-        const sorted = pRes.data.items.sort((a, b) =>
-          a.last_name.localeCompare(b.last_name, 'it') ||
-          a.first_name.localeCompare(b.first_name, 'it')
-        )
-        setPlayers(sorted)
-
-        const tMap = {}
-        ;(tRes.data ?? []).forEach((t) => { tMap[t.parameter] = t })
-        setTargetsMap(tMap)
-
-        // Initialise score-mode state from existing measurements
-        const init = {}
-        sorted.forEach((p) => { init[p.id] = emptyMeasurement() })
-        ;(s.measurements ?? []).forEach((m) => {
-          if (init[m.player_id] !== undefined) {
-            init[m.player_id] = {
-              scanning_rate:    m.scanning_rate ?? '',
-              decision_quality: m.decision_quality ?? '',
-              anticipation:     m.anticipation ?? '',
-              transition_reset: m.transition_reset ?? '',
-              verbal_comm:      m.verbal_comm ?? '',
-              is_absent:        m.is_absent ?? false,
-              notes:            m.notes ?? '',
-            }
-          }
-        })
-        setMeasurements(init)
-
-        // Initialise event-mode state from existing events
-        const evMap = {}
-        const seenVersions = new Set()
-        ;(eRes.data ?? []).forEach((ev) => {
-          if (!evMap[ev.player_id]) evMap[ev.player_id] = {}
-          evMap[ev.player_id][ev.metric_type] = {
-            numerator:  ev.numerator,
-            denominator: ev.denominator,
-            method:      ev.method,
-          }
-          if (ev.codebook_version) seenVersions.add(ev.codebook_version)
-        })
-        if (seenVersions.size > 1) setMixedVersionWarning(true)
-        // Auto-switch to event mode if this session already has events
-        if (Object.keys(evMap).length > 0) setEntryMode('event')
-        setEventData(evMap)
-      } catch {
-        setError('Errore nel caricamento della sessione')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [id])
-
-  // ── Score-mode handlers ─────────────────────────────────────────────────────
-
-  const handleChange = useCallback((playerId, field, value) => {
-    setIsDirty(true)
-    setMeasurements((prev) => ({
-      ...prev,
-      [playerId]: { ...prev[playerId], [field]: value },
-    }))
-  }, [])
-
-  const toggleAbsent = useCallback((playerId) => {
-    setIsDirty(true)
-    setMeasurements((prev) => ({
-      ...prev,
-      [playerId]: { ...prev[playerId], is_absent: !prev[playerId].is_absent },
-    }))
-  }, [])
-
-  const handleSaveScores = async () => {
-    setSaving(true); setSaveOk(false); setError('')
-    try {
-      const payload = players.map((p) => {
-        const m = measurements[p.id] ?? emptyMeasurement()
-        const absent = m.is_absent
-        return {
-          player_id:        p.id,
-          is_absent:        absent,
-          scanning_rate:    absent ? null : (m.scanning_rate    !== '' ? parseFloat(m.scanning_rate)    : null),
-          decision_quality: absent ? null : (m.decision_quality !== '' ? parseFloat(m.decision_quality) : null),
-          anticipation:     absent ? null : (m.anticipation     !== '' ? parseFloat(m.anticipation)     : null),
-          transition_reset: absent ? null : (m.transition_reset !== '' ? parseFloat(m.transition_reset) : null),
-          verbal_comm:      absent ? null : (m.verbal_comm      !== '' ? parseFloat(m.verbal_comm)      : null),
-          notes:            absent ? null : (m.notes || null),
-        }
-      })
-      await saveMeasurements(id, payload)
-      setSaveOk(true)
-      setIsDirty(false)
-      setTimeout(() => setSaveOk(false), 2500)
-    } catch {
-      setError('Errore nel salvataggio')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  // ── Event-mode handlers ─────────────────────────────────────────────────────
-
-  const handleEventChange = useCallback((playerId, metricType, key, delta) => {
-    setIsDirty(true)
-    setEventData((prev) => {
-      const playerData = prev[playerId] ?? {}
-      const current = playerData[metricType] ?? emptyEventRow()
-      const updated = { ...current, [key]: Math.max(0, current[key] + delta) }
-      return { ...prev, [playerId]: { ...playerData, [metricType]: updated } }
-    })
-  }, [])
-
-  const handleEventSet = useCallback((playerId, metricType, key, value) => {
-    const num = parseInt(value, 10)
-    if (isNaN(num) || num < 0) return
-    setIsDirty(true)
-    setEventData((prev) => {
-      const playerData = prev[playerId] ?? {}
-      const current = playerData[metricType] ?? emptyEventRow()
-      return { ...prev, [playerId]: { ...playerData, [metricType]: { ...current, [key]: num } } }
-    })
-  }, [])
-
-  const handleSaveEvents = async () => {
-    setSaving(true); setSaveOk(false); setError('')
-    try {
-      const events = []
-      players.forEach((p) => {
-        const absent = measurements[p.id]?.is_absent
-        if (absent) return
-        const playerEvs = eventData[p.id] ?? {}
-        PARAMS.forEach(({ field }) => {
-          const metricType = FIELD_TO_METRIC[field]
-          const ev = playerEvs[metricType]
-          if (!ev) return
-          const cfg = METRIC_EVENT_CONFIG[field]
-          // Only send if there's at least some data entered
-          if (ev.numerator === 0 && ev.denominator === 0 && !cfg.count_only) return
-          if (cfg.count_only && ev.numerator === 0) return
-          events.push({
-            player_id:      p.id,
-            metric_type:    metricType,
-            numerator:      ev.numerator,
-            denominator:    cfg.count_only ? 1 : ev.denominator,
-            method:         ev.method,
-            observer_notes: null,
-          })
-        })
-      })
-      if (events.length === 0) {
-        setError('Nessun evento da salvare')
-        setSaving(false)
-        return
-      }
-      const savedResp = await saveEvents(id, events)
-      if ((savedResp.data ?? []).some((ev) => ev.codebook_version === null)) {
-        setMixedVersionWarning(true)
-      }
-      setSaveOk(true)
-      setIsDirty(false)
-      setTimeout(() => setSaveOk(false), 2500)
-    } catch {
-      setError('Errore nel salvataggio degli eventi')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleSaveNotes = async () => {
-    setSavingNotes(true)
-    try {
-      const res = await updateSession(id, { notes: notesValue || null })
-      setSession((prev) => ({ ...prev, notes: res.data.notes }))
-      setEditingNotes(false)
-    } catch {
-      setError('Errore nel salvataggio delle note')
-    } finally {
-      setSavingNotes(false)
-    }
-  }
-
-  const handleSave = entryMode === 'event' ? handleSaveEvents : handleSaveScores
-
-  const goToNext = () => setCurrentIndex((i) => Math.min(i + 1, players.length - 1))
-  const goToPrev = () => setCurrentIndex((i) => Math.max(i - 1, 0))
+  const {
+    session, players, targetsMap, measurements, eventData,
+    entryMode,
+    loading, saving, error, saveOk,
+    currentIndex, editingNotes, setEditingNotes, notesValue, setNotesValue,
+    savingNotes, mixedVersionWarning, blocker,
+    currentPlayer, currentM, total,
+    handleChange, toggleAbsent, handleSave,
+    handleEventChange, handleEventSet, handleSaveNotes,
+    goToNext, goToPrev,
+    getReliabilityOkCount, hasAnyEventData,
+    insufficientCount, insufficientGateCount,
+  } = useSessionForm(id)
 
   if (loading) {
     return (
@@ -476,75 +72,6 @@ export default function SessionDetailPage() {
   if (!session) {
     return <div className="text-red-600 text-sm">{error || 'Sessione non trovata'}</div>
   }
-
-  const currentPlayer = players[currentIndex]
-  const currentM = currentPlayer ? (measurements[currentPlayer.id] ?? emptyMeasurement()) : null
-  const total = players.length
-
-  // ── Reliability helpers (event-mode only) ────────────────────────────────
-
-  const getReliabilityOkCount = (playerId) => {
-    let ok = 0
-    PARAMS.forEach(({ field }) => {
-      const metricType = FIELD_TO_METRIC[field]
-      const ev = eventData[playerId]?.[metricType]
-      if (!ev) return
-      const cfg = METRIC_EVENT_CONFIG[field]
-      if (cfg.count_only && ev.numerator === 0) return
-      if (!cfg.count_only && ev.numerator === 0 && ev.denominator === 0) return
-      const rel = deriveReliability(metricType, ev.numerator, ev.denominator)
-      if (rel === 'medium' || rel === 'high') ok++
-    })
-    return ok
-  }
-
-  const hasAnyEventData = (playerId) =>
-    PARAMS.some(({ field }) => {
-      const metricType = FIELD_TO_METRIC[field]
-      const ev = eventData[playerId]?.[metricType]
-      if (!ev) return false
-      const cfg = METRIC_EVENT_CONFIG[field]
-      return cfg.count_only ? ev.numerator > 0 : ev.numerator > 0 || ev.denominator > 0
-    })
-
-  const hasInsufficientMetric = (playerId) =>
-    PARAMS.some(({ field }) => {
-      const metricType = FIELD_TO_METRIC[field]
-      const ev = eventData[playerId]?.[metricType]
-      if (!ev) return false
-      const cfg = METRIC_EVENT_CONFIG[field]
-      if (cfg.count_only && ev.numerator === 0) return false
-      if (!cfg.count_only && ev.numerator === 0 && ev.denominator === 0) return false
-      return deriveReliability(metricType, ev.numerator, ev.denominator) === 'insufficient'
-    })
-
-  const ReliabilityChip = ({ playerId }) => {
-    const ok = getReliabilityOkCount(playerId)
-    const total = PARAMS.length
-    let cls
-    if (ok >= total)                     cls = 'bg-green-100 text-green-700'
-    else if (ok >= Math.ceil(total / 2)) cls = 'bg-yellow-100 text-yellow-700'
-    else                                 cls = 'bg-red-100 text-red-700'
-    return (
-      <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${cls}`}>
-        {ok}/{total}
-      </span>
-    )
-  }
-
-  const insufficientCount = entryMode === 'event'
-    ? players.filter((p) => {
-        const m = measurements[p.id] ?? emptyMeasurement()
-        return !m.is_absent && hasAnyEventData(p.id) && getReliabilityOkCount(p.id) < PARAMS.length
-      }).length
-    : 0
-
-  const insufficientGateCount = entryMode === 'event'
-    ? players.filter((p) => {
-        const m = measurements[p.id] ?? emptyMeasurement()
-        return !m.is_absent && hasAnyEventData(p.id) && hasInsufficientMetric(p.id)
-      }).length
-    : 0
 
   return (
     <>
@@ -572,6 +99,7 @@ export default function SessionDetailPage() {
           </div>
         </div>
       )}
+
       {/* ── MOBILE VIEW ── */}
       <div className="md:hidden pb-40">
         {/* Sticky header */}
@@ -652,7 +180,7 @@ export default function SessionDetailPage() {
               </span>
               <div className="flex items-center gap-2 select-none shrink-0 ml-3">
                 {entryMode === 'event' && !currentM.is_absent && hasAnyEventData(currentPlayer.id) && (
-                  <ReliabilityChip playerId={currentPlayer.id} />
+                  <ReliabilityChip ok={getReliabilityOkCount(currentPlayer.id)} total={PARAMS.length} />
                 )}
                 <span className="text-sm text-gray-500">Assente</span>
                 <ToggleSwitch
@@ -787,8 +315,8 @@ export default function SessionDetailPage() {
               {session.duration_min && ` · ${session.duration_min} min`}
             </div>
           </div>
-
         </div>
+
         {/* Report link — desktop */}
         <div className="flex justify-end mb-4 -mt-2">
           <button
@@ -847,7 +375,7 @@ export default function SessionDetailPage() {
         {/* Players */}
         <div className="space-y-4">
           {players.map((p) => {
-            const m = measurements[p.id] ?? emptyMeasurement()
+            const m = measurements[p.id]
             return (
               <div
                 key={p.id}
@@ -858,7 +386,7 @@ export default function SessionDetailPage() {
                   <span className="font-semibold text-gray-900">{p.last_name} {p.first_name}</span>
                   <div className="flex items-center gap-2 select-none">
                     {entryMode === 'event' && !m.is_absent && hasAnyEventData(p.id) && (
-                      <ReliabilityChip playerId={p.id} />
+                      <ReliabilityChip ok={getReliabilityOkCount(p.id)} total={PARAMS.length} />
                     )}
                     <span className="text-sm text-gray-500">Assente</span>
                     <ToggleSwitch checked={m.is_absent} onChange={() => toggleAbsent(p.id)} size="sm" />
