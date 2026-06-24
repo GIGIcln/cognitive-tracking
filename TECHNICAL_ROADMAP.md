@@ -54,13 +54,29 @@ Non esiste uno store globale (Redux, Zustand, React Query). Ogni pagina fa fetch
 **~~[TD-08] Rate limiting non applicato ai router~~** ✅ Risolto  
 `@limiter.limit("5/minute")` applicato su `/auth/login`; `60/minute` su list endpoint players e sessions; `120/minute` su endpoints di scrittura. Brute-force protetto.
 
+**[TD-11] Definizioni delle metriche sparse in 5+ sorgenti**  
+Le 5 metriche cognitive (SR, DQI, AI, TRS, VCI) sono definite in modo ridondante in: `frontend/src/constants/domain.js` (`COGNITIVE_PARAMS` + `METRIC_EVENT_CONFIG`), `PlayerDetailPage.jsx`, `GroupDetailPage.jsx`, `exportUtils.js` (due definizioni inline distinte), e `backend/app/services/observation_service.py` (`_METRIC_MIN_N`, `_METRIC_TO_FIELD`). Un cambio di etichetta o soglia richiede aggiornamenti in ≥5 file senza garanzie di coerenza.  
+_File:_ `frontend/src/constants/domain.js`, `frontend/src/pages/{Player,Group}DetailPage.jsx`, `frontend/src/utils/exportUtils.js`, `backend/app/services/observation_service.py`
+
+**[TD-12] Reliability preview SR disallineata tra frontend e backend**  
+Il backend calcola la reliability di SR su `COUNT(righe)` con soglia `min_n=6` (ricezioni = eventi registrati). Il frontend in `deriveReliability()` usa `denominator` dell'evento corrente con `min_n=15` (ricezioni in pressione per evento). La semantica è diversa: l'utente vede un badge di affidabilità durante l'inserimento che non corrisponde al valore definitivo calcolato dal backend. Filo aperto già registrato in `docs/dev/observation-events.md`.  
+_File:_ `frontend/src/constants/domain.js:38`, `backend/app/services/observation_service.py:18`
+
+**[TD-13] `SessionDetailPage` monolite (930+ righe)**  
+La pagina gestisce contemporaneamente: caricamento di sessione, giocatori, target e misurazioni; due modalità di input (score vs event); calcolo affidabilità in-page con 3 helper locali; dirty tracking + `useBlocker` + `beforeunload`; rendering mobile (≈590 linee) e desktop (≈270 linee). `EventParamRow` (113 righe) e `NotesBlock` (60 righe) sono funzioni inline anziché componenti. Non è un problema urgente, ma rende la pagina difficile da testare e modificare in sicurezza.  
+_File:_ `frontend/src/pages/SessionDetailPage.jsx`
+
+**[TD-14] Offline queue senza tetto di retry e cleanup**  
+`offlineQueue.js` accoda mutation offline con retry esponenziale, ma non ha un limite massimo di tentativi né un meccanismo di discard per item bloccati. Un evento corrotto può restare in coda IndexedDB indefinitamente, consumare storage e continuare a ritentare ad ogni online event. L'interceptor in `axios.js` non propaga al componente il caso di errore permanente.  
+_File:_ `frontend/src/utils/offlineQueue.js`, `frontend/src/api/axios.js`
+
 ### 🟢 Bassa Priorità
 
-**[TD-09] UI non mostra `reliability_flag` all'utente**  
-Il backend calcola e restituisce `reliability_flag` (`insufficient/low/medium/high`) per ogni metrica, ma il frontend non lo espone visivamente nella UI di inserimento eventi. Desiderata aperta in `docs/dev/observation-events.md`.
+**~~[TD-09] UI non mostra `reliability_flag` all'utente~~** ✅ Risolto  
+Badge per metrica presenti in `EventParamRow` con colore + label da `RELIABILITY_META`. Gate di pubblicazione in `SessionDetailPage` blocca il bottone "Salva" se almeno un giocatore ha reliability `insufficient`.
 
 **[TD-10] `codebook_version=None` non gestito nel frontend**  
-Quando una response aggregata mescola eventi con versioni diverse del codebook, `codebook_version` è `null`. Il frontend non distingue questo caso da `"v1"`.
+Quando una response aggregata mescola eventi con versioni diverse del codebook, `codebook_version` è `null`. Il frontend non distingue questo caso da `"v1"`. Filo aperto già registrato in `docs/dev/observation-events.md`.
 
 ---
 
@@ -86,6 +102,11 @@ _File:_ `backend/app/services/session_service.py`
 ### ~~OB-05 — Docker Compose per sviluppo locale~~ ✅ Completato
 
 `docker-compose.yml` con servizi `db` (postgres:15), `backend` e `frontend`. Hot-reload su entrambi; `alembic upgrade head` eseguito automaticamente ad ogni `docker compose up`. Il proxy Vite legge `API_TARGET` per raggiungere il backend nel network interno Docker.
+
+### OB-06 — Allineamento reliability SR nel frontend
+
+La `deriveReliability()` in `domain.js` usa `denominator` dell'evento con `min_n=15`, ma il backend usa `COUNT(righe)` con `min_n=6`. Allineare la preview live al comportamento reale del backend: per SR usare il conteggio degli eventi registrati (righe), non il denominatore. Basso sforzo (modifica a `domain.js` + aggiornamento del badge inline in `EventParamRow`), alto impatto sulla correttezza del feedback all'allenatore.  
+_Dipende da:_ filo aperto in `docs/dev/observation-events.md`
 
 ---
 
@@ -133,6 +154,32 @@ Aggiungere test E2E per i flussi critici:
 - Login → creazione sessione → inserimento observation events → export PDF
 - Verifica del gate di affidabilità (`insufficient` → blocco pubblicazione)
 
+### OL-06 — PDF generation server-side (WeasyPrint)
+
+`exportUtils.js` usa `html2canvas` che è sincrono, blocca il main thread e scala male su report con molti giocatori (hide/show DOM, loop su sections, nessun progress indicator). Migrazione a generazione server-side con WeasyPrint: il backend riceve la request, renderizza HTML → PDF in Python, restituisce il file come `application/pdf`. Benefici: thread UI libero, output deterministico, possibilità di schedulare la generazione in background. Da coordinare con OL-02 (auth su DB) per gestire accesso sicuro al report.  
+_File:_ `frontend/src/utils/exportUtils.js`
+
+### OL-07 — Refactoring `SessionDetailPage` in componenti e custom hook
+
+Estrarre dalla pagina monolite (930+ righe):
+1. `EventParamRow` → componente autonomo in `components/`
+2. `NotesBlock` → componente autonomo in `components/`
+3. `useSessionForm()` → custom hook che gestisce stato e side effect (caricamento dati, dirty tracking, salvataggio), lasciando alla pagina solo la composizione UI
+4. Split del rendering mobile/desktop in sub-component o slot-pattern
+
+Pre-requisito naturale per il passaggio a TypeScript (OL-03) perché riduce la superficie di ciascun file da tipizzare.  
+_File:_ `frontend/src/pages/SessionDetailPage.jsx`
+
+### OL-08 — Fonte unica di verità per le definizioni di metrica
+
+Consolidare le 5 definizioni sparse di SR/DQI/AI/TRS/VCI in una sola sorgente:
+- **Frontend:** `domain.js` diventa l'unico owner di `field`, `label`, `min_n`, `avgKey`, `color`, `metric_type`. Eliminare le definizioni inline in `PlayerDetailPage`, `GroupDetailPage`, `exportUtils.js`.
+- **Backend:** `_METRIC_MIN_N` e `_METRIC_TO_FIELD` in `observation_service.py` rimangono come authoritative source lato Python, ma vengono esposti tramite un endpoint `/api/meta/metrics` (JSON) per permettere al frontend di leggere le soglie live anziché duplicarle.
+- Risultato: un cambio di soglia richiede una modifica in un solo file Python; il frontend si adegua automaticamente.
+
+Sforzo medio; sblocca una più facile gestione di future versioni del codebook (v2+).  
+_File:_ `backend/app/services/observation_service.py`, `frontend/src/constants/domain.js`, pagine interessate
+
 ---
 
 ## 5. Sicurezza & Performance
@@ -162,5 +209,5 @@ Aggiungere test E2E per i flussi critici:
 | **Rankings** | `func.coalesce` + `desc` SQL-side in `get_rankings()` | ✅ SQL-side (OB-04) |
 | **GZip** | Attivo per response > 1KB | ✅ Presente |
 | **Frontend lazy loading** | Pagine pesanti (report, SessionDetail) caricate on-demand | ✅ Presente |
-| **PDF export** | `html2canvas` è lento su DOM complesso | Valutare generazione server-side (WeasyPrint) |
+| **PDF export** | `html2canvas` è lento su DOM complesso; sincrono, nessun progress indicator | Migrazione server-side WeasyPrint — vedere OL-06 |
 | **Offline** | Mutation code in coda IndexedDB | ✅ Operativo |

@@ -4,14 +4,16 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { getPlayer, getPlayerHistory, getPlayerAssignments, getPlayerStreak } from '../api/players'
+import { COGNITIVE_PARAMS } from '../constants/domain'
 
-const METRICS = [
-  { key: 'scanning_rate',    label: 'SR',  color: '#8b5cf6' },
-  { key: 'decision_quality', label: 'DQI', color: '#3b82f6' },
-  { key: 'anticipation',     label: 'AI',  color: '#10b981' },
-  { key: 'transition_reset', label: 'TRS', color: '#f59e0b' },
-  { key: 'verbal_comm',      label: 'VCI', color: '#ef4444' },
-]
+const METRIC_COLORS = {
+  scanning_rate:    '#8b5cf6',
+  decision_quality: '#3b82f6',
+  anticipation:     '#10b981',
+  transition_reset: '#f59e0b',
+  verbal_comm:      '#ef4444',
+}
+const METRICS = COGNITIVE_PARAMS.map((p) => ({ key: p.field, label: p.label, color: METRIC_COLORS[p.field] }))
 
 function fmt(d) {
   return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })

@@ -1,3 +1,5 @@
+import { COGNITIVE_PARAMS } from '../constants/domain'
+
 export async function exportReportPDF(contentId, filename) {
   const { default: html2canvas } = await import('html2canvas')
   const { default: jsPDF } = await import('jspdf')
@@ -55,13 +57,7 @@ export async function exportReportPDF(contentId, filename) {
 }
 
 export function exportPlayerCSV(playerName, history, targets) {
-  const params = [
-    { key: 'scanning_rate',    label: 'Scanning Rate',  code: 'SR'  },
-    { key: 'decision_quality', label: 'Decision Quality', code: 'DQI' },
-    { key: 'anticipation',     label: 'Anticipazione',  code: 'AI'  },
-    { key: 'transition_reset', label: 'Trans. Reset',   code: 'TRS' },
-    { key: 'verbal_comm',      label: 'Comunicazione',  code: 'VCI' },
-  ]
+  const params = COGNITIVE_PARAMS.map((p) => ({ key: p.field, label: p.italianLabel, code: p.label }))
 
   const headers = [
     'Data', 'Tipo sessione', 'Gruppo',
@@ -165,13 +161,7 @@ export function exportSessionTeamCSV(session, groupName, playerRankings, average
 }
 
 export function exportSessionPlayerCSV(playerLastName, playerFirstName, session, groupName, measurement, averages, targets) {
-  const params = [
-    { key: 'scanning_rate', avgKey: 'avg_sr', label: 'Scanning Rate', code: 'SR' },
-    { key: 'decision_quality', avgKey: 'avg_dqi', label: 'Decision Quality', code: 'DQI' },
-    { key: 'anticipation', avgKey: 'avg_ai', label: 'Anticipazione', code: 'AI' },
-    { key: 'transition_reset', avgKey: 'avg_trs', label: 'Trans. Reset', code: 'TRS' },
-    { key: 'verbal_comm', avgKey: 'avg_vci', label: 'Comunicazione', code: 'VCI' },
-  ]
+  const params = COGNITIVE_PARAMS.map((p) => ({ key: p.field, avgKey: p.avgKey, label: p.italianLabel, code: p.label }))
 
   const sessionDate = session?.session_date ? new Date(session.session_date).toLocaleDateString('it-IT') : ''
 

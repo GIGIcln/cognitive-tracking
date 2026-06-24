@@ -5,7 +5,7 @@ import { getSessions } from '../api/sessions'
 import { deletePlayer } from '../api/players'
 import PlayerFormModal from '../components/PlayerFormModal'
 import { Pencil, Trash2 } from 'lucide-react'
-import { LEVEL_COLORS } from '../constants/domain'
+import { LEVEL_COLORS, COGNITIVE_PARAMS } from '../constants/domain'
 import { useAuth } from '../context/AuthContext'
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -13,7 +13,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
 
-const PARAMS = ['SR', 'DQI', 'AI', 'TRS', 'VCI']
+const PARAMS = COGNITIVE_PARAMS.map((p) => p.label)
 
 const FIELD_LABELS = {
   level: 'Livello',
