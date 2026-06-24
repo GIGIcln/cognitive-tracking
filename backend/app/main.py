@@ -18,7 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.config import get_settings
 from app.database import get_db
 from app.limiter import limiter
-from app.routers import auth, groups, meta, players, reports, seasons, sessions, users
+from app.routers import auth, groups, matches, meta, players, reports, seasons, sessions, users
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +134,7 @@ app.include_router(seasons.router, prefix="/api")
 app.include_router(groups.router, prefix="/api")
 app.include_router(players.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
+app.include_router(matches.router, prefix="/api")
 app.include_router(meta.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(users.router, prefix="/api")

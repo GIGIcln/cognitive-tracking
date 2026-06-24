@@ -23,6 +23,8 @@ const SessionTeamReportPage = lazy(() => import('./pages/SessionTeamReportPage')
 const SessionPlayerReportPage = lazy(() => import('./pages/SessionPlayerReportPage'))
 const SeasonsPage = lazy(() => import('./pages/SeasonsPage'))
 const UsersAdminPage = lazy(() => import('./pages/UsersAdminPage'))
+const MatchesPage = lazy(() => import('./pages/MatchesPage'))
+const MatchDetailPage = lazy(() => import('./pages/MatchDetailPage'))
 
 function PageLoader() {
   return (
@@ -77,6 +79,14 @@ function App() {
             <Route
               path="/seasons"
               element={<Suspense fallback={<PageLoader />}><SeasonsPage /></Suspense>}
+            />
+            <Route
+              path="/partite"
+              element={<Suspense fallback={<PageLoader />}><MatchesPage /></Suspense>}
+            />
+            <Route
+              path="/partite/:id"
+              element={<Suspense fallback={<PageLoader />}><MatchDetailPage /></Suspense>}
             />
             <Route path="/impostazioni" element={<SettingsPage />}>
               <Route index element={<Navigate to="/impostazioni/profilo" replace />} />

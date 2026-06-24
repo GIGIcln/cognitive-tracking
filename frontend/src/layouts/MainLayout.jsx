@@ -1,13 +1,14 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import OfflineBanner from '../components/OfflineBanner'
-import { LayoutDashboard, Users, User, ClipboardList, Calendar, Settings } from 'lucide-react'
+import { LayoutDashboard, Users, User, ClipboardList, Calendar, Settings, Trophy } from 'lucide-react'
 
 const baseNavItems = [
   { to: '/', label: 'Home', icon: LayoutDashboard, end: true },
   { to: '/groups', label: 'Rosa', icon: Users },
   { to: '/players', label: 'Giocatori', icon: User },
   { to: '/sessions', label: 'Allenamenti', icon: ClipboardList },
+  { to: '/partite', label: 'Partite', icon: Trophy },
 ]
 
 const staffNavItems = [
