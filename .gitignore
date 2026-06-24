@@ -2,8 +2,13 @@
 node_modules/
 dist/
 dist-ssr/
+dev-dist/
 .vite/
 *.local
+
+# ── Playwright ───────────────────────────────────────────────
+frontend/playwright-report/
+frontend/test-results/
 
 # ── Python / Backend ─────────────────────────────────────────
 __pycache__/
