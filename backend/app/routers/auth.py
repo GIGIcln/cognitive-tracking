@@ -4,8 +4,6 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-logger = logging.getLogger(__name__)
-
 from app import user_store
 from app.config import get_settings
 from app.limiter import limiter
@@ -16,6 +14,8 @@ from app.services.auth_service import (
     hash_password,
     verify_password,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

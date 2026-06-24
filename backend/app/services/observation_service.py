@@ -35,16 +35,22 @@ _METRIC_TO_FIELD: dict[str, str] = {
 def reliability_flag(metric: str, n: int) -> str:
     """Return 'insufficient' | 'low' | 'medium' | 'high'."""
     if metric == "AI":
-        if n < 3:  return "insufficient"
-        if n < 6:  return "low"
-        if n < 10: return "medium"
+        if n < 3:
+            return "insufficient"
+        if n < 6:
+            return "low"
+        if n < 10:
+            return "medium"
         return "high"
 
     min_n = _METRIC_MIN_N[metric]
     half = min_n // 2
-    if n < half:      return "insufficient"
-    if n < min_n:     return "low"
-    if n < min_n * 2: return "medium"
+    if n < half:
+        return "insufficient"
+    if n < min_n:
+        return "low"
+    if n < min_n * 2:
+        return "medium"
     return "high"
 
 
