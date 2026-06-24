@@ -3,9 +3,10 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy.orm import Session
 
-from app import user_store
 from app.config import get_settings
+from app.database import get_db
 from app.limiter import limiter
 from app.schemas.auth import LoginRequest, TokenResponse, UserContext, UserResponse
 from app.services.auth_service import (
@@ -14,6 +15,7 @@ from app.services.auth_service import (
     hash_password,
     verify_password,
 )
+from app.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +28,18 @@ _DUMMY_HASH = hash_password("DummyPassword1!")
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
-def login(request: Request, response: Response, body: LoginRequest):
-    record = user_store.get_by_email(body.email)
-    candidate_hash = record["hashed_password"] if record else _DUMMY_HASH
+def login(
+    request: Request,
+    response: Response,
+    body: LoginRequest,
+    db: Session = Depends(get_db),
+):
+    svc = UserService(db)
+    user = svc.get_by_email(body.email)
+    candidate_hash = user.hashed_password if user else _DUMMY_HASH
     is_valid = verify_password(body.password, candidate_hash)
     rid = getattr(request.state, "request_id", "-")
-    if not record or not is_valid or not record.get("is_active", True):
+    if not user or not is_valid or not user.is_active:
         logger.warning("[%s] Login fallito: email='%s'", rid, body.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -39,7 +47,7 @@ def login(request: Request, response: Response, body: LoginRequest):
         )
     logger.info("[%s] Login riuscito: email='%s'", rid, body.email)
     settings = get_settings()
-    token = create_access_token(record)
+    token = create_access_token(user)
     is_production = settings.app_env == "production"
     response.set_cookie(
         key="ct_token",
@@ -53,11 +61,11 @@ def login(request: Request, response: Response, body: LoginRequest):
     return TokenResponse(
         access_token=token,
         user=UserResponse(
-            id=record["id"],
-            email=record["email"],
-            full_name=record.get("full_name"),
-            is_active=record.get("is_active", True),
-            roles=record.get("roles", []),
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            is_active=user.is_active,
+            roles=user.roles or [],
         ),
     )
 

@@ -15,11 +15,10 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app import user_store
 from app.config import get_settings
 from app.database import get_db
 from app.limiter import limiter
-from app.routers import auth, groups, meta, players, reports, seasons, sessions
+from app.routers import auth, groups, meta, players, reports, seasons, sessions, users
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,6 @@ _docs_enabled = settings.app_env == "development"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    user_store._load()  # fail fast se users.json è mancante o malformato
     yield
 
 
@@ -138,6 +136,7 @@ app.include_router(players.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(meta.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
 
 
 @app.get("/")

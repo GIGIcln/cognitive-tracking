@@ -18,7 +18,6 @@ from pytest_postgresql import factories as pg_factories
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app import user_store as _user_store
 from app.database import get_db
 from app.limiter import limiter as _rate_limiter
 from app.main import app as fastapi_app
@@ -27,6 +26,7 @@ from app.models import user, player, season, group, assignment, group_target, me
 from app.models.group import Group as GroupModel
 from app.models.player import Player
 from app.models.season import Season
+from app.models.user import User
 
 TEST_DB_URL = "sqlite:///./test_setup.db"
 TEST_DB_URL_INT = "sqlite:///./test_integration.db"
@@ -38,9 +38,9 @@ _TEST_HASH = _bcrypt.hashpw(_TEST_PASSWORD.encode(), _bcrypt.gensalt(rounds=4)).
 _LOGIN = {"email": "admin@test.com", "password": _TEST_PASSWORD}
 
 # ── Utenti di test ─────────────────────────────────────────────────────────
-ADMIN_ID = "00000000-0000-0000-0000-000000000001"
-COACH_ID = "00000000-0000-0000-0000-000000000002"
-RESP_ID  = "00000000-0000-0000-0000-000000000003"
+ADMIN_ID = "a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5"
+COACH_ID = "f1f1f1f1-a2a2-b3b3-c4c4-d5d5d5d5d5d5"
+RESP_ID  = "c1c1c1c1-d2d2-e3e3-f4f4-a5a5a5a5a5a5"
 
 _TEST_ADMIN = {
     "id": ADMIN_ID,
@@ -76,20 +76,19 @@ _TEST_RESP = {
 _ALL_TEST_USERS = [_TEST_ADMIN, _TEST_COACH, _TEST_RESP]
 
 
-def _inject_users(users: list = _ALL_TEST_USERS) -> None:
-    """Inietta utenti nello user_store in-memory, bypassando users.json."""
+def _seed_users(db, users: list = _ALL_TEST_USERS) -> None:
+    """Crea utenti nel DB per i test."""
     for u in users:
-        _user_store._by_id[u["id"]] = u
-        _user_store._by_email[u["email"].lower()] = u
-    _user_store._initialized = True
-
-
-def _cleanup_users(users: list = _ALL_TEST_USERS) -> None:
-    for u in users:
-        _user_store._by_id.pop(u["id"], None)
-        _user_store._by_email.pop(u["email"].lower(), None)
-    if not _user_store._by_id:
-        _user_store._initialized = False
+        db.add(User(
+            id=uuid.UUID(u["id"]),
+            email=u["email"],
+            full_name=u.get("full_name"),
+            hashed_password=u["hashed_password"],
+            is_active=u.get("is_active", True),
+            roles=list(u.get("roles", [])),
+            assigned_group_ids=list(u.get("assigned_group_ids", [])),
+        ))
+    db.commit()
 
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
@@ -97,6 +96,7 @@ def _cleanup_users(users: list = _ALL_TEST_USERS) -> None:
 @pytest.fixture
 def client():
     engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -109,9 +109,13 @@ def client():
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
     _rate_limiter.enabled = False
-    _inject_users()
+
+    db = TestingSessionLocal()
+    _seed_users(db)
+    db.close()
+
     yield TestClient(fastapi_app)
-    _cleanup_users()
+
     _rate_limiter.enabled = True
     fastapi_app.dependency_overrides.clear()
     Base.metadata.drop_all(engine)
@@ -125,9 +129,9 @@ def seeded():
     """Client con stagione, gruppo e giocatore pre-seeded e admin autenticato."""
     _rate_limiter.enabled = False
     engine = create_engine(TEST_DB_URL_INT, connect_args={"check_same_thread": False})
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    db = TestingSessionLocal()
 
     def override_get_db():
         session = TestingSessionLocal()
@@ -138,6 +142,7 @@ def seeded():
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
 
+    db = TestingSessionLocal()
     season_obj = Season(id=uuid.uuid4(), name="Stagione Test", is_current=True,
                         start_date=date(2025, 9, 1), end_date=date(2026, 6, 30))
     db.add(season_obj)
@@ -150,12 +155,11 @@ def seeded():
     db.commit()
 
     _TEST_COACH["assigned_group_ids"] = [str(grp.id)]
-    _inject_users()
+    _seed_users(db)
 
     http = TestClient(fastapi_app)
     token = http.post("/api/auth/login", json=_LOGIN).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
-    # Client fresco senza cookie — usato dai test "requires_auth"
     anon = TestClient(fastapi_app)
 
     yield {
@@ -170,7 +174,6 @@ def seeded():
     db.close()
     _rate_limiter.enabled = True
     _TEST_COACH["assigned_group_ids"] = []
-    _cleanup_users()
     fastapi_app.dependency_overrides.clear()
     Base.metadata.drop_all(engine)
     engine.dispose()
@@ -195,7 +198,6 @@ def pg_seeded(postgresql15_conn):
     engine = create_engine(dsn)
     Base.metadata.create_all(engine)
     PGSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    db = PGSession()
 
     def override_get_db():
         s = PGSession()
@@ -206,6 +208,7 @@ def pg_seeded(postgresql15_conn):
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
 
+    db = PGSession()
     season_obj = Season(id=uuid.uuid4(), name="Stagione PG Test", is_current=True,
                         start_date=date(2025, 9, 1), end_date=date(2026, 6, 30))
     db.add(season_obj)
@@ -223,7 +226,8 @@ def pg_seeded(postgresql15_conn):
     db.commit()
 
     _TEST_COACH["assigned_group_ids"] = [str(grp.id)]
-    _inject_users()
+    _seed_users(db)
+
     http = TestClient(fastapi_app)
     token = http.post("/api/auth/login", json=_LOGIN).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -238,6 +242,5 @@ def pg_seeded(postgresql15_conn):
     db.close()
     _rate_limiter.enabled = True
     _TEST_COACH["assigned_group_ids"] = []
-    _cleanup_users()
     fastapi_app.dependency_overrides.clear()
     engine.dispose()
