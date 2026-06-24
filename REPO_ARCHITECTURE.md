@@ -1,4 +1,6 @@
-# REPO_ARCHITECTURE.md — Mappa del Progetto Cognitive Tracking
+# REPO_ARCHITECTURE.md — Mappa del Progetto Gestionale Sportivo
+
+> Il progetto è in transizione da cognitive tracking a gestionale sportivo completo. Il modulo cognitivo è integrato nella sezione Allenamenti. I nuovi moduli vengono aggiunti iterativamente — vedi TECHNICAL_ROADMAP.md sezione GS-*.
 
 > Documento di riferimento architetturale. Aggiornalo ad ogni decisione strutturale significativa.
 
@@ -249,10 +251,16 @@ Tre ruoli con permessi differenziati, embedded nel JWT al login:
 | Ruolo | Lettura | Scrittura | Admin |
 |---|---|---|---|
 | `admin` | Tutti i gruppi | Tutti i gruppi | Sì (DELETE, PATCH protetti) |
-| `responsabile_tecnico` | Tutti i gruppi (read-only) | Nessuna | No |
+| `responsabile_tecnico` | Tutti i gruppi | **Nessuna** | No |
 | `allenatore` | Solo i propri `group_ids` | Solo i propri `group_ids` | No |
+| `allenatore` + `responsabile_tecnico` | Tutti i gruppi (responsabile prevale sul read) | Solo i propri `group_ids` (allenatore governa il write) | No |
 
-Lo scoping è applicato tramite `assert_group_access()` e `assert_write_access()` in `rbac.py`. Il lookup degli utenti è O(1) in-memory (nessuna query DB per ogni request).
+**Flusso utenti:**
+- `allenatore`: si auto-registra su `/register` → stato `pending` (nessun accesso ai dati) → admin assegna gruppo → accesso sbloccato.
+- `responsabile_tecnico`: creato direttamente dall'admin; nessuna auto-registrazione.
+- Il doppio ruolo viene assegnato dall'admin nel pannello utenti.
+
+Lo scoping è applicato tramite `assert_group_access()` e `assert_write_access()` in `rbac.py`. Il lookup degli utenti è O(1) in-memory (nessuna query DB per ogni request). **⚠️ Migrazione imminente su tabella DB — vedi GS-01 in TECHNICAL_ROADMAP.md.**
 
 ### Observation Events — Pipeline Cognitiva
 

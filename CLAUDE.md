@@ -1,12 +1,29 @@
-# ARCHITECTURE & CONTEXT - Cognitive Tracking
+# ARCHITECTURE & CONTEXT - Gestionale Sportivo
+
+> Il progetto sta evolvendo da cognitive tracking a **gestionale sportivo completo**. Il modulo cognitivo rimane, integrato nella sezione Allenamenti. I nuovi moduli (Rosa estesa, Partite, Presenze, Impostazioni gruppo) vengono aggiunti iterativamente. Vedi TECHNICAL_ROADMAP.md per la sequenza.
 
 ## 1. Stack Tecnologico
 - **Frontend:** React 18 (Vite), Tailwind CSS, React Router v6, Axios, Recharts (grafici), jsPDF/html2canvas (export), idb (IndexedDB).
 - **Backend:** FastAPI (Python), Pydantic v2 (validazione/settings), Uvicorn, slowapi (rate limiting), GZipMiddleware.
 - **Database:** PostgreSQL 15+ con SQLAlchemy 2.0 (ORM asincrono/sincrono, Mapped types) e Alembic (migrazioni). RLS abilitato su tutte le tabelle public.
-- **Auth:** JWT (python-jose) con bcrypt. Utenti in `backend/users.json` (gitignored); ruoli embedded nel token, zero DB hit per request.
+- **Auth:** JWT (python-jose) con bcrypt. Utenti in `backend/users.json` (gitignored) — **migrazione imminente su tabella `users` nel DB** (vedi GS-01 in TECHNICAL_ROADMAP.md). Gli allenatori si auto-registrano (stato `pending` finché l'admin non assegna il gruppo); i responsabili tecnici vengono creati direttamente dall'admin. Ruoli embedded nel token, zero DB hit per request.
 
-## 2. Struttura del Progetto (High-Level)
+## 2. Navigazione e Struttura UI
+
+### Voci di navigazione per ruolo
+
+| Sezione | Admin | Resp. tecnico | Allenatore |
+|---|---|---|---|
+| Home (dashboard role-specific) | ✓ | ✓ | ✓ |
+| Rosa (giocatori, anagrafica, report) | ✓ | ✓ | solo gruppo assegnato |
+| Allenamenti (sessioni, cognitivo, presenze, report) | ✓ | ✓ | solo gruppo assegnato |
+| Partite (calendario gare, risultati, report) | ✓ | ✓ | solo gruppo assegnato |
+| Stagioni | ✓ | ✓ | — |
+| Impostazioni | tutto | profilo | giorni allenamento, config gruppo |
+
+I **report sono interni a ogni sezione**, non esiste una voce "Report" separata nella nav.
+
+### Struttura del Progetto (High-Level)
 - `/frontend/src/`: SPA React. `pages/` gestiscono le viste, `context/AuthContext` gestisce lo stato auth, `layouts/MainLayout` il guscio UI.
 - `/backend/app/`: API strutturata.
   - `routers/`: Endpoint API divisi per dominio (`auth`, `groups`, `players`, `seasons`, `sessions`).
@@ -33,7 +50,12 @@
   - UUID v4 come Primary Key su tutti i modelli.
   - Dipendenze FastAPI (`Depends(get_db)`, `Depends(get_current_user)`) per iniettare sessioni DB e proteggere le rotte.
   - Configurazione centralizzata in `app.config.Settings` caricata da `.env`.
-  - **RBAC:** ruoli (`admin`, `responsabile_tecnico`, `allenatore`) embedded nel JWT. Guards: `Depends(require_admin)`, `Depends(require_staff)`, `Depends(require_auth)`. Data scoping: `current_user.read_scope()` → `None` (vede tutto) o `set[UUID]` (solo propri gruppi per `allenatore`). `assert_group_access` / `assert_write_access` per autorizzazioni fine-grained.
+  - **RBAC:** ruoli (`admin`, `responsabile_tecnico`, `allenatore`) embedded nel JWT. Guards: `Depends(require_admin)`, `Depends(require_staff)`, `Depends(require_auth)`. Regole di permesso:
+    - `admin`: legge e scrive tutto.
+    - `responsabile_tecnico`: **legge tutto, nessuna scrittura**.
+    - `allenatore`: legge e scrive **solo il proprio gruppo assegnato**.
+    - **Doppio ruolo** (`allenatore` + `responsabile_tecnico`): read scope = `None` (il ruolo responsabile prevale), write scope = solo gruppo assegnato (il ruolo allenatore governa la scrittura).
+    - Data scoping: `current_user.read_scope()` → `None` se ha `responsabile_tecnico` o `admin`, altrimenti `set[UUID]` dei gruppi assegnati. `assert_group_access` / `assert_write_access` per autorizzazioni fine-grained.
   - **Error handling centralizzato:** `main.py` ha `@exception_handler` per `RequestValidationError` (422), `IntegrityError` (409), `OperationalError` (503). Risposte JSON strutturate coerenti.
   - **Rate limiting:** slowapi su endpoint sensibili (es. login).
   - **Pagination:** limite massimo 200 per list endpoint (`/players`, `/sessions`, `/rankings`); 500 per `/players/{id}/history`.
@@ -48,6 +70,21 @@
   - **Dove:** `backend/app/services/session_service.py` / `group_service.py`.
   - **Impatto:** Medio.
   - **Azione suggerita:** Per le pagine di report (es. `TeamReportPage`), le query che aggregano le `Measurements` storiche potrebbero diventare lente. Utilizzare funzioni di aggregazione SQL (`func.avg()`, `func.sum()`) a livello di DB invece di caricare tutti i record in memoria Python.
+
+## 6. Nuovi Moduli in Sviluppo (Gestionale)
+
+I moduli seguenti sono pianificati nell'ordine indicato. Ogni modulo segue il solito flusso: migrazione → modello → schema → service → router → frontend.
+
+| Modulo | Stato | Note |
+|---|---|---|
+| **GS-01** Migrazione auth su DB + registrazione allenatori | pianificato | Pre-requisito per tutti gli altri |
+| **GS-02** Pannello admin utenti (assegnazione ruoli/gruppi) | pianificato | Dipende da GS-01 |
+| **GS-03** Anagrafica giocatore estesa | pianificato | Dati personali, ruolo tattico, documenti |
+| **GS-04** Modulo Presenze | pianificato | Attendance per sessione, giustificazioni |
+| **GS-05** Modulo Partite | pianificato | Gare, risultati, formazioni, minutaggi |
+| **GS-06** Impostazioni gruppo (allenatore) | pianificato | Giorni allenamento, configurazioni gruppo |
+| **GS-07** Infortuni & disponibilità | pianificato | InjuryLog, stato rosa |
+| **GS-08** UI redesign: context bar + layout allargato | pianificato | Stagione/Gruppo sempre visibili in cima |
 
 ## Observation events (metriche cognitive)
 - Modello **per-evento** (`observation_events`, append-only); salvataggio batch idempotente (delete-per-pair + insert), non upsert.

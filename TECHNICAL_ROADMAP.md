@@ -1,6 +1,8 @@
-# TECHNICAL_ROADMAP.md — Roadmap Tecnica Cognitive Tracking
+# TECHNICAL_ROADMAP.md — Roadmap Tecnica Gestionale Sportivo
 
 > Basata sull'analisi dello stato attuale del codice (giugno 2026). Aggiorna questa sezione quando una voce viene chiusa o cambia priorità.
+>
+> Il progetto è in transizione da cognitive tracking a **gestionale sportivo completo**. La sezione **GS-*** (Gestionale Sportivo) raccoglie i nuovi moduli da costruire. Le sezioni TD-*/OL-* riguardano il debito tecnico e refactoring dell'impianto esistente.
 
 ---
 
@@ -25,8 +27,8 @@ Il progetto è in uno stato strutturalmente solido per le sue dimensioni:
 
 ### 🔴 Alta Priorità
 
-**[TD-01] Auth file-based non scalabile (`users.json`)**  
-Attualmente gli utenti sono in un file JSON caricato in memoria all'avvio. Aggiungere o modificare un utente richiede di editare il file e ricaricare il server (`user_store.reload()`). Non c'è UI di gestione, no audit log degli accessi, no reset password self-service.  
+**[TD-01] Auth file-based non scalabile (`users.json`)** → **sostituito da GS-01**  
+Attualmente gli utenti sono in un file JSON caricato in memoria all'avvio. Aggiungere o modificare un utente richiede di editare il file e ricaricare il server. Non c'è UI di gestione, no auto-registrazione, no reset password self-service. **Pre-requisito bloccante per tutti i nuovi moduli del gestionale.**  
 _File:_ `backend/app/user_store.py`, `backend/users.json`
 
 **[TD-02] SQLAlchemy sincrono in un'app FastAPI asincrona**  
@@ -119,15 +121,9 @@ Passare da `create_engine` / `sessionmaker` a `create_async_engine` / `AsyncSess
 
 Sblocca: più connessioni concorrenti con meno thread, migliore utilizzo delle risorse.
 
-### OL-02 — Migrazione Auth su PostgreSQL
+### OL-02 — Migrazione Auth su PostgreSQL → **sostituito e ampliato da GS-01**
 
-Spostare `users.json` in una tabella `users` nel DB, con:
-- Endpoint admin per CRUD utenti (`POST /api/admin/users`)
-- Password reset via token (email o one-time code)
-- Audit log degli accessi (ultima login, IP)
-- `is_active` gestibile dinamicamente senza riavvio
-
-Mantiene lo stesso pattern JWT (roles/group_ids embedded), elimina la fragilità operativa.
+Vedi GS-01 nella sezione Gestionale Sportivo qui sotto.
 
 ### OL-03 — Frontend TypeScript
 
@@ -202,8 +198,8 @@ _File:_ `frontend/src/constants/domain.js`, `frontend/src/pages/SessionDetailPag
 | **RLS PostgreSQL** | Abilitata su tutte le tabelle public, policy deny-all esplicite | ✅ Presente (mig. 0011–0013) |
 | **Secrets** | `SECRET_KEY` validata (≥32 byte), `.env` non versionato | ✅ Corretto |
 | **OpenAPI** | Disabilitato in `APP_ENV=production` | ✅ Corretto |
-| **users.json** | File su disco, fuori dal repo | ⚠️ Soluzione temporanea — vedere OL-02 |
-| **Audit log** | Login riusciti/falliti loggati con `request_id`; `GroupChangeLog` per spostamenti | Estendere a audit per-utente con OL-02 |
+| **users.json** | File su disco, fuori dal repo | ⚠️ Soluzione temporanea — vedere GS-01 |
+| **Audit log** | Login riusciti/falliti loggati con `request_id`; `GroupChangeLog` per spostamenti | Estendere a audit per-utente con GS-01 |
 
 ### Performance
 
@@ -217,3 +213,95 @@ _File:_ `frontend/src/constants/domain.js`, `frontend/src/pages/SessionDetailPag
 | **Frontend lazy loading** | Pagine pesanti (report, SessionDetail) caricate on-demand | ✅ Presente |
 | **PDF export** | `html2canvas` è lento su DOM complesso; sincrono, nessun progress indicator | Migrazione server-side WeasyPrint — vedere OL-06 |
 | **Offline** | Mutation code in coda IndexedDB | ✅ Operativo |
+
+---
+
+## 6. Gestionale Sportivo — Nuovi Moduli (GS-*)
+
+Sequenza di sviluppo pianificata. Ogni modulo è bloccante per il successivo dove indicato.
+
+### GS-01 — Migrazione Auth su DB + Registrazione Allenatori 🔴 PRIORITÀ IMMEDIATA
+
+Pre-requisito bloccante per tutti i nuovi moduli. Sostituisce TD-01 e OL-02.
+
+**Backend:**
+- Nuova tabella `users` (id, email, hashed_password, roles[], assigned_group_ids[], is_active, status: `pending|active`, created_at)
+- Migrazione dati da `users.json` → tabella `users`
+- `user_store.py` diventa un thin wrapper su query DB (stesso pattern JWT, zero impatto sulle guard RBAC esistenti)
+- `POST /api/auth/register` (pubblico, crea allenatore in stato `pending`)
+- Endpoint admin: `GET /api/admin/users`, `PATCH /api/admin/users/{id}` (assegna ruolo, gruppo, attiva account)
+- Audit log accessi (ultima login, IP)
+
+**Frontend:**
+- Pagina `/register` (form nome, email, password — solo allenatori)
+- Stato post-registrazione: schermata "In attesa di assegnazione gruppo" per account pending
+- Pannello `/impostazioni/utenti` (solo admin): lista utenti, assegnazione ruolo + gruppo, attivazione
+
+**RBAC da aggiornare:**
+- `read_scope()`: se ruoli contengono `responsabile_tecnico` o `admin` → `None`; altrimenti → `set[group_ids]`
+- Il doppio ruolo (`allenatore` + `responsabile_tecnico`) viene assegnato dall'admin e gestito correttamente dalla logica sopra
+
+---
+
+### GS-02 — Pannello Admin Utenti
+
+Dipende da: GS-01.
+
+Sezione `/impostazioni` per admin:
+- Lista tutti gli utenti con stato, ruolo, gruppo assegnato
+- Attiva/sospende account, cambia ruolo, assegna/rimuove gruppo
+- Filtra per stato (pending, attivi, sospesi)
+
+---
+
+### GS-03 — Anagrafica Giocatore Estesa
+
+Dipende da: nessuno (aggiunta campi al modello `Player` esistente).
+
+Nuovi campi su `Player`: data di nascita, nazionalità, ruolo tattico, piede preferito, numero di maglia, tessera federale, note mediche (opzionale). La scheda giocatore nel frontend diventa una pagina con **tab**: `[Anagrafica]  [Cognitivo]  [Presenze]  [Partite]  [Infortuni]`.
+
+---
+
+### GS-04 — Modulo Presenze
+
+Dipende da: nessuno (nuova tabella).
+
+Nuova tabella `attendance`: (session_id, player_id, status: `present|absent|justified|injured`, note). Integrata dentro la `SessionDetailPage` (allenamento) come prima tab prima dell'inserimento cognitivo.
+
+Report presenze: statistiche per giocatore (% partecipazione stagionale), accessibili dalla sezione Allenamenti.
+
+---
+
+### GS-05 — Modulo Partite
+
+Dipende da: GS-03 (anagrafica per formazioni).
+
+Nuova tabella `match`: (group_id, season_id, date, opponent, home_away, score_home, score_away, notes). Tabella `match_lineup`: (match_id, player_id, minutes_played, position). Sezione **Partite** nella nav con calendario gare, inserimento risultati, formazione schierata. Report partite interno alla sezione.
+
+---
+
+### GS-06 — Impostazioni Gruppo (Allenatore)
+
+Dipende da: GS-01 (per accesso ruolo-specifico alle impostazioni).
+
+Sezione `/impostazioni` per allenatore: giorni di allenamento della settimana, orario, luogo. Dati salvati su tabella `group_settings` (group_id, training_days[], training_time, location). Usati come default nella creazione di nuove sessioni.
+
+---
+
+### GS-07 — Infortuni & Disponibilità
+
+Dipende da: GS-03.
+
+Nuova tabella `injury_log`: (player_id, injury_type, start_date, expected_return, actual_return, severity, notes). Vista "stato rosa" nella sezione Rosa: lista giocatori con badge disponibilità (disponibile / infortunato / limitato). Alert automatici nella dashboard se giocatori chiave sono indisponibili.
+
+---
+
+### GS-08 — UI Redesign: Context Bar + Layout
+
+Dipende da: nessuno (refactoring UI puro, può procedere in parallelo).
+
+- **Context bar** permanente in cima: selettore Stagione + Gruppo attivo, persistito in `localStorage`. Filtra automaticamente i dati di ogni sezione.
+- **Layout allargato**: rimosso `max-w-4xl` fisso; le pagine lista usano tutta la larghezza, le pagine dettaglio si centrano con `max-w-5xl`.
+- **Sidebar collassabile** (icone-only) su schermi medi.
+- **Bottom nav mobile** ridotta a 4 voci + drawer per le secondarie.
+- **Dashboard role-specific**: contenuto diverso per admin / responsabile / allenatore sulla stessa route `/`.

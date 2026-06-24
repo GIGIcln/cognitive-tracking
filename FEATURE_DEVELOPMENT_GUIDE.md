@@ -311,7 +311,9 @@ Spunta ogni voce prima di aprire la PR.
 - [ ] Se ho aggiunto/modificato un modello SQLAlchemy → ho generato e verificato la migrazione (`make migration-new`)
 - [ ] Se la migrazione modifica dati esistenti → è idempotente o reversibile
 - [ ] La logica di business è nel service, non nel router
-- [ ] Il nuovo endpoint ha il guard RBAC corretto (`require_auth` / `require_admin` + `assert_group_access`)
+- [ ] Il nuovo endpoint ha il guard RBAC corretto (`require_auth` / `require_admin` + `assert_group_access` / `assert_write_access`)
+- [ ] Se l'endpoint scrive dati: `responsabile_tecnico` puro riceve 403 (nessun accesso in scrittura)
+- [ ] Se l'endpoint legge dati: doppio ruolo (`allenatore` + `responsabile_tecnico`) vede tutti i gruppi
 - [ ] Ho aggiunto almeno il test del percorso felice e del 401/403
 - [ ] `pytest tests/` passa in verde
 
