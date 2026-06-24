@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func
+from sqlalchemy import Float, case, cast, desc, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, joinedload
 
@@ -140,26 +140,48 @@ class SessionService:
     ) -> list[dict]:
         _FIELDS = ("scanning_rate", "decision_quality", "anticipation", "transition_reset", "verbal_comm")
 
-        measurements = (
-            self.db.query(Measurement)
-            .options(joinedload(Measurement.player))
-            .filter(Measurement.session_id == session_id, Measurement.is_absent.is_(False))
+        # Build row-level mean of non-NULL columns entirely in SQL.
+        sum_expr = None
+        count_expr = None
+        for f in _FIELDS:
+            col = getattr(Measurement, f)
+            s = func.coalesce(col, 0.0)
+            c = case((col.isnot(None), 1), else_=0)
+            sum_expr = s if sum_expr is None else sum_expr + s
+            count_expr = c if count_expr is None else count_expr + c
+
+        avg_expr = cast(sum_expr, Float) / func.nullif(count_expr, 0)
+
+        rows = (
+            self.db.query(
+                Measurement.player_id,
+                Player.first_name,
+                Player.last_name,
+                avg_expr.label("avg_score"),
+            )
+            .join(Player, Measurement.player_id == Player.id)
+            .filter(
+                Measurement.session_id == session_id,
+                Measurement.is_absent.is_(False),
+                count_expr > 0,
+            )
+            .order_by(desc(avg_expr))
             .all()
         )
 
-        ranked = []
-        for m in measurements:
-            vals = [float(getattr(m, f)) for f in _FIELDS if getattr(m, f) is not None]
-            if not vals:
-                continue
-            ranked.append({
-                "player_id": m.player_id,
-                "first_name": m.player.first_name,
-                "last_name": m.player.last_name,
-                "avg_score": round(sum(vals) / len(vals), 2),
-            })
+        if not rows:
+            return []
 
-        ranked.sort(key=lambda x: x["avg_score"], reverse=True)
+        ranked = [
+            {
+                "player_id": r.player_id,
+                "first_name": r.first_name,
+                "last_name": r.last_name,
+                "avg_score": round(float(r.avg_score), 2),
+            }
+            for r in rows
+        ]
+
         total = len(ranked)
 
         # Dense ranking: players with equal avg_score share rank and percentile.
