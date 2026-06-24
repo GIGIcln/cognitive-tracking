@@ -80,11 +80,17 @@ export default function MainLayout() {
 
         <div className="p-4 border-t border-gray-200">
           <div className="text-sm font-medium text-gray-700 truncate">
-            {user?.full_name?.split(' ')[0] || user?.email}
-            {user?.roles?.[0] && (
-              <span className="text-xs font-normal text-gray-400 ml-1">
-                ({roleLabel(user.roles[0])})
-              </span>
+            {isAdmin ? (
+              <span className="font-bold tracking-wide">ADMIN</span>
+            ) : (
+              <>
+                {user?.full_name || user?.email}
+                {user?.roles?.[0] && (
+                  <span className="text-xs font-normal text-gray-400 ml-1">
+                    ({roleLabel(user.roles[0])})
+                  </span>
+                )}
+              </>
             )}
           </div>
           <button
