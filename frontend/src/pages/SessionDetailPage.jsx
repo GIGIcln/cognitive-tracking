@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { COGNITIVE_PARAMS, FIELD_TO_METRIC } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
 import ToggleSwitch from '../components/ToggleSwitch'
 import NotesBlock from '../components/NotesBlock'
 import EventParamRow from '../components/EventParamRow'
+import AttendanceTab from '../components/AttendanceTab'
 import { useSessionForm } from '../hooks/useSessionForm'
 
 const PARAMS = COGNITIVE_PARAMS
@@ -46,6 +48,7 @@ function ReliabilityChip({ ok, total }) {
 export default function SessionDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [section, setSection] = useState('presenze')
 
   const {
     session, players, targetsMap, measurements, eventData,
@@ -143,20 +146,50 @@ export default function SessionDetailPage() {
             onCancel={() => { setEditingNotes(false); setNotesValue(session.notes ?? '') }}
           />
 
-          {/* Progress bar */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 shrink-0">
-              Giocatore {currentIndex + 1} di {total}
-            </span>
-            <div className="flex-1 bg-gray-200 rounded-full h-1.5">
-              <div
-                className="bg-granata h-1.5 rounded-full transition-all duration-300"
-                style={{ width: total ? `${((currentIndex + 1) / total) * 100}%` : '0%' }}
-              />
-            </div>
+          {/* Section tabs */}
+          <div className="flex border-b border-gray-200 mt-1">
+            {[
+              { key: 'presenze', label: 'Presenze' },
+              { key: 'cognitivo', label: 'Cognitivo' },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setSection(key)}
+                className={`flex-1 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  section === key
+                    ? 'border-granata text-granata'
+                    : 'border-transparent text-gray-500'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
+
+          {/* Cognitivo: progress bar only when on cognitivo tab */}
+          {section === 'cognitivo' && (
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs text-gray-500 shrink-0">
+                Giocatore {currentIndex + 1} di {total}
+              </span>
+              <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                <div
+                  className="bg-granata h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: total ? `${((currentIndex + 1) / total) * 100}%` : '0%' }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
+        {/* Presenze tab */}
+        {section === 'presenze' && (
+          <AttendanceTab sessionId={id} players={players} />
+        )}
+
+        {/* Cognitivo tab */}
+        {section === 'cognitivo' && (
+          <>
         {error && (
           <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg mb-4 border border-red-200">{error}</div>
         )}
@@ -296,6 +329,8 @@ export default function SessionDetailPage() {
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
 
       {/* ── DESKTOP VIEW ── */}
@@ -327,6 +362,32 @@ export default function SessionDetailPage() {
           </button>
         </div>
 
+        {/* Section tabs — desktop */}
+        <div className="flex border-b border-gray-200 mb-5">
+          {[
+            { key: 'presenze', label: 'Presenze' },
+            { key: 'cognitivo', label: 'Cognitivo' },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setSection(key)}
+              className={`px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                section === key
+                  ? 'border-granata text-granata'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {section === 'presenze' && (
+          <AttendanceTab sessionId={id} players={players} />
+        )}
+
+        {section === 'cognitivo' && (
+          <>
         {error && (
           <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg mb-4 border border-red-200">{error}</div>
         )}
@@ -446,30 +507,34 @@ export default function SessionDetailPage() {
             <div className="text-center text-gray-400 py-8 text-sm">Nessun giocatore nel gruppo</div>
           )}
         </div>
+          </>
+        )}
 
-        {/* Sticky save bar */}
-        <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-white border-t border-gray-200 p-4 flex items-center gap-3 z-20">
-          {entryMode === 'event' && insufficientGateCount > 0 && (
-            <span className="text-red-600 text-xs font-medium shrink-0">
-              🚫 {insufficientGateCount} giocator{insufficientGateCount === 1 ? 'e' : 'i'} con dati insufficienti
-            </span>
-          )}
-          {entryMode === 'event' && insufficientGateCount === 0 && insufficientCount > 0 && (
-            <span className="text-amber-600 text-xs font-medium shrink-0">
-              ⚠ {insufficientCount} giocator{insufficientCount === 1 ? 'e' : 'i'} con dati sotto soglia
-            </span>
-          )}
-          {saveOk && (
-            <span className="text-green-600 text-sm font-medium flex items-center gap-1">✓ Salvato</span>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={saving || !players.length || (entryMode === 'event' && insufficientGateCount > 0)}
-            className="flex-1 bg-granata text-white py-3 rounded-xl font-medium text-sm hover:bg-granata-dark transition-colors disabled:opacity-60"
-          >
-            {saving ? 'Salvataggio…' : 'Salva sessione'}
-          </button>
-        </div>
+        {/* Sticky save bar — solo tab cognitivo */}
+        {section === 'cognitivo' && (
+          <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-white border-t border-gray-200 p-4 flex items-center gap-3 z-20">
+            {entryMode === 'event' && insufficientGateCount > 0 && (
+              <span className="text-red-600 text-xs font-medium shrink-0">
+                🚫 {insufficientGateCount} giocator{insufficientGateCount === 1 ? 'e' : 'i'} con dati insufficienti
+              </span>
+            )}
+            {entryMode === 'event' && insufficientGateCount === 0 && insufficientCount > 0 && (
+              <span className="text-amber-600 text-xs font-medium shrink-0">
+                ⚠ {insufficientCount} giocator{insufficientCount === 1 ? 'e' : 'i'} con dati sotto soglia
+              </span>
+            )}
+            {saveOk && (
+              <span className="text-green-600 text-sm font-medium flex items-center gap-1">✓ Salvato</span>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={saving || !players.length || (entryMode === 'event' && insufficientGateCount > 0)}
+              className="flex-1 bg-granata text-white py-3 rounded-xl font-medium text-sm hover:bg-granata-dark transition-colors disabled:opacity-60"
+            >
+              {saving ? 'Salvataggio…' : 'Salva sessione'}
+            </button>
+          </div>
+        )}
       </div>
     </>
   )

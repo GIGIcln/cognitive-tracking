@@ -12,6 +12,7 @@ from app.models.measurement import Measurement
 from app.models.training_session import TrainingSession
 from app.rbac import assert_group_access, assert_write_access, require_admin, require_auth
 from app.schemas.auth import UserContext
+from app.schemas.attendance import AttendanceBatchInput, AttendanceResponse
 from app.schemas.observation_event import ObservationEventResponse, ObservationEventsBatchInput
 from app.schemas.pagination import Page
 from app.schemas.session import (
@@ -28,6 +29,7 @@ from app.services.observation_service import (
     aggregate_events_to_responses,
     event_to_response,
 )
+from app.services.attendance_service import AttendanceService
 from app.services.session_service import SessionService
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -226,6 +228,31 @@ def update_session(
     if session is None:
         raise HTTPException(status_code=404, detail="Sessione non trovata")
     return SessionResponse.model_validate(session)
+
+
+@router.get("/{session_id}/attendance", response_model=list[AttendanceResponse])
+def get_attendance(
+    session_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    session = _get_session_or_404(db, session_id)
+    assert_group_access(current_user, session.group_id)
+    rows = AttendanceService(db).get_by_session(session_id)
+    return [AttendanceResponse.model_validate(r) for r in rows]
+
+
+@router.put("/{session_id}/attendance", response_model=list[AttendanceResponse])
+def upsert_attendance(
+    session_id: uuid.UUID,
+    body: AttendanceBatchInput,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    session = _get_session_or_404(db, session_id)
+    assert_write_access(current_user, session.group_id)
+    rows = AttendanceService(db).upsert_batch(session_id, body.records)
+    return [AttendanceResponse.model_validate(r) for r in rows]
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
