@@ -15,7 +15,11 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     getMe()
       .then((res) => setUser(res.data))
-      .catch(() => {})
+      .catch((err) => {
+        if (err?.response?.status !== 401) {
+          console.warn('[Auth] Session check failed unexpectedly:', err)
+        }
+      })
       .finally(() => setIsLoading(false))
   }, [])
 

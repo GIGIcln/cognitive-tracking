@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useBlocker } from 'react-router-dom'
 import { getSession, saveMeasurements, updateSession } from '../api/sessions'
 import { getEvents, saveEvents } from '../api/events'
 import { getPlayers } from '../api/players'
@@ -251,6 +251,19 @@ export default function SessionDetailPage() {
   const [editingNotes, setEditingNotes] = useState(false)
   const [notesValue, setNotesValue] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
+
+  const blocker = useBlocker(isDirty)
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (!isDirty) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isDirty])
 
   useEffect(() => {
     const load = async () => {
@@ -319,6 +332,7 @@ export default function SessionDetailPage() {
   // ── Score-mode handlers ─────────────────────────────────────────────────────
 
   const handleChange = useCallback((playerId, field, value) => {
+    setIsDirty(true)
     setMeasurements((prev) => ({
       ...prev,
       [playerId]: { ...prev[playerId], [field]: value },
@@ -326,6 +340,7 @@ export default function SessionDetailPage() {
   }, [])
 
   const toggleAbsent = useCallback((playerId) => {
+    setIsDirty(true)
     setMeasurements((prev) => ({
       ...prev,
       [playerId]: { ...prev[playerId], is_absent: !prev[playerId].is_absent },
@@ -351,6 +366,7 @@ export default function SessionDetailPage() {
       })
       await saveMeasurements(id, payload)
       setSaveOk(true)
+      setIsDirty(false)
       setTimeout(() => setSaveOk(false), 2500)
     } catch {
       setError('Errore nel salvataggio')
@@ -362,6 +378,7 @@ export default function SessionDetailPage() {
   // ── Event-mode handlers ─────────────────────────────────────────────────────
 
   const handleEventChange = useCallback((playerId, metricType, key, delta) => {
+    setIsDirty(true)
     setEventData((prev) => {
       const playerData = prev[playerId] ?? {}
       const current = playerData[metricType] ?? emptyEventRow()
@@ -373,6 +390,7 @@ export default function SessionDetailPage() {
   const handleEventSet = useCallback((playerId, metricType, key, value) => {
     const num = parseInt(value, 10)
     if (isNaN(num) || num < 0) return
+    setIsDirty(true)
     setEventData((prev) => {
       const playerData = prev[playerId] ?? {}
       const current = playerData[metricType] ?? emptyEventRow()
@@ -413,6 +431,7 @@ export default function SessionDetailPage() {
       }
       await saveEvents(id, events)
       setSaveOk(true)
+      setIsDirty(false)
       setTimeout(() => setSaveOk(false), 2500)
     } catch {
       setError('Errore nel salvataggio degli eventi')
@@ -504,6 +523,30 @@ export default function SessionDetailPage() {
 
   return (
     <>
+      {blocker.state === 'blocked' && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-2">Modifiche non salvate</h3>
+            <p className="text-sm text-gray-600 mb-5">
+              Hai dati inseriti che non sono ancora stati salvati. Se esci ora li perderai.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => blocker.reset()}
+                className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50"
+              >
+                Resta
+              </button>
+              <button
+                onClick={() => blocker.proceed()}
+                className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-red-700"
+              >
+                Esci senza salvare
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ── MOBILE VIEW ── */}
       <div className="md:hidden pb-40">
         {/* Sticky header */}

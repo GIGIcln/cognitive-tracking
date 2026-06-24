@@ -22,8 +22,8 @@ const TEST_USER = { id: '1', email: 'a@b.it', full_name: 'Admin', is_active: tru
 describe('AuthContext', () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    // Default: nessuna sessione attiva (cookie assente o scaduto)
-    authApi.getMe.mockRejectedValue(new Error('Unauthorized'))
+    // Default: nessuna sessione attiva → 401 expected, non deve produrre console.warn
+    authApi.getMe.mockRejectedValue({ response: { status: 401 }, message: 'Unauthorized' })
   })
 
   describe('inizializzazione al mount', () => {
@@ -52,6 +52,21 @@ describe('AuthContext', () => {
       expect(result.current.user).toBeNull()
       // Auth è gestita dal cookie HttpOnly: localStorage non viene mai scritto
       expect(localStorage.getItem('ct_token')).toBeNull()
+    })
+
+    it('errore non-401 da getMe → emette console.warn', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      authApi.getMe.mockRejectedValue({ response: { status: 500 }, message: 'Server Error' })
+
+      const { result } = renderHook(() => useAuth(), { wrapper })
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[Auth]'),
+        expect.anything()
+      )
+      expect(result.current.user).toBeNull()
+      warnSpy.mockRestore()
     })
   })
 

@@ -101,6 +101,27 @@ describe('OfflineContext', () => {
     vi.unstubAllGlobals()
   })
 
+  it('syncNow → 5xx con retries=2 (max raggiunto) → rimuove item e imposta syncError', async () => {
+    const item = {
+      id: 55, url: '/sessions', method: 'POST',
+      body: {}, retries: 2, nextRetryAt: 0,
+    }
+    offlineQueue.getAllItems.mockResolvedValue([item])
+    offlineQueue.getCount.mockResolvedValue(0)
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 503 })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const { result } = renderHook(() => useOffline(), { wrapper })
+    await waitFor(() => expect(result.current.pendingCount).toBe(0))
+
+    await act(async () => { await result.current.syncNow() })
+
+    expect(offlineQueue.removeItem).toHaveBeenCalledWith(55)
+    expect(result.current.syncError).toBeTruthy()
+
+    vi.unstubAllGlobals()
+  })
+
   // ── syncNow — coda vuota / item ok ────────────────────────────────────
 
   it('syncNow con coda vuota → chiama getAllItems, nessun fetch', async () => {

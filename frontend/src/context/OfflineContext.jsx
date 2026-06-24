@@ -74,6 +74,7 @@ export function OfflineContextProvider({ children }) {
             await incrementRetry(item.id);
             if (item.retries + 1 >= 3) {
               await removeItem(item.id);
+              setSyncError('Sincronizzazione fallita: alcuni dati non sono stati inviati al server.');
               console.error(
                 `[OfflineSync] Max retry raggiunti per ${item.url}. Item rimosso.`
               );
@@ -83,6 +84,7 @@ export function OfflineContextProvider({ children }) {
           await incrementRetry(item.id);
           if (item.retries + 1 >= 3) {
             await removeItem(item.id);
+            setSyncError('Sincronizzazione fallita: alcuni dati non sono stati inviati al server.');
           }
         }
       }
