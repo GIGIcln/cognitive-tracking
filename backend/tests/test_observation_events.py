@@ -420,8 +420,8 @@ def test_events_accepts_ai_with_denominator_zero(seeded):
     assert res.status_code == 200, res.json()
 
 
-def test_upsert_events_unknown_player_returns_404(seeded):
-    """player_id inesistente nel batch eventi deve dare 404."""
+def test_upsert_events_unknown_player_returns_422(seeded):
+    """player_id inesistente nel batch eventi deve dare 422 (input non processabile)."""
     import uuid as _uuid
     c, h = seeded["client"], seeded["headers"]
     gid = seeded["group_id"]
@@ -429,5 +429,5 @@ def test_upsert_events_unknown_player_returns_404(seeded):
     res = _post_events(c, h, sid, [
         {"player_id": str(_uuid.uuid4()), "metric_type": "SR", "numerator": 5, "denominator": 10},
     ])
-    assert res.status_code == 404
+    assert res.status_code == 422
     assert "non trovati" in res.json()["detail"].lower()

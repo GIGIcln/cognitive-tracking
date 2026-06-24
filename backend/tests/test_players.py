@@ -89,6 +89,15 @@ def test_assign_nonexistent_player_returns_404(seeded):
     c, h, gid = seeded["client"], seeded["headers"], seeded["group_id"]
     res = c.post(f"/api/players/{uuid.uuid4()}/assign", headers=h, json={"group_id": gid})
     assert res.status_code == 404
+    assert "giocatore" in res.json()["detail"].lower()
+
+
+def test_assign_nonexistent_group_returns_404(seeded):
+    import uuid
+    c, h, pid = seeded["client"], seeded["headers"], seeded["player_id"]
+    res = c.post(f"/api/players/{pid}/assign", headers=h, json={"group_id": str(uuid.uuid4())})
+    assert res.status_code == 404
+    assert "gruppo" in res.json()["detail"].lower()
 
 
 def test_get_player_history_returns_list(seeded):

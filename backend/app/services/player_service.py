@@ -359,11 +359,12 @@ class PlayerService:
 
         return {"streak": streak, "sessions_checked": len(rows)}
 
-    def assign_to_group(self, player_id: uuid.UUID, group_id: uuid.UUID) -> bool:
-        """Returns False if player not found."""
-        player = self.db.get(Player, player_id)
-        if player is None:
-            return False
+    def assign_to_group(self, player_id: uuid.UUID, group_id: uuid.UUID) -> None:
+        """Raises ValueError('player') or ValueError('group') if not found."""
+        if self.db.get(Player, player_id) is None:
+            raise ValueError("player")
+        if self.db.get(Group, group_id) is None:
+            raise ValueError("group")
 
         current = (
             self.db.query(PlayerGroupAssignment)
@@ -384,7 +385,6 @@ class PlayerService:
             is_current=True,
         ))
         self.db.commit()
-        return True
 
     def bulk_assign_to_group(
         self, player_ids: list[uuid.UUID], group_id: uuid.UUID

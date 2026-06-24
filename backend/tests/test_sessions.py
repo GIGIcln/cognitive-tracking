@@ -212,8 +212,8 @@ def test_upsert_measurements_absent_player(pg_seeded):
     assert p2_updated["scanning_rate"] == 6.0
 
 
-def test_upsert_measurements_unknown_player_returns_404(pg_seeded):
-    """player_id inesistente causa 404 con messaggio esplicito."""
+def test_upsert_measurements_unknown_player_returns_422(pg_seeded):
+    """player_id inesistente causa 422 (input non processabile) con messaggio esplicito."""
     import uuid as _uuid
     c, h = pg_seeded["client"], pg_seeded["headers"]
     gid = pg_seeded["group_id"]
@@ -223,7 +223,7 @@ def test_upsert_measurements_unknown_player_returns_404(pg_seeded):
     res = c.post(f"/api/sessions/{sid}/measurements", headers=h, json={
         "measurements": [{"player_id": str(_uuid.uuid4()), "scanning_rate": 5.0}]
     })
-    assert res.status_code == 404
+    assert res.status_code == 422
     assert "non trovati" in res.json()["detail"].lower()
 
 

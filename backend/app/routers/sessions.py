@@ -62,7 +62,7 @@ def _get_session_or_404(db: Session, session_id: uuid.UUID) -> TrainingSession:
 def list_sessions(
     group_id: uuid.UUID | None = None,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
@@ -114,7 +114,7 @@ def get_session_averages(
 def get_session_rankings(
     session_id: uuid.UUID,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
@@ -175,7 +175,7 @@ def upsert_measurements(
     try:
         measurements = SessionService(db).upsert_measurements(session, body)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc))
     return [_measurement_to_response(m) for m in measurements]
 
 
@@ -196,7 +196,7 @@ def upsert_events(
     try:
         events = ObservationService(db).upsert_events(session_id, session.group_id, body)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc))
     return aggregate_events_to_responses(events)
 
 

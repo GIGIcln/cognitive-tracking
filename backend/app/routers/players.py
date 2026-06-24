@@ -37,7 +37,7 @@ def _to_response(player: Player, group_name: str | None) -> PlayerResponse:
 def list_players(
     group_id: uuid.UUID | None = None,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
@@ -110,7 +110,7 @@ def get_player_streak(
 def get_player_history(
     player_id: uuid.UUID,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=200, ge=1, le=1000),
+    limit: int = Query(default=200, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
@@ -164,8 +164,11 @@ def assign_player(
     db: Session = Depends(get_db),
     _: UserContext = Depends(require_admin),
 ):
-    if not PlayerService(db).assign_to_group(player_id, body.group_id):
-        raise HTTPException(status_code=404, detail="Giocatore non trovato")
+    try:
+        PlayerService(db).assign_to_group(player_id, body.group_id)
+    except ValueError as exc:
+        detail = "Gruppo non trovato" if str(exc) == "group" else "Giocatore non trovato"
+        raise HTTPException(status_code=404, detail=detail)
     return {"message": "Giocatore assegnato con successo", "group_id": str(body.group_id)}
 
 
