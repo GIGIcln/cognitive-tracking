@@ -271,6 +271,27 @@ def test_get_session_rankings_nonexistent_returns_404(seeded):
     assert res.status_code == 404
 
 
+def test_get_session_rankings_tied_scores_share_rank_and_percentile(pg_seeded):
+    """Giocatori con avg_score identico devono ricevere lo stesso rank e lo stesso
+    percentile (dense ranking), non rank diversi basati sull'ordine arbitrario di sort."""
+    c, h = pg_seeded["client"], pg_seeded["headers"]
+    pid1, pid2 = pg_seeded["player_ids"]
+    gid = pg_seeded["group_id"]
+
+    sid = _create_session(c, h, gid)
+    # Entrambi i giocatori ricevono lo stesso punteggio su tutte le metriche → avg_score identico
+    c.post(f"/api/sessions/{sid}/measurements", headers=h,
+           json=_measurement_payload([pid1, pid2], [7.0, 7.0]))
+
+    res = c.get(f"/api/sessions/{sid}/rankings", headers=h)
+    assert res.status_code == 200
+    ranked = res.json()
+    assert len(ranked) == 2
+
+    assert ranked[0]["rank"] == ranked[1]["rank"] == 1, "rank uguale per punteggi identici"
+    assert ranked[0]["percentile"] == ranked[1]["percentile"], "percentile uguale per punteggi identici"
+
+
 # ── Score precision ───────────────────────────────────────────────────────────
 
 def test_measurement_accepts_score_10(pg_seeded):

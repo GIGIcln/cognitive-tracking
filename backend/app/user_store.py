@@ -36,6 +36,12 @@ def _load() -> None:
         if missing:
             raise RuntimeError(f"Campi mancanti per utente '{u.get('email', '?')}': {missing}")
 
+        if not u.get("roles"):
+            raise RuntimeError(
+                f"Utente '{u.get('email', '?')}' non ha ruoli assegnati. "
+                "Almeno un ruolo è obbligatorio."
+            )
+
         invalid_roles = set(u["roles"]) - VALID_ROLES
         if invalid_roles:
             raise RuntimeError(

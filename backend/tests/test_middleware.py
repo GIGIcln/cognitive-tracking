@@ -35,3 +35,12 @@ def test_unknown_route_returns_404_with_request_id(client):
     res = client.get("/api/questa-rotta-non-esiste")
     assert res.status_code == 404
     assert "x-request-id" in res.headers
+
+
+def test_health_returns_ok(client):
+    """/api/health deve rispondere 200 con {"status": "ok"} senza esporre dettagli DB."""
+    res = client.get("/api/health")
+    assert res.status_code == 200
+    data = res.json()
+    assert data == {"status": "ok"}
+    assert "database" not in data

@@ -3,7 +3,8 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 
-from sqlalchemy import tuple_
+from sqlalchemy import func, tuple_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -215,34 +216,66 @@ class ObservationService:
             ).all()
         }
 
+        new_players: dict[uuid.UUID, dict] = {}
         for player_id, updates in player_updates.items():
             existing = existing_map.get(player_id)
             if existing:
                 for field, value in updates.items():
                     setattr(existing, field, value)
             else:
-                # Use a SAVEPOINT so a concurrent INSERT (same session+player) rolls back
-                # only this sub-transaction and lets us fall through to an UPDATE instead.
-                try:
-                    with self.db.begin_nested():
-                        self.db.add(Measurement(
-                            session_id=session_id,
-                            player_id=player_id,
-                            group_id=group_id,
-                            **updates,
-                        ))
-                except IntegrityError:
-                    existing = (
-                        self.db.query(Measurement)
-                        .filter(
-                            Measurement.session_id == session_id,
-                            Measurement.player_id == player_id,
+                new_players[player_id] = updates
+
+        if new_players:
+            bind = getattr(self.db, "bind", None)
+            is_pg = bind is not None and bind.dialect.name == "postgresql"
+            if is_pg:
+                # Atomic upsert: avoids the SAVEPOINT race where two concurrent
+                # transactions both pass the "not found" check, one commits first,
+                # and the second silently drops the update after its SAVEPOINT
+                # rollback can't see the just-committed row within the outer tx.
+                # COALESCE preserves existing non-NULL fields not present in this batch.
+                _score_fields = list(_METRIC_TO_FIELD.values())
+                rows = [
+                    {
+                        "session_id": session_id,
+                        "player_id": pid,
+                        "group_id": group_id,
+                        **{f: upd.get(f) for f in _score_fields},
+                    }
+                    for pid, upd in new_players.items()
+                ]
+                ins = pg_insert(Measurement)
+                stmt = ins.values(rows).on_conflict_do_update(
+                    constraint="uq_measurement_session_player",
+                    set_={
+                        f: func.coalesce(ins.excluded[f], Measurement.__table__.c[f])
+                        for f in _score_fields
+                    },
+                )
+                self.db.execute(stmt)
+            else:
+                # SQLite path (tests only): no concurrent writers, SAVEPOINT is safe.
+                for player_id, updates in new_players.items():
+                    try:
+                        with self.db.begin_nested():
+                            self.db.add(Measurement(
+                                session_id=session_id,
+                                player_id=player_id,
+                                group_id=group_id,
+                                **updates,
+                            ))
+                    except IntegrityError:
+                        existing = (
+                            self.db.query(Measurement)
+                            .filter(
+                                Measurement.session_id == session_id,
+                                Measurement.player_id == player_id,
+                            )
+                            .first()
                         )
-                        .first()
-                    )
-                    if existing:
-                        for field, value in updates.items():
-                            setattr(existing, field, value)
+                        if existing:
+                            for field, value in updates.items():
+                                setattr(existing, field, value)
 
         self.db.commit()
 

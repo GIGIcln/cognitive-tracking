@@ -161,10 +161,22 @@ class SessionService:
 
         ranked.sort(key=lambda x: x["avg_score"], reverse=True)
         total = len(ranked)
+
+        # Dense ranking: players with equal avg_score share rank and percentile.
+        current_rank = 1
         for i, r in enumerate(ranked):
-            r["rank"] = i + 1
+            if i > 0 and r["avg_score"] < ranked[i - 1]["avg_score"]:
+                current_rank = i + 1
+            r["rank"] = current_rank
             r["total"] = total
-            r["percentile"] = round((total - i - 1) / total * 100) if total > 1 else 100
+
+        # Percentile based on the first position of each rank group.
+        rank_first_pos: dict[int, int] = {}
+        for i, r in enumerate(ranked):
+            rank_first_pos.setdefault(r["rank"], i)
+        for r in ranked:
+            pos = rank_first_pos[r["rank"]]
+            r["percentile"] = round((total - pos - 1) / total * 100) if total > 1 else 100
 
         return ranked[skip : skip + limit]
 

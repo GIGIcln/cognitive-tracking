@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
+from app.limiter import limiter
 from app.models.measurement import Measurement
 from app.models.training_session import TrainingSession
 from app.rbac import assert_group_access, assert_write_access, require_admin, require_auth
@@ -154,7 +155,9 @@ def create_session(
 
 
 @router.post("/{session_id}/measurements", response_model=list[MeasurementResponse])
+@limiter.limit("60/minute")
 def upsert_measurements(
+    request: Request,
     session_id: uuid.UUID,
     body: MeasurementsBatchInput,
     db: Session = Depends(get_db),
@@ -179,7 +182,9 @@ def upsert_measurements(
 # ── OBSERVATION EVENTS (event-based entry mode) ───────────────────────────────
 
 @router.post("/{session_id}/events", response_model=list[ObservationEventResponse])
+@limiter.limit("120/minute")
 def upsert_events(
+    request: Request,
     session_id: uuid.UUID,
     body: ObservationEventsBatchInput,
     db: Session = Depends(get_db),

@@ -147,6 +147,6 @@ def root():
 def health(db: Session = Depends(get_db)):
     try:
         db.execute(text("SELECT 1"))
-        return {"status": "healthy", "database": "connected"}
+        return {"status": "ok"}
     except Exception:
-        return {"status": "unhealthy", "database": "disconnected"}
+        return JSONResponse({"status": "error"}, status_code=503)
