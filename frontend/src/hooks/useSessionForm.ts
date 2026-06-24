@@ -11,8 +11,8 @@ import {
   METRIC_EVENT_CONFIG,
   deriveReliability,
 } from '../constants/domain'
-import { emptyEventRow } from '../components/EventParamRow'
-import type { EventRow } from '../components/EventParamRow'
+import { emptyEventRow } from '../types/eventRow'
+import type { EventRow } from '../types/eventRow'
 import type { GroupTarget } from '../utils/reportUtils'
 
 // ── API shapes ────────────────────────────────────────────────────────────────

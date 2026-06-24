@@ -8,16 +8,10 @@ import {
   deriveScore,
   deriveReliability,
 } from '../constants/domain'
-
-export interface EventRow {
-  numerator: number
-  denominator: number
-  method: string
-}
+import { emptyEventRow } from '../types/eventRow'
+import type { EventRow } from '../types/eventRow'
 
 type CounterKey = 'numerator' | 'denominator'
-
-export const emptyEventRow = (): EventRow => ({ numerator: 0, denominator: 0, method: 'video' })
 
 function scoreBadgeClass(score: number | null, targetsMap: Record<string, GroupTarget>, field: MetricField): string {
   const param = FIELD_TO_METRIC[field]
