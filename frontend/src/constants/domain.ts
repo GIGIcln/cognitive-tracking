@@ -47,6 +47,12 @@ export const POSITIONS: { value: string; label: string }[] = [
   { value: 'ATT', label: 'Attaccante' },
 ]
 
+export const FOOT_OPTIONS: { value: string; label: string }[] = [
+  { value: 'destro', label: 'Destro' },
+  { value: 'sinistro', label: 'Sinistro' },
+  { value: 'ambidestro', label: 'Ambidestro' },
+]
+
 export const GROUP_CATEGORIES: string[] = ['Esordienti', 'Pulcini', 'Primi Calci']
 
 export const COGNITIVE_PARAMS: CognitiveParam[] = [

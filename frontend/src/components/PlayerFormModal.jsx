@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import { createPlayer, updatePlayer, assignPlayer } from '../api/players'
 import { getGroups } from '../api/groups'
-import { POSITIONS } from '../constants/domain'
+import { POSITIONS, FOOT_OPTIONS } from '../constants/domain'
 
-const EMPTY_FORM = { first_name: '', last_name: '', birth_year: '', position: '', notes: '', group_id: '' }
+const EMPTY_FORM = {
+  first_name: '', last_name: '', birth_year: '', position: '',
+  nationality: '', foot: '', jersey_number: '', phone: '', notes: '', group_id: '',
+}
 
 export default function PlayerFormModal({
   isOpen,
@@ -38,6 +41,10 @@ export default function PlayerFormModal({
             last_name: player.last_name ?? '',
             birth_year: player.birth_year ?? '',
             position: player.position ?? '',
+            nationality: player.nationality ?? '',
+            foot: player.foot ?? '',
+            jersey_number: player.jersey_number ?? '',
+            phone: player.phone ?? '',
             notes: player.notes ?? '',
             group_id: currentId,
           })
@@ -67,6 +74,10 @@ export default function PlayerFormModal({
           last_name: form.last_name,
           birth_year: parseInt(form.birth_year),
           position: form.position || null,
+          nationality: form.nationality || null,
+          foot: form.foot || null,
+          jersey_number: form.jersey_number ? parseInt(form.jersey_number) : null,
+          phone: form.phone || null,
           notes: form.notes || null,
         })
         if (groupChanged) {
@@ -85,6 +96,10 @@ export default function PlayerFormModal({
           last_name: form.last_name,
           birth_year: parseInt(form.birth_year),
           position: form.position || null,
+          nationality: form.nationality || null,
+          foot: form.foot || null,
+          jersey_number: form.jersey_number ? parseInt(form.jersey_number) : null,
+          phone: form.phone || null,
           notes: form.notes || null,
           group_id: preselectedGroupId || form.group_id || null,
         })
@@ -151,6 +166,42 @@ export default function PlayerFormModal({
               <option key={p.value} value={p.value}>{p.label}</option>
             ))}
           </select>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              placeholder="Nazionalità (opz.)"
+              value={form.nationality}
+              onChange={(e) => setForm({ ...form, nationality: e.target.value })}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
+            />
+            <input
+              placeholder="N° maglia (opz.)"
+              type="number"
+              min="1"
+              max="99"
+              value={form.jersey_number}
+              onChange={(e) => setForm({ ...form, jersey_number: e.target.value })}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={form.foot}
+              onChange={(e) => setForm({ ...form, foot: e.target.value })}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
+            >
+              <option value="">Piede (opz.)</option>
+              {FOOT_OPTIONS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
+            <input
+              placeholder="Telefono (opz.)"
+              type="tel"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
+            />
+          </div>
           <textarea
             placeholder="Note (opzionale)"
             value={form.notes}

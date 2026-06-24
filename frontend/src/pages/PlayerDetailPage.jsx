@@ -269,9 +269,15 @@ export default function PlayerDetailPage() {
           )}
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             {[
-              { label: 'Nome', value: `${player.last_name} ${player.first_name}` },
+              { label: 'Cognome e nome', value: `${player.last_name} ${player.first_name}` },
               { label: 'Anno di nascita', value: player.birth_year ?? '—' },
+              { label: 'Nazionalità', value: player.nationality ?? '—' },
               { label: 'Ruolo', value: player.position ?? '—' },
+              { label: 'Piede', value: player.foot
+                  ? player.foot.charAt(0).toUpperCase() + player.foot.slice(1)
+                  : '—' },
+              { label: 'N° maglia', value: player.jersey_number ?? '—' },
+              { label: 'Telefono', value: player.phone ?? '—' },
               { label: 'Gruppo attuale', value: player.current_group_name ?? '—' },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-center justify-between px-4 py-3">
