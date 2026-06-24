@@ -8,12 +8,13 @@ const baseNavItems = [
   { to: '/groups', label: 'Rosa', icon: Users },
   { to: '/players', label: 'Giocatori', icon: User },
   { to: '/sessions', label: 'Allenamenti', icon: ClipboardList },
-  { to: '/impostazioni', label: 'Impostazioni', icon: Settings },
 ]
 
 const staffNavItems = [
   { to: '/seasons', label: 'Stagioni', icon: Calendar },
 ]
+
+const settingsNavItem = { to: '/impostazioni', label: 'Impostazioni', icon: Settings }
 
 const roleLabel = (role) => ({
   admin: 'admin',
@@ -40,12 +41,29 @@ export default function MainLayout() {
         </div>
 
         <OfflineBanner />
-        <nav className="flex-1 p-3 space-y-1">
-          {navItems.map(({ to, label, icon, end }) => (
+        <nav className="flex-1 p-3 flex flex-col">
+          <div className="space-y-1 flex-1">
+            {navItems.map(({ to, label, icon, end }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-granata/10 text-granata border-l-4 border-granata pl-2'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`
+                }
+              >
+                {(() => { const Icon = icon; return <Icon size={18} strokeWidth={1.75} /> })()}
+                {label}
+              </NavLink>
+            ))}
+          </div>
+          <div className="pt-2 border-t border-gray-100">
             <NavLink
-              key={to}
-              to={to}
-              end={end}
+              to={settingsNavItem.to}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   isActive
@@ -54,10 +72,10 @@ export default function MainLayout() {
                 }`
               }
             >
-              {(() => { const Icon = icon; return <Icon size={18} strokeWidth={1.75} /> })()}
-              {label}
+              <Settings size={18} strokeWidth={1.75} />
+              {settingsNavItem.label}
             </NavLink>
-          ))}
+          </div>
         </nav>
 
         <div className="p-4 border-t border-gray-200">
@@ -91,7 +109,7 @@ export default function MainLayout() {
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <div className="flex h-16">
-          {navItems.map(({ to, label, icon, end }) => (
+          {[...navItems, settingsNavItem].map(({ to, label, icon, end }) => (
             <NavLink
               key={to}
               to={to}
