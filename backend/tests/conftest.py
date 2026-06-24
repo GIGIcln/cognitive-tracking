@@ -138,10 +138,10 @@ def seeded():
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
 
-    season = Season(id=uuid.uuid4(), name="Stagione Test", is_current=True,
-                    start_date=date(2025, 9, 1), end_date=date(2026, 6, 30))
-    db.add(season)
-    grp = GroupModel(id=uuid.uuid4(), season_id=season.id, name="Under 15",
+    season_obj = Season(id=uuid.uuid4(), name="Stagione Test", is_current=True,
+                        start_date=date(2025, 9, 1), end_date=date(2026, 6, 30))
+    db.add(season_obj)
+    grp = GroupModel(id=uuid.uuid4(), season_id=season_obj.id, name="Under 15",
                      category="Agonistica", level="A", birth_year=2010)
     db.add(grp)
     plr = Player(id=uuid.uuid4(), first_name="Mario", last_name="Rossi",
@@ -162,7 +162,7 @@ def seeded():
         "client": http,
         "anon_client": anon,
         "headers": headers,
-        "season_id": str(season.id),
+        "season_id": str(season_obj.id),
         "group_id": str(grp.id),
         "player_id": str(plr.id),
     }
@@ -206,10 +206,10 @@ def pg_seeded(postgresql15_conn):
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
 
-    season = Season(id=uuid.uuid4(), name="Stagione PG Test", is_current=True,
-                    start_date=date(2025, 9, 1), end_date=date(2026, 6, 30))
-    db.add(season)
-    grp = GroupModel(id=uuid.uuid4(), season_id=season.id, name="Under 15",
+    season_obj = Season(id=uuid.uuid4(), name="Stagione PG Test", is_current=True,
+                        start_date=date(2025, 9, 1), end_date=date(2026, 6, 30))
+    db.add(season_obj)
+    grp = GroupModel(id=uuid.uuid4(), season_id=season_obj.id, name="Under 15",
                      category="Agonistica", level="A", birth_year=2010)
     db.add(grp)
     players = [

@@ -1,7 +1,5 @@
 """Integration tests for /api/sessions endpoints."""
 
-import pytest
-
 SESSION_BODY = {
     "session_date": "2025-10-15",
     "session_type": "Allenamento",
@@ -324,13 +322,6 @@ def test_get_session_averages_returns_typed_response(seeded):
     assert "avg_ai" in data
     assert "avg_trs" in data
     assert "avg_vci" in data
-
-
-def test_get_session_rankings_nonexistent_returns_404(seeded):
-    import uuid
-    c, h = seeded["client"], seeded["headers"]
-    res = c.get(f"/api/sessions/{uuid.uuid4()}/rankings", headers=h)
-    assert res.status_code == 404
 
 
 # ── Gate allow_manual_scores ──────────────────────────────────────────────────

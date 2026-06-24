@@ -1,7 +1,5 @@
 """Integration tests for /api/seasons endpoints."""
 
-import pytest
-
 
 # ── GET /seasons/current ──────────────────────────────────────────────────────
 
