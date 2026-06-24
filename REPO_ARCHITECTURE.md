@@ -59,8 +59,8 @@
 └──────────────────────┬──────────────────────────────┘
                        │ SQLAlchemy (sync, connection pool)
 ┌──────────────────────▼──────────────────────────────┐
-│  PostgreSQL 15                                      │
-│  9 migrazioni Alembic (0001 → 0009)                 │
+│  PostgreSQL 15 (RLS abilitata su tutte le tabelle)  │
+│  15 migrazioni Alembic (0001 → 0015)                │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -195,7 +195,8 @@ src/
 │   └── events.js      # getEvents(), upsertEvents() (observation events)
 │
 ├── context/
-│   └── AuthContext.jsx        # user, isLoading, login(), logout(), isAdmin
+│   ├── AuthContext.jsx        # user, isLoading, login(), logout(), isAdmin
+│   └── OfflineContext.jsx     # stato connessione + coda sync + syncError
 │
 ├── hooks/             # Custom hooks per data fetching con state
 │   ├── useTeamReport.js       # Dati per TeamReportPage (group + history + targets)

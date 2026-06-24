@@ -226,8 +226,9 @@ const handleSubmit = async () => {
 ```
 backend/tests/
 ├── conftest.py          # Fixture: engine, tabelle, client FastAPI con TestClient
-├── test_auth_login.py   # Test autenticazione, JWT, cookie
-├── test_sessions.py     # CRUD sessioni, measurements
+├── test_auth_login.py   # Login valido, password errata, cookie JWT
+├── test_auth_setup.py   # Guards RBAC (require_admin/staff/auth), data scoping allenatore
+├── test_sessions.py     # CRUD sessioni, measurements, averages
 ├── test_observation_events.py  # Pipeline cognitiva (il test più critico)
 ├── test_players.py
 ├── test_groups.py / test_groups_admin.py

@@ -11,10 +11,13 @@ Il progetto è in uno stato strutturalmente solido per le sue dimensioni:
 - **Service layer completo**: tutti i router delegano la logica ai service (`session_service.py`, `observation_service.py`, etc.). I router si occupano solo di wiring HTTP.
 - **Gestione errori globale**: `main.py` cattura `RequestValidationError`, `OperationalError`, `IntegrityError` e `Exception` non gestite con response JSON strutturate e header `X-Request-ID`.
 - **RBAC funzionante**: tre ruoli (`admin`, `responsabile_tecnico`, `allenatore`) con group-level scoping. Zero query DB per request autenticata (lookup O(1) in-memory).
-- **API client centralizzato**: `api/axios.js` con interceptor 401 e offline queue (IndexedDB) per mutation offline.
-- **Test di integrazione backend**: `pytest-postgresql` con database reale (non mock). Copertura su auth, sessions, observation events, players, groups.
+- **Rate limiting attivo**: `@limiter.limit("5/minute")` su login, 60–120/min sugli altri endpoint.
+- **RLS PostgreSQL**: Row-Level Security abilitata su tutte le tabelle public con policy deny-all (migrazioni 0011–0013). Preparazione per accesso PostgREST/Supabase.
+- **API client centralizzato**: `api/axios.js` con interceptor 401, `withCredentials` e offline queue (IndexedDB) per mutation offline.
+- **Test di integrazione backend**: `pytest-postgresql` con database reale (non mock). Copertura su auth, sessions, observation events, players, groups, middleware.
 - **PWA**: `vite-plugin-pwa` configurato; offline banner e coda mutation già operativi.
 - **Pipeline cognitiva robusta**: observation events append-only, batch idempotente, aggregazione SQL-side prima della derivazione. Definizioni congelate in `codebook-v1.md`.
+- **Frontend robusto**: dirty tracking in `SessionDetailPage` (`useBlocker` + `beforeunload`); `OfflineContext` propaga `syncError` a `OfflineBanner`; pagination limits corretti (max 200/500).
 
 ---
 
@@ -48,9 +51,8 @@ Non esiste uno store globale (Redux, Zustand, React Query). Ogni pagina fa fetch
 **[TD-07] No containerizzazione**  
 Non c'è `Dockerfile` né `docker-compose.yml`. L'onboarding richiede installazione locale di Python, Node e PostgreSQL. Il `Makefile` mitiga, ma non elimina la dipendenza dall'ambiente host.
 
-**[TD-08] Rate limiting non applicato ai router**  
-`limiter.py` istanzia SlowAPI ma i decorator `@limiter.limit(...)` non risultano applicati agli endpoint nei router. La protezione DDoS/brute-force è configurata ma inattiva.  
-_File:_ `backend/app/limiter.py`, tutti i `routers/*.py`
+**~~[TD-08] Rate limiting non applicato ai router~~** ✅ Risolto  
+`@limiter.limit("5/minute")` applicato su `/auth/login`; `60/minute` su list endpoint players e sessions; `120/minute` su endpoints di scrittura. Brute-force protetto.
 
 ### 🟢 Bassa Priorità
 
@@ -74,10 +76,9 @@ Creare `.github/workflows/ci.yml` che esegua:
 
 Beneficio immediato: ogni PR è validata automaticamente. Zero effort per i test esistenti (già scritti).
 
-### OB-02 — Rate Limiting attivo
+### ~~OB-02 — Rate Limiting attivo~~ ✅ Completato
 
-Applicare `@limiter.limit("20/minute")` sugli endpoint di autenticazione (`/auth/login`) e `@limiter.limit("200/minute")` sugli endpoint di lettura. Basta aggiungere il decorator ai router.  
-_Effort:_ < 1 giorno.
+`@limiter.limit("5/minute")` su `/auth/login`; 60/minute su list endpoint; 120/minute su mutation. Applicato a `auth.py`, `players.py`, `sessions.py`.
 
 ### OB-03 — UI di `reliability_flag`
 
@@ -162,14 +163,15 @@ Aggiungere test E2E per i flussi critici:
 | Area | Stato attuale | Azione |
 |---|---|---|
 | **Autenticazione** | JWT HS256, HttpOnly cookie, bcrypt | ✅ Solido. Valutare refresh token per sessioni lunghe |
-| **Rate limiting** | Configurato ma non applicato | Applicare decorator (OB-02) |
+| **Rate limiting** | Applicato: 5/min login, 60/min list, 120/min mutation | ✅ Attivo |
 | **CORS** | Origini esplicite in produzione; regex trycloudflare solo in dev | ✅ Corretto |
 | **Upload size** | 1MB hard cap via `_LimitUploadSize` middleware | ✅ Presente |
 | **SQL injection** | Parametrizzazione ORM SQLAlchemy | ✅ Protetto per costruzione |
+| **RLS PostgreSQL** | Abilitata su tutte le tabelle public, policy deny-all esplicite | ✅ Presente (mig. 0011–0013) |
 | **Secrets** | `SECRET_KEY` validata (≥32 byte), `.env` non versionato | ✅ Corretto |
 | **OpenAPI** | Disabilitato in `APP_ENV=production` | ✅ Corretto |
 | **users.json** | File su disco, fuori dal repo | ⚠️ Soluzione temporanea — vedere OL-02 |
-| **Audit log** | Solo `GroupChangeLog` per spostamenti giocatori | Estendere agli accessi utente con OL-02 |
+| **Audit log** | Login riusciti/falliti loggati con `request_id`; `GroupChangeLog` per spostamenti | Estendere a audit per-utente con OL-02 |
 
 ### Performance
 

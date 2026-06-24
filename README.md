@@ -249,7 +249,8 @@ cognitivetracking/
 │   │   │   ├── assignment.py    # Assegnazione giocatore → gruppo (storico)
 │   │   │   ├── training_session.py  # Sessione di allenamento
 │   │   │   ├── measurement.py       # Misurazioni cognitive (voto 1–10 o derivato)
-│   │   │   ├── observation_event.py # ← NUOVO: eventi grezzi (num/denom per metrica)
+│   │   │   ├── observation_event.py # eventi grezzi (num/denom per metrica, append-only)
+│   │   │   ├── group_change_log.py  # Audit log spostamenti giocatori
 │   │   │   └── group_target.py      # Target cognitivi per gruppo/parametro
 │   │   ├── routers/
 │   │   │   ├── auth.py          # /api/auth/* (login, logout, me)
@@ -257,21 +258,25 @@ cognitivetracking/
 │   │   │   ├── groups.py        # /api/groups/* (lista, dettaglio, target, history)
 │   │   │   ├── players.py       # /api/players/* (CRUD, assign, history)
 │   │   │   └── sessions.py      # /api/sessions/* (CRUD, measurements, events)
-│   │   ├── schemas/             # Schemi Pydantic per request/response
+│   │   ├── schemas/             # Schemi Pydantic per request/response (+ pagination.py)
 │   │   └── services/
 │   │       ├── auth_service.py        # hash/verify password, JWT, get_current_user
-│   │       ├── observation_service.py # ← NUOVO: derivazione score + reliability da eventi
+│   │       ├── group_service.py       # query gruppi con eager loading
+│   │       ├── observation_service.py # derivazione score + reliability da eventi
 │   │       ├── player_service.py      # logica di business per giocatori e assignment
 │   │       ├── season_service.py      # logica di business per stagioni
-│   │       └── session_service.py     # logica di business per sessioni e misurazioni
+│   │       └── session_service.py     # averages, rankings, upsert measurements
 │   ├── alembic/
-│   │   └── versions/
+│   │   └── versions/            # 15 migrazioni (0001 → 0015)
 │   │       ├── 0001_initial_schema.py
-│   │       ├── 0002_add_performance_indexes.py
-│   │       ├── 0003_add_missing_indexes.py
-│   │       ├── 0004_add_soft_delete_and_updated_at.py
-│   │       ├── 0005_add_player_position.py
-│   │       └── 0006_add_observation_events.py   # ← NUOVO
+│   │       ├── 0002–0006_performance_indexes_softdelete_position_events.py
+│   │       ├── 0007_observation_events_per_row.py
+│   │       ├── 0008_widen_measurement_score_precision.py
+│   │       ├── 0009_add_group_change_logs.py
+│   │       ├── 0010_db_integrity_fixes.py
+│   │       ├── 0011–0013_enable_rls_deny_all.py
+│   │       ├── 0014_index_groups_season_id.py
+│   │       └── 0015_missing_performance_indexes.py
 │   ├── users.example.json       # Template per users.json (committato; users.json è gitignored)
 │   ├── scripts/
 │   │   └── hash_password.py     # Genera hash bcrypt da inserire in users.json
@@ -288,6 +293,8 @@ cognitivetracking/
         │   ├── AuthContext.jsx      # Auth state globale + login/logout
         │   └── OfflineContext.jsx   # Stato online/offline globale + coda sync
         ├── hooks/
+        │   ├── useTeamReport.js / usePlayerReport.js  # Data fetching per report
+        │   ├── useSessionTeamReport.js / useSessionPlayerReport.js
         │   └── useOnlineStatus.js   # Hook per rilevare connettività
         ├── layouts/MainLayout.jsx   # Sidebar desktop + bottom nav mobile
         ├── pages/               # Una pagina per route
@@ -709,6 +716,17 @@ Passi chiave:
 ---
 
 ## Changelog
+
+### 2026-06-24 — Security, performance e fix UX
+
+- **RLS PostgreSQL**: Row-Level Security abilitata su tutte le tabelle public con policy deny-all esplicite (migrazioni 0011–0013). Preparazione per accesso diretto PostgREST/Supabase.
+- **Index performance**: aggiunti index mancanti su `groups.season_id`, `training_sessions.is_active`, `observation_events.session_id` e composito `(session_id, player_id, metric_type)` (migrazioni 0014–0015).
+- **Pagination**: limite massimo ridotto a 200 per list endpoint (`/players`, `/sessions`, `/rankings`) e 500 per `/players/{id}/history`.
+- **Status codes**: `ValueError("Giocatori non trovati")` restituisce 422 (invece di 404) in POST `/measurements` e POST `/events` — semanticamente corretto.
+- **Assign validation**: `assign_to_group()` valida l'esistenza del gruppo prima dell'insert; `group_id` inesistente → 404 invece di 409 IntegrityError generico.
+- **Audit login**: login falliti e riusciti loggati con `request_id` per correlazione e rilevamento brute-force.
+- **Frontend dirty tracking**: `SessionDetailPage` aggiunge `useBlocker` (dialog conferma navigazione in-app) e `beforeunload` per evitare perdita dati non salvati.
+- **OfflineContext**: imposta `syncError` quando gli item raggiungono max retry — `OfflineBanner` mostra l'errore invece di eliminare dati silenziosamente.
 
 ### 2026-06-20 — Notifica push automatica URL tunnel (ntfy.sh)
 
