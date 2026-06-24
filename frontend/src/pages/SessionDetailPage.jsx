@@ -252,6 +252,7 @@ export default function SessionDetailPage() {
   const [notesValue, setNotesValue] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
+  const [mixedVersionWarning, setMixedVersionWarning] = useState(false)
 
   const blocker = useBlocker(isDirty)
 
@@ -309,6 +310,7 @@ export default function SessionDetailPage() {
 
         // Initialise event-mode state from existing events
         const evMap = {}
+        const seenVersions = new Set()
         ;(eRes.data ?? []).forEach((ev) => {
           if (!evMap[ev.player_id]) evMap[ev.player_id] = {}
           evMap[ev.player_id][ev.metric_type] = {
@@ -316,7 +318,9 @@ export default function SessionDetailPage() {
             denominator: ev.denominator,
             method:      ev.method,
           }
+          if (ev.codebook_version) seenVersions.add(ev.codebook_version)
         })
+        if (seenVersions.size > 1) setMixedVersionWarning(true)
         // Auto-switch to event mode if this session already has events
         if (Object.keys(evMap).length > 0) setEntryMode('event')
         setEventData(evMap)
@@ -429,7 +433,10 @@ export default function SessionDetailPage() {
         setSaving(false)
         return
       }
-      await saveEvents(id, events)
+      const savedResp = await saveEvents(id, events)
+      if ((savedResp.data ?? []).some((ev) => ev.codebook_version === null)) {
+        setMixedVersionWarning(true)
+      }
       setSaveOk(true)
       setIsDirty(false)
       setTimeout(() => setSaveOk(false), 2500)
@@ -630,6 +637,11 @@ export default function SessionDetailPage() {
             ✓ Sessione salvata
           </div>
         )}
+        {mixedVersionWarning && (
+          <div className="bg-amber-50 text-amber-700 text-sm p-3 rounded-lg mb-4 border border-amber-200">
+            Attenzione: questa sessione contiene dati raccolti con versioni diverse del codebook. I parametri potrebbero non essere direttamente confrontabili.
+          </div>
+        )}
 
         {/* Player card */}
         {currentPlayer && currentM ? (
@@ -789,6 +801,11 @@ export default function SessionDetailPage() {
 
         {error && (
           <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg mb-4 border border-red-200">{error}</div>
+        )}
+        {mixedVersionWarning && (
+          <div className="bg-amber-50 text-amber-700 text-sm p-3 rounded-lg mb-4 border border-amber-200">
+            Attenzione: questa sessione contiene dati raccolti con versioni diverse del codebook. I parametri potrebbero non essere direttamente confrontabili.
+          </div>
         )}
 
         {/* Note sessione — desktop */}

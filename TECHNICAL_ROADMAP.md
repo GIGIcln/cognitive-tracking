@@ -75,8 +75,8 @@ _File:_ `frontend/src/utils/offlineQueue.js`, `frontend/src/api/axios.js`
 **~~[TD-09] UI non mostra `reliability_flag` all'utente~~** ✅ Risolto  
 Badge per metrica presenti in `EventParamRow` con colore + label da `RELIABILITY_META`. Gate di pubblicazione in `SessionDetailPage` blocca il bottone "Salva" se almeno un giocatore ha reliability `insufficient`.
 
-**[TD-10] `codebook_version=None` non gestito nel frontend**  
-Quando una response aggregata mescola eventi con versioni diverse del codebook, `codebook_version` è `null`. Il frontend non distingue questo caso da `"v1"`. Filo aperto già registrato in `docs/dev/observation-events.md`.
+**~~[TD-10] `codebook_version=None` non gestito nel frontend~~** ✅ Risolto  
+`SessionDetailPage` ora rileva versioni miste sia al caricamento (GET events, versioni distinte nel raw array) sia al salvataggio (POST response aggregata, `codebook_version=null`). In entrambi i casi mostra un banner ambra persistente: "Attenzione: dati con versioni diverse del codebook — parametri potrebbero non essere confrontabili."
 
 ---
 
@@ -103,10 +103,9 @@ _File:_ `backend/app/services/session_service.py`
 
 `docker-compose.yml` con servizi `db` (postgres:15), `backend` e `frontend`. Hot-reload su entrambi; `alembic upgrade head` eseguito automaticamente ad ogni `docker compose up`. Il proxy Vite legge `API_TARGET` per raggiungere il backend nel network interno Docker.
 
-### OB-06 — Allineamento reliability SR nel frontend
+### ~~OB-06 — Allineamento reliability SR nel frontend~~ → riclassificato in OL-09
 
-La `deriveReliability()` in `domain.js` usa `denominator` dell'evento con `min_n=15`, ma il backend usa `COUNT(righe)` con `min_n=6`. Allineare la preview live al comportamento reale del backend: per SR usare il conteggio degli eventi registrati (righe), non il denominatore. Basso sforzo (modifica a `domain.js` + aggiornamento del badge inline in `EventParamRow`), alto impatto sulla correttezza del feedback all'allenatore.  
-_Dipende da:_ filo aperto in `docs/dev/observation-events.md`
+Analisi approfondita (codebook v1 + observation_service.py + SessionDetailPage) ha rivelato che il disallineamento non è un semplice fix di soglia. Il codebook specifica `una riga = una ricezione, denominator = durata finestra in secondi`, il backend segue questa semantica (`n = COUNT(rows)`, `min_n=6`), ma il frontend usa una riga aggregata con `denominator = ricezioni totali` e `min_n=15`. Con la UI attuale (un solo evento per metrica per player) `COUNT(rows) = 1` dopo ogni save → SR è sempre "insufficient" dal backend. La fix richiede supporto per multiple righe SR nell'UI. Spostato in OL-09.
 
 ---
 
@@ -169,6 +168,17 @@ Estrarre dalla pagina monolite (930+ righe):
 
 Pre-requisito naturale per il passaggio a TypeScript (OL-03) perché riduce la superficie di ciascun file da tipizzare.  
 _File:_ `frontend/src/pages/SessionDetailPage.jsx`
+
+### OL-09 — Workflow SR multi-riga e allineamento reliability
+
+Il codebook v1 specifica `una riga = una ricezione` per SR (denominator = durata finestra in secondi). Il frontend usa una riga aggregata (denominator = ricezioni totali), semantica incompatibile con il backend che calcola `n = COUNT(rows)`. La fix richiede:
+1. Aggiornare `METRIC_EVENT_CONFIG.scanning_rate.denominator_label` a "Durata finestra (sec)"
+2. Supportare l'inserimento di **multiple righe SR** nell'UI (`SessionDetailPage`) — una per ricezione
+3. Aggiornare la live preview reliability per SR: usare `COUNT(righe SR in inserimento)` con `min_n=6`
+4. Aggiornare `deriveScore('SR')` per gestire il nuovo denominator (secondi → scansioni/sec invece di scansioni/ricezione)
+
+Sforzo medio. Pre-requisito: nessun dato reale ancora registrato (le definizioni sono congelate al primo dato).  
+_File:_ `frontend/src/constants/domain.js`, `frontend/src/pages/SessionDetailPage.jsx`
 
 ### OL-08 — Fonte unica di verità per le definizioni di metrica
 
