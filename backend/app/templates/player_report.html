@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  color: #1f2937;
+  background: white;
+  padding: 18px 22px;
+}
+
+.header {
+  border-bottom: 3px solid #7c1f1f;
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+.header-left h1 { font-size: 18px; font-weight: 700; color: #7c1f1f; }
+.header-left .sub { color: #6b7280; font-size: 10px; margin-top: 3px; }
+.header-right { font-size: 9px; color: #9ca3af; text-align: right; }
+.brand { font-weight: 700; color: #7c1f1f; }
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.metric-box {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 7px 6px;
+  text-align: center;
+}
+.metric-box.good { background: #f0fdf4; border-color: #86efac; }
+.metric-box.mid  { background: #fefce8; border-color: #fde047; }
+.metric-box.bad  { background: #fef2f2; border-color: #fca5a5; }
+.metric-box.neutral, .metric-box.null { background: #f9fafb; border-color: #e5e7eb; }
+.metric-box .abbrev { font-size: 9px; font-weight: 700; color: #6b7280; letter-spacing: 0.4px; }
+.metric-box .score { font-size: 20px; font-weight: 800; margin: 1px 0; line-height: 1.1; }
+.metric-box.good .score { color: #16a34a; }
+.metric-box.mid  .score { color: #ca8a04; }
+.metric-box.bad  .score { color: #dc2626; }
+.metric-box.neutral .score, .metric-box.null .score { color: #9ca3af; }
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+  margin: 14px 0 7px;
+  border-left: 3px solid #7c1f1f;
+  padding-left: 7px;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.chart-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  padding: 7px 8px;
+}
+.chart-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+table { width: 100%; border-collapse: collapse; font-size: 10px; }
+th {
+  background: #f3f4f6;
+  padding: 5px 7px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #d1d5db;
+}
+td { padding: 3.5px 7px; border-bottom: 1px solid #f3f4f6; }
+tr:last-child td { border-bottom: none; }
+
+.td-good { background: #f0fdf4; color: #166534; font-weight: 600; }
+.td-mid  { background: #fefce8; color: #854d0e; font-weight: 600; }
+.td-bad  { background: #fef2f2; color: #991b1b; font-weight: 600; }
+.td-neutral, .td-null { color: #d1d5db; }
+
+.rank-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 11px;
+}
+.rank-top  { background: #dcfce7; color: #166534; }
+.rank-mid  { background: #dbeafe; color: #1d4ed8; }
+.rank-low  { background: #fef3c7; color: #92400e; }
+.rank-bot  { background: #fee2e2; color: #991b1b; }
+
+.footer {
+  margin-top: 18px;
+  padding-top: 6px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 9px;
+  color: #9ca3af;
+  text-align: right;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>{{ player.first_name }} {{ player.last_name }}</h1>
+    <div class="sub">
+      {% if player.position %}{{ player.position }} · {% endif %}
+      {{ group_name }}
+      {% if ranking %} · {{ ranking.rank }}°/{{ ranking.total }} ultima sessione{% endif %}
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="brand">Cognitive Tracking</span><br>
+    Generato il {{ generated_at }}
+  </div>
+</div>
+
+<!-- Latest scores summary -->
+<div class="metrics-grid">
+  {% for field, chart in charts.items() %}
+  <div class="metric-box {{ chart.cls }}">
+    <div class="abbrev">{{ chart.abbrev }}</div>
+    <div class="score">
+      {% if chart.latest is not none %}{{ "%.1f"|format(chart.latest) }}{% else %}—{% endif %}
+    </div>
+    <div class="abbrev" style="font-weight:400;color:#9ca3af">ultima sess.</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if ranking %}
+{% set pct = ranking.percentile %}
+{% if pct >= 75 %}{% set rcls = "rank-top" %}
+{% elif pct >= 50 %}{% set rcls = "rank-mid" %}
+{% elif pct >= 25 %}{% set rcls = "rank-low" %}
+{% else %}{% set rcls = "rank-bot" %}{% endif %}
+<p style="margin-bottom:14px;font-size:10px;color:#6b7280">
+  Ranking ultima sessione:&nbsp;
+  <span class="rank-badge {{ rcls }}">{{ ranking.rank }}° / {{ ranking.total }}</span>
+  &nbsp;— {{ pct }}° percentile
+</p>
+{% endif %}
+
+<!-- Sparkline charts -->
+<div class="section-title">Andamento per parametro (ultime {{ history|length }} sessioni)</div>
+<div class="charts-grid">
+  {% for field, chart in charts.items() %}
+  <div class="chart-card">
+    <div class="chart-label">{{ chart.label }}</div>
+    {{ chart.svg | safe }}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- History table -->
+<div class="section-title">Storico sessioni</div>
+<table>
+  <thead>
+    <tr>
+      <th>Data</th><th>Tipo</th>
+      {% for field, abbrev, label in [
+        ("scanning_rate","SR","Scanning Rate"),
+        ("decision_quality","DQI","Decision Quality"),
+        ("anticipation","AI","Anticipation"),
+        ("transition_reset","TRS","Trans. Reset"),
+        ("verbal_comm","VCI","Verbal Comm.")
+      ] %}
+      <th>{{ abbrev }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in history | reverse %}
+    <tr>
+      <td>{{ format_date(row.session_date) }}</td>
+      <td>{{ row.session_type or "—" }}</td>
+      {% for field, abbrev, label in [
+        ("scanning_rate","SR","Scanning Rate"),
+        ("decision_quality","DQI","Decision Quality"),
+        ("anticipation","AI","Anticipation"),
+        ("transition_reset","TRS","Trans. Reset"),
+        ("verbal_comm","VCI","Verbal Comm.")
+      ] %}
+      <td class="td-{{ row.classes[field] }}">
+        {% set val = row[field] %}
+        {% if val is not none %}{{ "%.1f"|format(val) }}{% else %}—{% endif %}
+      </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if last_avg %}
+<div class="section-title">Media squadra (ultima sessione)</div>
+<table>
+  <thead>
+    <tr>
+      <th>SR</th><th>DQI</th><th>AI</th><th>TRS</th><th>VCI</th><th>N giocatori</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      {% for field, key in [
+        ("scanning_rate","avg_sr"),
+        ("decision_quality","avg_dqi"),
+        ("anticipation","avg_ai"),
+        ("transition_reset","avg_trs"),
+        ("verbal_comm","avg_vci")
+      ] %}
+      {% set val = last_avg[key] %}
+      <td class="td-{{ last_avg.classes[field] }}">
+        {% if val is not none %}{{ "%.1f"|format(val) }}{% else %}—{% endif %}
+      </td>
+      {% endfor %}
+      <td>{{ last_avg.player_count }}</td>
+    </tr>
+  </tbody>
+</table>
+{% endif %}
+
+<div class="footer">Cognitive Tracking · {{ generated_at }}</div>
+</body>
+</html>

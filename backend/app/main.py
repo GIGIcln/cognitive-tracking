@@ -19,7 +19,7 @@ from app import user_store
 from app.config import get_settings
 from app.database import get_db
 from app.limiter import limiter
-from app.routers import auth, groups, meta, players, seasons, sessions
+from app.routers import auth, groups, meta, players, reports, seasons, sessions
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +137,7 @@ app.include_router(groups.router, prefix="/api")
 app.include_router(players.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(meta.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
 
 
 @app.get("/")
