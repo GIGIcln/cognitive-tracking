@@ -4,6 +4,7 @@ import { getSession, saveMeasurements, updateSession } from '../api/sessions'
 import { getEvents, saveEvents } from '../api/events'
 import { getPlayers } from '../api/players'
 import { getGroupTargets } from '../api/groups'
+import type { MetricField, MetricType } from '../constants/domain'
 import {
   COGNITIVE_PARAMS,
   FIELD_TO_METRIC,
@@ -11,20 +12,72 @@ import {
   deriveReliability,
 } from '../constants/domain'
 import { emptyEventRow } from '../components/EventParamRow'
+import type { EventRow } from '../components/EventParamRow'
+import type { GroupTarget } from '../utils/reportUtils'
+
+// ── API shapes ────────────────────────────────────────────────────────────────
+
+interface ApiMeasurement {
+  player_id: string
+  scanning_rate: number | null
+  decision_quality: number | null
+  anticipation: number | null
+  transition_reset: number | null
+  verbal_comm: number | null
+  is_absent: boolean
+  notes: string | null
+}
+
+export interface ApiSession {
+  id: string
+  group_id: string
+  session_date: string
+  session_type: string
+  duration_min: number | null
+  notes: string | null
+  measurements: ApiMeasurement[]
+}
+
+export interface ApiPlayer {
+  id: string
+  first_name: string
+  last_name: string
+}
+
+// ── Local form state ──────────────────────────────────────────────────────────
+
+export interface MeasurementEntry {
+  scanning_rate: number | string
+  decision_quality: number | string
+  anticipation: number | string
+  transition_reset: number | string
+  verbal_comm: number | string
+  is_absent: boolean
+  notes: string
+}
+
+type MeasurementsState = Record<string, MeasurementEntry>
+type EventData = Record<string, Record<string, EventRow>>
+type CounterKey = 'numerator' | 'denominator'
 
 const PARAMS = COGNITIVE_PARAMS
 
-const emptyMeasurement = () =>
-  PARAMS.reduce((acc, { field }) => ({ ...acc, [field]: '' }), { is_absent: false, notes: '' })
+const emptyMeasurement = (): MeasurementEntry =>
+  PARAMS.reduce<MeasurementEntry>(
+    (acc, { field }) => ({ ...acc, [field]: '' }),
+    { scanning_rate: '', decision_quality: '', anticipation: '', transition_reset: '', verbal_comm: '', is_absent: false, notes: '' },
+  )
 
-export function useSessionForm(id) {
-  const [session, setSession]           = useState(null)
-  const [players, setPlayers]           = useState([])
-  const [targetsMap, setTargetsMap]     = useState({})
-  const [measurements, setMeasurements] = useState({})
-  const [eventData, setEventData]       = useState({})
+// ── Hook ──────────────────────────────────────────────────────────────────────
 
-  const [entryMode, setEntryMode]           = useState('event')
+export function useSessionForm(id: string) {
+  const [session, setSession]           = useState<ApiSession | null>(null)
+  const [players, setPlayers]           = useState<ApiPlayer[]>([])
+  const [targetsMap, setTargetsMap]     = useState<Record<string, GroupTarget>>({})
+  const [measurements, setMeasurements] = useState<MeasurementsState>({})
+  const [eventData, setEventData]       = useState<EventData>({})
+
+  const [entryMode, setEntryMode]           = useState<'score' | 'event'>('event')
   const [loading, setLoading]               = useState(true)
   const [saving, setSaving]                 = useState(false)
   const [error, setError]                   = useState('')
@@ -39,7 +92,7 @@ export function useSessionForm(id) {
   const blocker = useBlocker(isDirty)
 
   useEffect(() => {
-    const handler = (e) => {
+    const handler = (e: BeforeUnloadEvent) => {
       if (!isDirty) return
       e.preventDefault()
       e.returnValue = ''
@@ -51,28 +104,26 @@ export function useSessionForm(id) {
   useEffect(() => {
     const load = async () => {
       try {
-        const sRes = await getSession(id)
-        const s = sRes.data
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sRes = await getSession(id) as any
+        const s: ApiSession = sRes.data
         setSession(s)
         setNotesValue(s.notes ?? '')
 
-        const [pRes, tRes, eRes] = await Promise.all([
-          getPlayers(s.group_id),
-          getGroupTargets(s.group_id),
-          getEvents(id),
-        ])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const [pRes, tRes, eRes] = await Promise.all([getPlayers(s.group_id), getGroupTargets(s.group_id), getEvents(id)]) as any[]
 
-        const sorted = pRes.data.items.sort((a, b) =>
+        const sorted: ApiPlayer[] = (pRes.data.items as ApiPlayer[]).sort((a, b) =>
           a.last_name.localeCompare(b.last_name, 'it') ||
-          a.first_name.localeCompare(b.first_name, 'it')
+          a.first_name.localeCompare(b.first_name, 'it'),
         )
         setPlayers(sorted)
 
-        const tMap = {}
-        ;(tRes.data ?? []).forEach((t) => { tMap[t.parameter] = t })
+        const tMap: Record<string, GroupTarget> = {}
+        ;(tRes.data ?? [] as GroupTarget[]).forEach((t: GroupTarget) => { tMap[t.parameter] = t })
         setTargetsMap(tMap)
 
-        const init = {}
+        const init: MeasurementsState = {}
         sorted.forEach((p) => { init[p.id] = emptyMeasurement() })
         ;(s.measurements ?? []).forEach((m) => {
           if (init[m.player_id] !== undefined) {
@@ -89,9 +140,10 @@ export function useSessionForm(id) {
         })
         setMeasurements(init)
 
-        const evMap = {}
-        const seenVersions = new Set()
-        ;(eRes.data ?? []).forEach((ev) => {
+        const evMap: EventData = {}
+        const seenVersions = new Set<string>()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(eRes.data ?? [] as any[]).forEach((ev: any) => {
           if (!evMap[ev.player_id]) evMap[ev.player_id] = {}
           evMap[ev.player_id][ev.metric_type] = {
             numerator:   ev.numerator,
@@ -112,15 +164,15 @@ export function useSessionForm(id) {
     load()
   }, [id])
 
-  const handleChange = useCallback((playerId, field, value) => {
+  const handleChange = useCallback((playerId: string, field: MetricField | 'notes', value: number | string | null) => {
     setIsDirty(true)
     setMeasurements((prev) => ({
       ...prev,
-      [playerId]: { ...prev[playerId], [field]: value },
+      [playerId]: { ...prev[playerId], [field]: value } as MeasurementEntry,
     }))
   }, [])
 
-  const toggleAbsent = useCallback((playerId) => {
+  const toggleAbsent = useCallback((playerId: string) => {
     setIsDirty(true)
     setMeasurements((prev) => ({
       ...prev,
@@ -137,11 +189,11 @@ export function useSessionForm(id) {
         return {
           player_id:        p.id,
           is_absent:        absent,
-          scanning_rate:    absent ? null : (m.scanning_rate    !== '' ? parseFloat(m.scanning_rate)    : null),
-          decision_quality: absent ? null : (m.decision_quality !== '' ? parseFloat(m.decision_quality) : null),
-          anticipation:     absent ? null : (m.anticipation     !== '' ? parseFloat(m.anticipation)     : null),
-          transition_reset: absent ? null : (m.transition_reset !== '' ? parseFloat(m.transition_reset) : null),
-          verbal_comm:      absent ? null : (m.verbal_comm      !== '' ? parseFloat(m.verbal_comm)      : null),
+          scanning_rate:    absent ? null : (m.scanning_rate    !== '' ? parseFloat(String(m.scanning_rate))    : null),
+          decision_quality: absent ? null : (m.decision_quality !== '' ? parseFloat(String(m.decision_quality)) : null),
+          anticipation:     absent ? null : (m.anticipation     !== '' ? parseFloat(String(m.anticipation))     : null),
+          transition_reset: absent ? null : (m.transition_reset !== '' ? parseFloat(String(m.transition_reset)) : null),
+          verbal_comm:      absent ? null : (m.verbal_comm      !== '' ? parseFloat(String(m.verbal_comm))      : null),
           notes:            absent ? null : (m.notes || null),
         }
       })
@@ -156,17 +208,17 @@ export function useSessionForm(id) {
     }
   }
 
-  const handleEventChange = useCallback((playerId, metricType, key, delta) => {
+  const handleEventChange = useCallback((playerId: string, metricType: MetricType, key: CounterKey, delta: number) => {
     setIsDirty(true)
     setEventData((prev) => {
       const playerData = prev[playerId] ?? {}
       const current = playerData[metricType] ?? emptyEventRow()
-      const updated = { ...current, [key]: Math.max(0, current[key] + delta) }
+      const updated: EventRow = { ...current, [key]: Math.max(0, current[key] + delta) }
       return { ...prev, [playerId]: { ...playerData, [metricType]: updated } }
     })
   }, [])
 
-  const handleEventSet = useCallback((playerId, metricType, key, value) => {
+  const handleEventSet = useCallback((playerId: string, metricType: MetricType, key: CounterKey, value: string) => {
     const num = parseInt(value, 10)
     if (isNaN(num) || num < 0) return
     setIsDirty(true)
@@ -180,7 +232,7 @@ export function useSessionForm(id) {
   const handleSaveEvents = async () => {
     setSaving(true); setSaveOk(false); setError('')
     try {
-      const events = []
+      const events: object[] = []
       players.forEach((p) => {
         const absent = measurements[p.id]?.is_absent
         if (absent) return
@@ -207,8 +259,10 @@ export function useSessionForm(id) {
         setSaving(false)
         return
       }
-      const savedResp = await saveEvents(id, events)
-      if ((savedResp.data ?? []).some((ev) => ev.codebook_version === null)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const savedResp = await saveEvents(id, events) as any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((savedResp.data ?? [] as any[]).some((ev: any) => ev.codebook_version === null)) {
         setMixedVersionWarning(true)
       }
       setSaveOk(true)
@@ -224,8 +278,9 @@ export function useSessionForm(id) {
   const handleSaveNotes = async () => {
     setSavingNotes(true)
     try {
-      const res = await updateSession(id, { notes: notesValue || null })
-      setSession((prev) => ({ ...prev, notes: res.data.notes }))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res = await updateSession(id, { notes: notesValue || null }) as any
+      setSession((prev) => prev ? { ...prev, notes: res.data.notes } : prev)
       setEditingNotes(false)
     } catch {
       setError('Errore nel salvataggio delle note')
@@ -239,7 +294,7 @@ export function useSessionForm(id) {
   const goToNext = () => setCurrentIndex((i) => Math.min(i + 1, players.length - 1))
   const goToPrev = () => setCurrentIndex((i) => Math.max(i - 1, 0))
 
-  const getReliabilityOkCount = useCallback((playerId) => {
+  const getReliabilityOkCount = useCallback((playerId: string): number => {
     let ok = 0
     PARAMS.forEach(({ field }) => {
       const metricType = FIELD_TO_METRIC[field]
@@ -254,7 +309,7 @@ export function useSessionForm(id) {
     return ok
   }, [eventData])
 
-  const hasAnyEventData = useCallback((playerId) =>
+  const hasAnyEventData = useCallback((playerId: string): boolean =>
     PARAMS.some(({ field }) => {
       const metricType = FIELD_TO_METRIC[field]
       const ev = eventData[playerId]?.[metricType]
@@ -263,7 +318,7 @@ export function useSessionForm(id) {
       return cfg.count_only ? ev.numerator > 0 : ev.numerator > 0 || ev.denominator > 0
     }), [eventData])
 
-  const hasInsufficientMetric = useCallback((playerId) =>
+  const hasInsufficientMetric = useCallback((playerId: string): boolean =>
     PARAMS.some(({ field }) => {
       const metricType = FIELD_TO_METRIC[field]
       const ev = eventData[playerId]?.[metricType]

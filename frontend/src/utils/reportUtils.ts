@@ -1,6 +1,19 @@
-export const LINE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899']
+import type { MetricType } from '../constants/domain'
 
-export function linearRegression(xs, ys) {
+export interface GroupTarget {
+  parameter: MetricType
+  ottimo_min: number
+  insufficient_max: number
+}
+
+export interface LinearRegressionResult {
+  slope: number
+  intercept: number
+}
+
+export const LINE_COLORS: string[] = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899']
+
+export function linearRegression(xs: number[], ys: number[]): LinearRegressionResult | null {
   const n = xs.length
   if (n < 2) return null
   const sumX = xs.reduce((a, b) => a + b, 0)
@@ -14,29 +27,33 @@ export function linearRegression(xs, ys) {
   return { slope, intercept }
 }
 
-export function badge(val, target) {
+export function badge(
+  val: number | null | undefined,
+  target: GroupTarget | null | undefined,
+): '🟢' | '🔴' | '🟡' | null {
   if (val == null || !target) return null
   if (val >= target.ottimo_min) return '🟢'
   if (val <= target.insufficient_max) return '🔴'
   return '🟡'
 }
 
-/**
- * Genera un commento testuale basato sull'ultima sessione rispetto ai target.
- * @param {string} subject  - Soggetto del commento (es. nome giocatore o "La squadra")
- * @param {object} lastData - Ultimo record (sessione giocatore o media squadra)
- * @param {Array}  targets  - Array di GroupTarget con parameter, ottimo_min, insufficient_max
- * @param {Array}  history  - Storico completo per calcolo trend
- * @param {Array}  fieldKeys - Chiavi da leggere in lastData/history (ordinate come SR,DQI,AI,TRS,VCI)
- */
-export function generateComment(subject, lastData, targets, history, fieldKeys) {
-  const labels = ['SR', 'DQI', 'AI', 'TRS', 'VCI']
-  const italianLabels = [
+export function generateComment(
+  subject: string,
+  lastData: Record<string, number | null | undefined>,
+  targets: GroupTarget[],
+  history: Record<string, number | null | undefined>[],
+  fieldKeys: string[],
+): string {
+  const labels: MetricType[] = ['SR', 'DQI', 'AI', 'TRS', 'VCI']
+  const italianLabels: string[] = [
     'Scanning Rate', 'Decision Quality', 'Anticipazione',
     'Transition Reset', 'Comunicazione Verbale',
   ]
 
-  const strong = [], weak = [], sufficient = []
+  const strong: string[] = []
+  const weak: string[] = []
+  const sufficient: string[] = []
+
   fieldKeys.forEach((key, i) => {
     const val = lastData[key]
     const t = targets.find((t) => t.parameter === labels[i])
@@ -50,11 +67,11 @@ export function generateComment(subject, lastData, targets, history, fieldKeys) 
   if (history.length >= 2) {
     const prev = history[history.length - 2]
     const curr = history[history.length - 1]
-    const avgPrev = fieldKeys.reduce((s, k) => s + (prev[k] || 0), 0) / fieldKeys.length
-    const avgCurr = fieldKeys.reduce((s, k) => s + (curr[k] || 0), 0) / fieldKeys.length
+    const avgPrev = fieldKeys.reduce((s, k) => s + (prev[k] ?? 0), 0) / fieldKeys.length
+    const avgCurr = fieldKeys.reduce((s, k) => s + (curr[k] ?? 0), 0) / fieldKeys.length
     const diff = (avgCurr - avgPrev).toFixed(1)
-    if (diff > 0) trendText = `Trend generale in miglioramento (+${diff} punti medi).`
-    else if (diff < 0) trendText = `Trend generale in calo (${diff} punti medi).`
+    if (Number(diff) > 0) trendText = `Trend generale in miglioramento (+${diff} punti medi).`
+    else if (Number(diff) < 0) trendText = `Trend generale in calo (${diff} punti medi).`
     else trendText = `Trend generale stabile.`
   }
 

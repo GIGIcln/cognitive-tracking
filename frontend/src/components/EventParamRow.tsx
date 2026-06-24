@@ -1,3 +1,5 @@
+import type { MetricField, MetricType } from '../constants/domain'
+import type { GroupTarget } from '../utils/reportUtils'
 import {
   COGNITIVE_PARAMS,
   FIELD_TO_METRIC,
@@ -7,9 +9,17 @@ import {
   deriveReliability,
 } from '../constants/domain'
 
-export const emptyEventRow = () => ({ numerator: 0, denominator: 0, method: 'video' })
+export interface EventRow {
+  numerator: number
+  denominator: number
+  method: string
+}
 
-function scoreBadgeClass(score, targetsMap, field) {
+type CounterKey = 'numerator' | 'denominator'
+
+export const emptyEventRow = (): EventRow => ({ numerator: 0, denominator: 0, method: 'video' })
+
+function scoreBadgeClass(score: number | null, targetsMap: Record<string, GroupTarget>, field: MetricField): string {
   const param = FIELD_TO_METRIC[field]
   const t = targetsMap[param]
   if (!t || score == null) return 'bg-gray-100 text-gray-500'
@@ -18,7 +28,17 @@ function scoreBadgeClass(score, targetsMap, field) {
   return 'bg-yellow-100 text-yellow-700'
 }
 
-export default function EventParamRow({ field, playerId, compact = false, eventData, targetsMap, onEventChange, onEventSet }) {
+interface Props {
+  field: MetricField
+  playerId: string
+  compact?: boolean
+  eventData: Record<string, Record<string, EventRow>>
+  targetsMap: Record<string, GroupTarget>
+  onEventChange: (playerId: string, metricType: MetricType, key: CounterKey, delta: number) => void
+  onEventSet: (playerId: string, metricType: MetricType, key: CounterKey, value: string) => void
+}
+
+export default function EventParamRow({ field, playerId, compact = false, eventData, targetsMap, onEventChange, onEventSet }: Props) {
   const metricType = FIELD_TO_METRIC[field]
   const cfg = METRIC_EVENT_CONFIG[field]
   const ev = eventData[playerId]?.[metricType] ?? emptyEventRow()
@@ -26,9 +46,9 @@ export default function EventParamRow({ field, playerId, compact = false, eventD
   const rel = deriveReliability(metricType, ev.numerator, ev.denominator)
   const relMeta = RELIABILITY_META[rel]
   const badgeClass = scoreBadgeClass(score, targetsMap, field)
-  const param = COGNITIVE_PARAMS.find((p) => p.field === field)
+  const param = COGNITIVE_PARAMS.find((p) => p.field === field)!
 
-  const CounterBtn = ({ counterKey, delta }) => (
+  const CounterBtn = ({ counterKey, delta }: { counterKey: CounterKey; delta: number }) => (
     <button
       onClick={() => onEventChange(playerId, metricType, counterKey, delta)}
       className={`w-7 h-7 rounded-md font-bold text-sm flex items-center justify-center shrink-0 ${
@@ -39,7 +59,7 @@ export default function EventParamRow({ field, playerId, compact = false, eventD
     >{delta > 0 ? '+' : '−'}</button>
   )
 
-  const CounterInput = ({ counterKey }) => (
+  const CounterInput = ({ counterKey }: { counterKey: CounterKey }) => (
     <input
       type="number"
       min="0"

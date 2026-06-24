@@ -1,7 +1,18 @@
 import { useAuth } from '../context/AuthContext'
 
-export default function NotesBlock({ notes, editing, value, saving, onChange, onEdit, onSave, onCancel }) {
-  const { isAdmin } = useAuth()
+interface Props {
+  notes: string | null | undefined
+  editing: boolean
+  value: string
+  saving: boolean
+  onChange: (value: string) => void
+  onEdit: () => void
+  onSave: () => void
+  onCancel: () => void
+}
+
+export default function NotesBlock({ notes, editing, value, saving, onChange, onEdit, onSave, onCancel }: Props) {
+  const { isAdmin } = useAuth() ?? { isAdmin: false }
 
   if (editing) {
     return (
