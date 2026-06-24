@@ -119,6 +119,7 @@ export function OfflineContextProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useOffline() {
   const ctx = useContext(OfflineContext);
   if (!ctx) throw new Error('useOffline deve essere usato dentro OfflineContextProvider');

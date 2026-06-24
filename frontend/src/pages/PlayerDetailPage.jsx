@@ -193,6 +193,7 @@ export default function PlayerDetailPage() {
         .catch(() => {})
         .finally(() => setAssignmentsLoading(false))
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, id])
 
   useEffect(() => {
@@ -203,6 +204,7 @@ export default function PlayerDetailPage() {
         .catch(() => {})
         .finally(() => setHistoryLoading(false))
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, id])
 
   if (loading) {

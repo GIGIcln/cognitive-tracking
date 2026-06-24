@@ -450,6 +450,7 @@ export default function GroupDetailPage() {
       .finally(() => setLoading(false))
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [id])
 
   useEffect(() => {
@@ -485,6 +486,7 @@ export default function GroupDetailPage() {
       .then((res) => { setPlayerStats(res.data); setSelectedPlayers(res.data.slice(0, 2).map((p) => p.player_id)) })
       .catch(() => {})
       .finally(() => setPlayerStatsLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, id])
 
   useEffect(() => {
