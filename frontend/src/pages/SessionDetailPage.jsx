@@ -500,6 +500,17 @@ export default function SessionDetailPage() {
       return cfg.count_only ? ev.numerator > 0 : ev.numerator > 0 || ev.denominator > 0
     })
 
+  const hasInsufficientMetric = (playerId) =>
+    PARAMS.some(({ field }) => {
+      const metricType = FIELD_TO_METRIC[field]
+      const ev = eventData[playerId]?.[metricType]
+      if (!ev) return false
+      const cfg = METRIC_EVENT_CONFIG[field]
+      if (cfg.count_only && ev.numerator === 0) return false
+      if (!cfg.count_only && ev.numerator === 0 && ev.denominator === 0) return false
+      return deriveReliability(metricType, ev.numerator, ev.denominator) === 'insufficient'
+    })
+
   const ReliabilityChip = ({ playerId }) => {
     const ok = getReliabilityOkCount(playerId)
     const total = PARAMS.length
@@ -518,6 +529,13 @@ export default function SessionDetailPage() {
     ? players.filter((p) => {
         const m = measurements[p.id] ?? emptyMeasurement()
         return !m.is_absent && hasAnyEventData(p.id) && getReliabilityOkCount(p.id) < PARAMS.length
+      }).length
+    : 0
+
+  const insufficientGateCount = entryMode === 'event'
+    ? players.filter((p) => {
+        const m = measurements[p.id] ?? emptyMeasurement()
+        return !m.is_absent && hasAnyEventData(p.id) && hasInsufficientMetric(p.id)
       }).length
     : 0
 
@@ -702,7 +720,12 @@ export default function SessionDetailPage() {
           className="fixed left-0 right-0 bg-white border-t border-gray-200 p-3 z-20"
           style={{ bottom: 'calc(64px + env(safe-area-inset-bottom))' }}
         >
-          {entryMode === 'event' && insufficientCount > 0 && currentIndex === total - 1 && (
+          {entryMode === 'event' && currentIndex === total - 1 && insufficientGateCount > 0 && (
+            <div className="text-xs text-red-600 text-center mb-2">
+              🚫 {insufficientGateCount} giocator{insufficientGateCount === 1 ? 'e' : 'i'} con dati insufficienti — salvataggio bloccato
+            </div>
+          )}
+          {entryMode === 'event' && currentIndex === total - 1 && insufficientGateCount === 0 && insufficientCount > 0 && (
             <div className="text-xs text-amber-600 text-center mb-2">
               ⚠ {insufficientCount} giocator{insufficientCount === 1 ? 'e' : 'i'} con dati sotto soglia
             </div>
@@ -725,7 +748,7 @@ export default function SessionDetailPage() {
             ) : (
               <button
                 onClick={handleSave}
-                disabled={saving || !total}
+                disabled={saving || !total || (entryMode === 'event' && insufficientGateCount > 0)}
                 className="flex-[2] py-3 px-4 rounded-xl bg-green-600 text-white text-sm font-semibold disabled:opacity-60"
               >
                 {saving ? 'Salvataggio...' : '✓ Salva sessione'}
@@ -881,7 +904,12 @@ export default function SessionDetailPage() {
 
         {/* Sticky save bar */}
         <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-white border-t border-gray-200 p-4 flex items-center gap-3 z-20">
-          {entryMode === 'event' && insufficientCount > 0 && (
+          {entryMode === 'event' && insufficientGateCount > 0 && (
+            <span className="text-red-600 text-xs font-medium shrink-0">
+              🚫 {insufficientGateCount} giocator{insufficientGateCount === 1 ? 'e' : 'i'} con dati insufficienti
+            </span>
+          )}
+          {entryMode === 'event' && insufficientGateCount === 0 && insufficientCount > 0 && (
             <span className="text-amber-600 text-xs font-medium shrink-0">
               ⚠ {insufficientCount} giocator{insufficientCount === 1 ? 'e' : 'i'} con dati sotto soglia
             </span>
@@ -891,7 +919,7 @@ export default function SessionDetailPage() {
           )}
           <button
             onClick={handleSave}
-            disabled={saving || !players.length}
+            disabled={saving || !players.length || (entryMode === 'event' && insufficientGateCount > 0)}
             className="flex-1 bg-granata text-white py-3 rounded-xl font-medium text-sm hover:bg-granata-dark transition-colors disabled:opacity-60"
           >
             {saving ? 'Salvataggio…' : 'Salva sessione'}

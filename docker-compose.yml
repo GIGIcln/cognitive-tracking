@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: cogtrack
+      POSTGRES_PASSWORD: cogtrack
+      POSTGRES_DB: cognitive_tracking
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cogtrack"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://cogtrack:cogtrack@db:5432/cognitive_tracking
+      SECRET_KEY: ${SECRET_KEY:-change-me-generate-with-openssl-rand-hex-32}
+      APP_ENV: development
+      ALLOWED_ORIGINS: http://localhost:5173
+    volumes:
+      - ./backend:/app
+      - /app/.venv
+    depends_on:
+      db:
+        condition: service_healthy
+    # Esegue le migrazioni ad ogni avvio, poi parte il server con hot-reload.
+    # Assicurarsi che backend/users.json esista (copiare da users.example.json).
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      API_TARGET: http://backend:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: npm run dev
+
+volumes:
+  postgres_data:
