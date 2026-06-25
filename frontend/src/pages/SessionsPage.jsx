@@ -164,7 +164,7 @@ export default function SessionsPage() {
         setForm((f) => ({ ...f, session_date: defaultDate }))
       })
       .catch(() => {})
-  }, [showModal])
+  }, [showModal, selectedGroupId, groups])
 
   useEffect(() => {
     setLoading(true)
