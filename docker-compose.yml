@@ -18,7 +18,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://cogtrack:cogtrack@db:5432/cognitive_tracking
+      DATABASE_URL: ${DATABASE_URL:-postgresql://cogtrack:cogtrack@db:5432/cognitive_tracking}
       SECRET_KEY: ${SECRET_KEY:-change-me-generate-with-openssl-rand-hex-32}
       APP_ENV: development
       ALLOWED_ORIGINS: http://localhost:5173
