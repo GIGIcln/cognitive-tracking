@@ -13,6 +13,7 @@ import PlayersPage from './pages/PlayersPage'
 import SessionsPage from './pages/SessionsPage'
 import SettingsPage from './pages/SettingsPage'
 import ProfilePage from './pages/ProfilePage'
+import { useAuth } from './context/AuthContext'
 
 const SessionDetailPage = lazy(() => import('./pages/SessionDetailPage'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
@@ -33,6 +34,11 @@ function PageLoader() {
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
     </div>
   )
+}
+
+function SettingsIndex() {
+  const { isAdmin } = useAuth()
+  return <Navigate to={isAdmin ? '/impostazioni/stagione' : '/impostazioni/profilo'} replace />
 }
 
 function App() {
@@ -90,7 +96,7 @@ function App() {
               element={<Suspense fallback={<PageLoader />}><MatchDetailPage /></Suspense>}
             />
             <Route path="/impostazioni" element={<SettingsPage />}>
-              <Route index element={<Navigate to="/impostazioni/profilo" replace />} />
+              <Route index element={<SettingsIndex />} />
               <Route path="profilo" element={<ProfilePage />} />
               <Route
                 path="utenti"
