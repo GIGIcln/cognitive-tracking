@@ -1,8 +1,9 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import PendingPage from '../pages/PendingPage'
 
 export default function ProtectedRoute() {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, isPending } = useAuth()
 
   if (isLoading) {
     return (
@@ -14,6 +15,10 @@ export default function ProtectedRoute() {
 
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  if (isPending) {
+    return <PendingPage />
   }
 
   return <Outlet />

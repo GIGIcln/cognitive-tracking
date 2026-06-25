@@ -35,6 +35,10 @@ class PlayerCreate(BaseModel):
     last_name: str
     birth_year: int
     position: str | None = None
+    nationality: str | None = None
+    foot: str | None = None
+    jersey_number: int | None = None
+    phone: str | None = None
     notes: str | None = None
     group_id: uuid.UUID | None = None
 
@@ -44,6 +48,10 @@ class PlayerUpdate(BaseModel):
     last_name: str | None = None
     birth_year: int | None = None
     position: str | None = None
+    nationality: str | None = None
+    foot: str | None = None
+    jersey_number: int | None = None
+    phone: str | None = None
     is_active: bool | None = None
     notes: str | None = None
 
@@ -54,9 +62,14 @@ class PlayerResponse(BaseModel):
     last_name: str
     birth_year: int | None
     position: str | None = None
+    nationality: str | None = None
+    foot: str | None = None
+    jersey_number: int | None = None
+    phone: str | None = None
     is_active: bool
     notes: str | None
     current_group_name: str | None = None
+    availability: str = "disponibile"
 
     model_config = {"from_attributes": True}
 

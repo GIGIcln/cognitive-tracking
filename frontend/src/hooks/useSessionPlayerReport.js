@@ -1,71 +1,82 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { getSession, getMeasurements, getSessionAverages, getSessionRankings } from '../api/sessions'
 import { getPlayer } from '../api/players'
 import { getGroup, getGroupTargets } from '../api/groups'
 
 export function useSessionPlayerReport(sessionId, playerId) {
-  const [session, setSession] = useState(null)
-  const [groupName, setGroupName] = useState('')
-  const [playerName, setPlayerName] = useState('')
-  const [playerFirstName, setPlayerFirstName] = useState('')
-  const [playerLastName, setPlayerLastName] = useState('')
-  const [playerPosition, setPlayerPosition] = useState(null)
-  const [measurement, setMeasurement] = useState(null)
-  const [averages, setAverages] = useState(null)
-  const [playerRanking, setPlayerRanking] = useState(null)
-  const [targets, setTargets] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const sessionQuery = useQuery({
+    queryKey: ['session', sessionId],
+    queryFn: () => getSession(sessionId).then((r) => r.data),
+  })
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [sessRes, playerRes] = await Promise.all([
-          getSession(sessionId),
-          getPlayer(playerId),
-        ])
-        const s = sessRes.data
-        setSession(s)
-        const { first_name, last_name, position } = playerRes.data
-        setPlayerName(`${first_name} ${last_name}`)
-        setPlayerFirstName(first_name)
-        setPlayerLastName(last_name)
-        setPlayerPosition(position ?? null)
+  const playerQuery = useQuery({
+    queryKey: ['player', playerId],
+    queryFn: () => getPlayer(playerId).then((r) => r.data),
+  })
 
-        const [groupRes, measRes, avgRes, rankRes, tgtRes] = await Promise.all([
-          getGroup(s.group_id),
-          getMeasurements(sessionId),
-          getSessionAverages(sessionId),
-          getSessionRankings(sessionId).catch(() => ({ data: [] })),
-          getGroupTargets(s.group_id),
-        ])
-        setGroupName(groupRes.data.name)
-        const allMeasurements = measRes.data ?? []
-        setMeasurement(allMeasurements.find((m) => m.player_id === playerId) ?? null)
-        setAverages(avgRes.data)
-        const mine = (rankRes.data ?? []).find((r) => r.player_id === playerId)
-        setPlayerRanking(mine ?? null)
-        setTargets(tgtRes.data ?? [])
-      } catch {
-        setError('Errore nel caricamento del report')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [sessionId, playerId])
+  // Fetch in parallel with session — only sessionId needed
+  const measQuery = useQuery({
+    queryKey: ['session-measurements', sessionId],
+    queryFn: () => getMeasurements(sessionId).then((r) => r.data ?? []),
+  })
+
+  const avgQuery = useQuery({
+    queryKey: ['session-averages', sessionId],
+    queryFn: () => getSessionAverages(sessionId).then((r) => r.data),
+  })
+
+  const rankQuery = useQuery({
+    queryKey: ['session-rankings', sessionId],
+    queryFn: () =>
+      getSessionRankings(sessionId)
+        .then((r) => r.data ?? [])
+        .catch(() => []),
+  })
+
+  // Depends on session.group_id
+  const groupId = sessionQuery.data?.group_id
+
+  const groupQuery = useQuery({
+    queryKey: ['group', groupId],
+    queryFn: () => getGroup(groupId).then((r) => r.data),
+    enabled: !!groupId,
+  })
+
+  const targetsQuery = useQuery({
+    queryKey: ['group-targets', groupId],
+    queryFn: () => getGroupTargets(groupId).then((r) => r.data ?? []),
+    enabled: !!groupId,
+  })
+
+  const player = playerQuery.data
+  const allMeasurements = measQuery.data ?? []
+
+  const loading =
+    sessionQuery.isPending ||
+    playerQuery.isPending ||
+    measQuery.isPending ||
+    avgQuery.isPending ||
+    rankQuery.isPending ||
+    (!!groupId && (groupQuery.isPending || targetsQuery.isPending))
+
+  const error =
+    sessionQuery.isError || playerQuery.isError || measQuery.isError || avgQuery.isError
+      ? 'Errore nel caricamento del report'
+      : ''
+
+  const rankings = rankQuery.data ?? []
 
   return {
-    session,
-    groupName,
-    playerName,
-    playerFirstName,
-    playerLastName,
-    playerPosition,
-    measurement,
-    averages,
-    playerRanking,
-    targets,
+    session: sessionQuery.data ?? null,
+    groupName: groupQuery.data?.name ?? '',
+    playerName: player ? `${player.first_name} ${player.last_name}` : '',
+    playerFirstName: player?.first_name ?? '',
+    playerLastName: player?.last_name ?? '',
+    playerPosition: player?.position ?? null,
+    measurement: allMeasurements.find((m) => m.player_id === playerId) ?? null,
+    averages: avgQuery.data ?? null,
+    playerRanking: rankings.find((r) => r.player_id === playerId) ?? null,
+    targets: targetsQuery.data ?? [],
     loading,
     error,
   }

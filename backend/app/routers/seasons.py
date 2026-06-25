@@ -28,7 +28,7 @@ def get_current_season(
 @router.get("", response_model=list[SeasonResponse])
 def list_seasons(
     db: Session = Depends(get_db),
-    _: UserContext = Depends(require_admin),
+    _: UserContext = Depends(require_auth),
 ):
     return [SeasonResponse.model_validate(s) for s in SeasonService(db).list_all()]
 

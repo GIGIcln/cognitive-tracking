@@ -1,4 +1,4 @@
-# Cognitive Tracking — Documentazione Tecnica
+# ASC.D Torino Club — Gestionale Sportivo
 
 ## ⚡ Avvio Rapido
 
@@ -76,7 +76,7 @@ Con `cloudflared` installato, `make dev` avvia automaticamente un tunnel pubblic
 ```bash
 brew install python node postgresql@15
 brew services start postgresql@15
-createdb cognitive_tracking   # solo prima volta
+createdb gestionale   # solo prima volta
 ```
 
 ### Prerequisiti Windows 11
@@ -108,7 +108,7 @@ $env:PATH += ";C:\Program Files\PostgreSQL\17\bin"
 
 ```cmd
 net start postgresql-x64-17
-psql -U postgres -c "CREATE DATABASE cognitive_tracking;"
+psql -U postgres -c "CREATE DATABASE gestionale;"
 ```
 
 > Se usi un database remoto (Supabase, Neon, ecc.) questo passaggio non serve — basta avere `psql` installato come client.
@@ -178,7 +178,7 @@ Stop-Process -Name "cloudflared" -Force -ErrorAction SilentlyContinue
 
 ## Panoramica
 
-Cognitive Tracking è una piattaforma full-stack per il monitoraggio cognitivo di giocatori di calcio giovanile. Permette agli staff tecnici di registrare, tracciare e analizzare cinque parametri cognitivi per ciascun giocatore durante le sessioni di allenamento, confrontandoli con target personalizzati per fascia d'età e livello.
+ASC.D Torino Club Gestionale è una piattaforma full-stack per la gestione sportiva del settore giovanile. Permette agli staff tecnici di gestire rosa, presenze, partite e di registrare, tracciare e analizzare cinque parametri cognitivi per ciascun giocatore durante le sessioni di allenamento, confrontandoli con target personalizzati per fascia d'età e livello.
 
 L'app è installabile come **PWA** su qualsiasi dispositivo (iOS, Android, desktop) e supporta la **modalità offline**: le misurazioni vengono salvate localmente e sincronizzate automaticamente al ripristino della connessione.
 
@@ -249,7 +249,8 @@ cognitivetracking/
 │   │   │   ├── assignment.py    # Assegnazione giocatore → gruppo (storico)
 │   │   │   ├── training_session.py  # Sessione di allenamento
 │   │   │   ├── measurement.py       # Misurazioni cognitive (voto 1–10 o derivato)
-│   │   │   ├── observation_event.py # ← NUOVO: eventi grezzi (num/denom per metrica)
+│   │   │   ├── observation_event.py # eventi grezzi (num/denom per metrica, append-only)
+│   │   │   ├── group_change_log.py  # Audit log spostamenti giocatori
 │   │   │   └── group_target.py      # Target cognitivi per gruppo/parametro
 │   │   ├── routers/
 │   │   │   ├── auth.py          # /api/auth/* (login, logout, me)
@@ -257,21 +258,25 @@ cognitivetracking/
 │   │   │   ├── groups.py        # /api/groups/* (lista, dettaglio, target, history)
 │   │   │   ├── players.py       # /api/players/* (CRUD, assign, history)
 │   │   │   └── sessions.py      # /api/sessions/* (CRUD, measurements, events)
-│   │   ├── schemas/             # Schemi Pydantic per request/response
+│   │   ├── schemas/             # Schemi Pydantic per request/response (+ pagination.py)
 │   │   └── services/
 │   │       ├── auth_service.py        # hash/verify password, JWT, get_current_user
-│   │       ├── observation_service.py # ← NUOVO: derivazione score + reliability da eventi
+│   │       ├── group_service.py       # query gruppi con eager loading
+│   │       ├── observation_service.py # derivazione score + reliability da eventi
 │   │       ├── player_service.py      # logica di business per giocatori e assignment
 │   │       ├── season_service.py      # logica di business per stagioni
-│   │       └── session_service.py     # logica di business per sessioni e misurazioni
+│   │       └── session_service.py     # averages, rankings, upsert measurements
 │   ├── alembic/
-│   │   └── versions/
+│   │   └── versions/            # 15 migrazioni (0001 → 0015)
 │   │       ├── 0001_initial_schema.py
-│   │       ├── 0002_add_performance_indexes.py
-│   │       ├── 0003_add_missing_indexes.py
-│   │       ├── 0004_add_soft_delete_and_updated_at.py
-│   │       ├── 0005_add_player_position.py
-│   │       └── 0006_add_observation_events.py   # ← NUOVO
+│   │       ├── 0002–0006_performance_indexes_softdelete_position_events.py
+│   │       ├── 0007_observation_events_per_row.py
+│   │       ├── 0008_widen_measurement_score_precision.py
+│   │       ├── 0009_add_group_change_logs.py
+│   │       ├── 0010_db_integrity_fixes.py
+│   │       ├── 0011–0013_enable_rls_deny_all.py
+│   │       ├── 0014_index_groups_season_id.py
+│   │       └── 0015_missing_performance_indexes.py
 │   ├── users.example.json       # Template per users.json (committato; users.json è gitignored)
 │   ├── scripts/
 │   │   └── hash_password.py     # Genera hash bcrypt da inserire in users.json
@@ -288,6 +293,8 @@ cognitivetracking/
         │   ├── AuthContext.jsx      # Auth state globale + login/logout
         │   └── OfflineContext.jsx   # Stato online/offline globale + coda sync
         ├── hooks/
+        │   ├── useTeamReport.js / usePlayerReport.js  # Data fetching per report
+        │   ├── useSessionTeamReport.js / useSessionPlayerReport.js
         │   └── useOnlineStatus.js   # Hook per rilevare connettività
         ├── layouts/MainLayout.jsx   # Sidebar desktop + bottom nav mobile
         ├── pages/               # Una pagina per route
@@ -387,7 +394,7 @@ Il proxy Vite redirige `/api/*` → `http://localhost:8000` (vedi `vite.config.j
 
 | Variabile | Descrizione | Esempio |
 |---|---|---|
-| `DATABASE_URL` | Stringa di connessione PostgreSQL | `postgresql://user:pass@localhost:5432/cognitive_tracking` |
+| `DATABASE_URL` | Stringa di connessione PostgreSQL | `postgresql://user:pass@localhost:5432/gestionale` |
 | `SECRET_KEY` | Chiave segreta per firma JWT | Output di `openssl rand -hex 32` |
 | `ALGORITHM` | Algoritmo JWT | `HS256` (default) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Durata token | `60` (default) |
@@ -709,6 +716,17 @@ Passi chiave:
 ---
 
 ## Changelog
+
+### 2026-06-24 — Security, performance e fix UX
+
+- **RLS PostgreSQL**: Row-Level Security abilitata su tutte le tabelle public con policy deny-all esplicite (migrazioni 0011–0013). Preparazione per accesso diretto PostgREST/Supabase.
+- **Index performance**: aggiunti index mancanti su `groups.season_id`, `training_sessions.is_active`, `observation_events.session_id` e composito `(session_id, player_id, metric_type)` (migrazioni 0014–0015).
+- **Pagination**: limite massimo ridotto a 200 per list endpoint (`/players`, `/sessions`, `/rankings`) e 500 per `/players/{id}/history`.
+- **Status codes**: `ValueError("Giocatori non trovati")` restituisce 422 (invece di 404) in POST `/measurements` e POST `/events` — semanticamente corretto.
+- **Assign validation**: `assign_to_group()` valida l'esistenza del gruppo prima dell'insert; `group_id` inesistente → 404 invece di 409 IntegrityError generico.
+- **Audit login**: login falliti e riusciti loggati con `request_id` per correlazione e rilevamento brute-force.
+- **Frontend dirty tracking**: `SessionDetailPage` aggiunge `useBlocker` (dialog conferma navigazione in-app) e `beforeunload` per evitare perdita dati non salvati.
+- **OfflineContext**: imposta `syncError` quando gli item raggiungono max retry — `OfflineBanner` mostra l'errore invece di eliminare dati silenziosamente.
 
 ### 2026-06-20 — Notifica push automatica URL tunnel (ntfy.sh)
 

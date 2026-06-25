@@ -15,7 +15,11 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     getMe()
       .then((res) => setUser(res.data))
-      .catch(() => {})
+      .catch((err) => {
+        if (err?.response?.status !== 401) {
+          console.warn('[Auth] Session check failed unexpectedly:', err)
+        }
+      })
       .finally(() => setIsLoading(false))
   }, [])
 
@@ -32,12 +36,15 @@ export function AuthProvider({ children }) {
   }
 
   const isAdmin = user?.roles?.includes('admin') ?? false
+  const isStaff = user?.roles?.some((r) => ['admin', 'responsabile_tecnico'].includes(r)) ?? false
+  const isPending = user?.status === 'pending'
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, isAdmin }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, isAdmin, isStaff, isPending }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext)

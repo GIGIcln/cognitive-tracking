@@ -226,8 +226,9 @@ const handleSubmit = async () => {
 ```
 backend/tests/
 ├── conftest.py          # Fixture: engine, tabelle, client FastAPI con TestClient
-├── test_auth_login.py   # Test autenticazione, JWT, cookie
-├── test_sessions.py     # CRUD sessioni, measurements
+├── test_auth_login.py   # Login valido, password errata, cookie JWT
+├── test_auth_setup.py   # Guards RBAC (require_admin/staff/auth), data scoping allenatore
+├── test_sessions.py     # CRUD sessioni, measurements, averages
 ├── test_observation_events.py  # Pipeline cognitiva (il test più critico)
 ├── test_players.py
 ├── test_groups.py / test_groups_admin.py
@@ -310,7 +311,9 @@ Spunta ogni voce prima di aprire la PR.
 - [ ] Se ho aggiunto/modificato un modello SQLAlchemy → ho generato e verificato la migrazione (`make migration-new`)
 - [ ] Se la migrazione modifica dati esistenti → è idempotente o reversibile
 - [ ] La logica di business è nel service, non nel router
-- [ ] Il nuovo endpoint ha il guard RBAC corretto (`require_auth` / `require_admin` + `assert_group_access`)
+- [ ] Il nuovo endpoint ha il guard RBAC corretto (`require_auth` / `require_admin` + `assert_group_access` / `assert_write_access`)
+- [ ] Se l'endpoint scrive dati: `responsabile_tecnico` puro riceve 403 (nessun accesso in scrittura)
+- [ ] Se l'endpoint legge dati: doppio ruolo (`allenatore` + `responsabile_tecnico`) vede tutti i gruppi
 - [ ] Ho aggiunto almeno il test del percorso felice e del 401/403
 - [ ] `pytest tests/` passa in verde
 

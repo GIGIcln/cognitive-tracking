@@ -1,7 +1,7 @@
 import api from './axios'
 
-export const getPlayers = (groupId) =>
-  api.get('/players', { params: groupId ? { group_id: groupId } : {} })
+export const getPlayers = (groupId, limit) =>
+  api.get('/players', { params: { ...(groupId ? { group_id: groupId } : {}), ...(limit ? { limit } : {}) } })
 
 export const getPlayer = (playerId, config) => api.get(`/players/${playerId}`, config)
 

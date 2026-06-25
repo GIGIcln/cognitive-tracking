@@ -10,11 +10,18 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    full_name: str | None = None
+
+
 class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     full_name: str | None
     is_active: bool
+    status: str = "active"
     roles: list[str] = []
 
     model_config = {"from_attributes": True}
@@ -39,6 +46,7 @@ class UserContext(BaseModel):
     roles: list[str]
     group_ids: list[str]
     is_active: bool
+    status: str = "active"
 
     @property
     def is_admin(self) -> bool:

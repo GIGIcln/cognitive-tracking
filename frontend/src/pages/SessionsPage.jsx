@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSessions, createSession, deleteSession } from '../api/sessions'
-import { getGroups } from '../api/groups'
 import { getCurrentSeason } from '../api/seasons'
 import { SESSION_TYPES, GROUP_CATEGORIES } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
 import { useAuth } from '../context/AuthContext'
+import { useSeasonGroup } from '../context/SeasonGroupContext'
 
 const SESSION_TYPE_COLOR = {
   'SSG':            'bg-blue-500',
@@ -125,9 +125,8 @@ function CalendarView({ sessions, groups, calMonth, setCalMonth, navigate }) {
 }
 
 export default function SessionsPage() {
+  const { groups, selectedGroupId, setSelectedGroupId, selectedSeasonId } = useSeasonGroup()
   const [sessions, setSessions] = useState([])
-  const [groups, setGroups] = useState([])
-  const [selectedGroup, setSelectedGroup] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showModal, setShowModal] = useState(false)
@@ -148,6 +147,10 @@ export default function SessionsPage() {
 
   useEffect(() => {
     if (!showModal) return
+    setForm((f) => ({
+      ...f,
+      group_id: selectedGroupId || groups[0]?.id || f.group_id,
+    }))
     getCurrentSeason()
       .then((res) => {
         const { start_date, end_date } = res.data
@@ -161,30 +164,15 @@ export default function SessionsPage() {
         setForm((f) => ({ ...f, session_date: defaultDate }))
       })
       .catch(() => {})
-  }, [showModal])
+  }, [showModal, selectedGroupId, groups])
 
-  const loadSessions = (groupId) => {
+  useEffect(() => {
     setLoading(true)
-    getSessions(groupId || undefined)
+    getSessions(selectedGroupId || undefined, undefined, selectedSeasonId || undefined)
       .then((res) => setSessions(res.data.items ?? []))
       .catch(() => setError('Errore nel caricamento'))
       .finally(() => setLoading(false))
-  }
-
-  useEffect(() => {
-    getGroups().then((res) => {
-      setGroups(res.data)
-      if (res.data.length) {
-        setForm((f) => ({ ...f, group_id: res.data[0].id }))
-      }
-    })
-    loadSessions()
-  }, [])
-
-  const handleGroupFilter = (e) => {
-    setSelectedGroup(e.target.value)
-    loadSessions(e.target.value)
-  }
+  }, [selectedGroupId, selectedSeasonId])
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -236,8 +224,8 @@ export default function SessionsPage() {
 
       <div className="mb-5 flex items-center gap-3 flex-wrap">
         <select
-          value={selectedGroup}
-          onChange={handleGroupFilter}
+          value={selectedGroupId}
+          onChange={(e) => setSelectedGroupId(e.target.value)}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
         >
           <option value="">Tutti i gruppi</option>

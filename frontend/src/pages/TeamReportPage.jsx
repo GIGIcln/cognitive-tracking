@@ -164,7 +164,7 @@ export default function TeamReportPage() {
               onClick={async () => {
                 setPdfLoading(true)
                 await exportReportPDF(
-                  'report-content',
+                  `/reports/team/${groupId}/pdf`,
                   `report_squadra_${groupName.replace(/\s/g, '_')}_${sessionDate}.pdf`
                 )
                 setPdfLoading(false)

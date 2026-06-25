@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
+from app.limiter import limiter
 from app.models.measurement import Measurement
 from app.models.training_session import TrainingSession
 from app.rbac import assert_group_access, assert_write_access, require_admin, require_auth
 from app.schemas.auth import UserContext
+from app.schemas.attendance import AttendanceBatchInput, AttendanceResponse
 from app.schemas.observation_event import ObservationEventResponse, ObservationEventsBatchInput
 from app.schemas.pagination import Page
 from app.schemas.session import (
@@ -26,6 +29,7 @@ from app.services.observation_service import (
     aggregate_events_to_responses,
     event_to_response,
 )
+from app.services.attendance_service import AttendanceService
 from app.services.session_service import SessionService
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -59,8 +63,9 @@ def _get_session_or_404(db: Session, session_id: uuid.UUID) -> TrainingSession:
 @router.get("", response_model=Page[SessionResponse])
 def list_sessions(
     group_id: uuid.UUID | None = None,
+    season_id: uuid.UUID | None = None,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
@@ -68,11 +73,11 @@ def list_sessions(
     svc = SessionService(db)
     if group_id is not None:
         assert_group_access(current_user, group_id)
-        sessions = svc.list(group_id, skip, limit)
-        total = svc.count(group_id=group_id)
+        sessions = svc.list(group_id, skip, limit, season_id=season_id)
+        total = svc.count(group_id=group_id, season_id=season_id)
     else:
-        sessions = svc.list(None, skip, limit, allowed_group_ids=scope)
-        total = svc.count(allowed_group_ids=scope)
+        sessions = svc.list(None, skip, limit, allowed_group_ids=scope, season_id=season_id)
+        total = svc.count(allowed_group_ids=scope, season_id=season_id)
     return Page(items=[SessionResponse.model_validate(s) for s in sessions], total=total, limit=limit, skip=skip)
 
 
@@ -82,10 +87,11 @@ def get_session(
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
-    session = _get_session_or_404(db, session_id)
-    assert_group_access(current_user, session.group_id)
-
     full = SessionService(db).get(session_id)
+    if full is None or not full.is_active:
+        raise HTTPException(status_code=404, detail="Sessione non trovata")
+    assert_group_access(current_user, full.group_id)
+
     measurements = [_measurement_to_response(m) for m in full.measurements]
     data = SessionResponse.model_validate(full).model_dump()
     data["measurements"] = [m.model_dump() for m in measurements]
@@ -111,7 +117,7 @@ def get_session_averages(
 def get_session_rankings(
     session_id: uuid.UUID,
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
@@ -126,13 +132,11 @@ def get_measurements(
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
-    session = _get_session_or_404(db, session_id)
-    assert_group_access(current_user, session.group_id)
-
-    measurements = SessionService(db).get_measurements(session_id)
-    if measurements is None:
+    full = SessionService(db).get(session_id)
+    if full is None or not full.is_active:
         raise HTTPException(status_code=404, detail="Sessione non trovata")
-    return [_measurement_to_response(m) for m in measurements]
+    assert_group_access(current_user, full.group_id)
+    return [_measurement_to_response(m) for m in full.measurements]
 
 
 # ── WRITE: admin (tutto) + allenatore (propri gruppi) ────────────────────────
@@ -154,7 +158,9 @@ def create_session(
 
 
 @router.post("/{session_id}/measurements", response_model=list[MeasurementResponse])
+@limiter.limit("60/minute")
 def upsert_measurements(
+    request: Request,
     session_id: uuid.UUID,
     body: MeasurementsBatchInput,
     db: Session = Depends(get_db),
@@ -163,17 +169,25 @@ def upsert_measurements(
     session = _get_session_or_404(db, session_id)
     assert_write_access(current_user, session.group_id)
 
+    if not get_settings().allow_manual_scores:
+        raise HTTPException(
+            status_code=403,
+            detail="Inserimento punteggi manuali disabilitato: usare la modalità Conteggio (events).",
+        )
+
     try:
         measurements = SessionService(db).upsert_measurements(session, body)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc))
     return [_measurement_to_response(m) for m in measurements]
 
 
 # ── OBSERVATION EVENTS (event-based entry mode) ───────────────────────────────
 
 @router.post("/{session_id}/events", response_model=list[ObservationEventResponse])
+@limiter.limit("120/minute")
 def upsert_events(
+    request: Request,
     session_id: uuid.UUID,
     body: ObservationEventsBatchInput,
     db: Session = Depends(get_db),
@@ -185,7 +199,7 @@ def upsert_events(
     try:
         events = ObservationService(db).upsert_events(session_id, session.group_id, body)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc))
     return aggregate_events_to_responses(events)
 
 
@@ -215,6 +229,31 @@ def update_session(
     if session is None:
         raise HTTPException(status_code=404, detail="Sessione non trovata")
     return SessionResponse.model_validate(session)
+
+
+@router.get("/{session_id}/attendance", response_model=list[AttendanceResponse])
+def get_attendance(
+    session_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    session = _get_session_or_404(db, session_id)
+    assert_group_access(current_user, session.group_id)
+    rows = AttendanceService(db).get_by_session(session_id)
+    return [AttendanceResponse.model_validate(r) for r in rows]
+
+
+@router.put("/{session_id}/attendance", response_model=list[AttendanceResponse])
+def upsert_attendance(
+    session_id: uuid.UUID,
+    body: AttendanceBatchInput,
+    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    session = _get_session_or_404(db, session_id)
+    assert_write_access(current_user, session.group_id)
+    rows = AttendanceService(db).upsert_batch(session_id, body.records)
+    return [AttendanceResponse.model_validate(r) for r in rows]
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

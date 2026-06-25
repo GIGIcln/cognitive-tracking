@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func
+from sqlalchemy import Float, case, cast, desc, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, joinedload
 
@@ -24,6 +24,7 @@ class SessionService:
         skip: int,
         limit: int,
         allowed_group_ids: set[uuid.UUID] | None = None,
+        season_id: uuid.UUID | None = None,
     ) -> list[TrainingSession]:
         """
         allowed_group_ids=None → nessun filtro (admin/responsabile).
@@ -35,18 +36,23 @@ class SessionService:
             q = q.filter(TrainingSession.group_id == group_id)
         elif allowed_group_ids is not None:
             q = q.filter(TrainingSession.group_id.in_(allowed_group_ids))
+        if season_id:
+            q = q.filter(TrainingSession.season_id == season_id)
         return q.order_by(TrainingSession.session_date.desc()).offset(skip).limit(limit).all()
 
     def count(
         self,
         group_id: uuid.UUID | None = None,
         allowed_group_ids: set[uuid.UUID] | None = None,
+        season_id: uuid.UUID | None = None,
     ) -> int:
         q = self.db.query(func.count(TrainingSession.id)).filter(TrainingSession.is_active.is_(True))
         if group_id:
             q = q.filter(TrainingSession.group_id == group_id)
         elif allowed_group_ids is not None:
             q = q.filter(TrainingSession.group_id.in_(allowed_group_ids))
+        if season_id:
+            q = q.filter(TrainingSession.season_id == season_id)
         return q.scalar() or 0
 
     def update(self, session_id: uuid.UUID, body: SessionUpdate) -> TrainingSession | None:
@@ -140,31 +146,65 @@ class SessionService:
     ) -> list[dict]:
         _FIELDS = ("scanning_rate", "decision_quality", "anticipation", "transition_reset", "verbal_comm")
 
-        measurements = (
-            self.db.query(Measurement)
-            .options(joinedload(Measurement.player))
-            .filter(Measurement.session_id == session_id, Measurement.is_absent.is_(False))
+        # Build row-level mean of non-NULL columns entirely in SQL.
+        sum_expr = None
+        count_expr = None
+        for f in _FIELDS:
+            col = getattr(Measurement, f)
+            s = func.coalesce(col, 0.0)
+            c = case((col.isnot(None), 1), else_=0)
+            sum_expr = s if sum_expr is None else sum_expr + s
+            count_expr = c if count_expr is None else count_expr + c
+
+        avg_expr = cast(sum_expr, Float) / func.nullif(count_expr, 0)
+
+        rows = (
+            self.db.query(
+                Measurement.player_id,
+                Player.first_name,
+                Player.last_name,
+                avg_expr.label("avg_score"),
+            )
+            .join(Player, Measurement.player_id == Player.id)
+            .filter(
+                Measurement.session_id == session_id,
+                Measurement.is_absent.is_(False),
+                count_expr > 0,
+            )
+            .order_by(desc(avg_expr))
             .all()
         )
 
-        ranked = []
-        for m in measurements:
-            vals = [float(getattr(m, f)) for f in _FIELDS if getattr(m, f) is not None]
-            if not vals:
-                continue
-            ranked.append({
-                "player_id": m.player_id,
-                "first_name": m.player.first_name,
-                "last_name": m.player.last_name,
-                "avg_score": round(sum(vals) / len(vals), 2),
-            })
+        if not rows:
+            return []
 
-        ranked.sort(key=lambda x: x["avg_score"], reverse=True)
+        ranked = [
+            {
+                "player_id": r.player_id,
+                "first_name": r.first_name,
+                "last_name": r.last_name,
+                "avg_score": round(float(r.avg_score), 2),
+            }
+            for r in rows
+        ]
+
         total = len(ranked)
+
+        # Dense ranking: players with equal avg_score share rank and percentile.
+        current_rank = 1
         for i, r in enumerate(ranked):
-            r["rank"] = i + 1
+            if i > 0 and r["avg_score"] < ranked[i - 1]["avg_score"]:
+                current_rank = i + 1
+            r["rank"] = current_rank
             r["total"] = total
-            r["percentile"] = round((total - i - 1) / total * 100) if total > 1 else 100
+
+        # Percentile based on the first position of each rank group.
+        rank_first_pos: dict[int, int] = {}
+        for i, r in enumerate(ranked):
+            rank_first_pos.setdefault(r["rank"], i)
+        for r in ranked:
+            pos = rank_first_pos[r["rank"]]
+            r["percentile"] = round((total - pos - 1) / total * 100) if total > 1 else 100
 
         return ranked[skip : skip + limit]
 

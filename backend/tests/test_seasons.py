@@ -1,7 +1,5 @@
 """Integration tests for /api/seasons endpoints."""
 
-import pytest
-
 
 # ── GET /seasons/current ──────────────────────────────────────────────────────
 
@@ -30,14 +28,15 @@ def test_list_seasons_returns_all(seeded):
     assert len(res.json()) >= 1
 
 
-def test_list_seasons_requires_admin(seeded):
+def test_list_seasons_accessible_to_coach(seeded):
     c = seeded["client"]
     from tests.conftest import _TEST_PASSWORD
     coach_token = c.post("/api/auth/login", json={
         "email": "coach@test.com", "password": _TEST_PASSWORD
     }).json()["access_token"]
     res = c.get("/api/seasons", headers={"Authorization": f"Bearer {coach_token}"})
-    assert res.status_code == 403
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)
 
 
 # ── POST /seasons ─────────────────────────────────────────────────────────────

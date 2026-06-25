@@ -1,4 +1,36 @@
-export const LEVEL_COLORS = {
+export type MetricField =
+  | 'scanning_rate'
+  | 'decision_quality'
+  | 'anticipation'
+  | 'transition_reset'
+  | 'verbal_comm'
+
+export type MetricType = 'SR' | 'DQI' | 'AI' | 'TRS' | 'VCI'
+export type ReliabilityLevel = 'insufficient' | 'low' | 'medium' | 'high'
+
+export interface CognitiveParam {
+  field: MetricField
+  label: MetricType
+  italianLabel: string
+  avgKey: string
+}
+
+export interface MetricEventConfig {
+  metric_type: MetricType
+  numerator_label: string
+  denominator_label: string
+  rate_label: string
+  min_n: number | null
+  count_only: boolean
+}
+
+export interface ReliabilityMeta {
+  label: string
+  color: string
+  bg: string
+}
+
+export const LEVEL_COLORS: Record<string, string> = {
   alto: 'bg-green-100 text-green-700',
   medio: 'bg-yellow-100 text-yellow-700',
   basso: 'bg-red-100 text-red-700',
@@ -6,18 +38,24 @@ export const LEVEL_COLORS = {
   'medio/basso': 'bg-orange-100 text-orange-700',
 }
 
-export const SESSION_TYPES = ['SSG', 'Partita a tema', 'Partita']
+export const SESSION_TYPES: string[] = ['SSG', 'Partita a tema', 'Partita']
 
-export const POSITIONS = [
+export const POSITIONS: { value: string; label: string }[] = [
   { value: 'POR', label: 'Portiere' },
   { value: 'DIF', label: 'Difensore' },
   { value: 'CEN', label: 'Centrocampista' },
   { value: 'ATT', label: 'Attaccante' },
 ]
 
-export const GROUP_CATEGORIES = ['Esordienti', 'Pulcini', 'Primi Calci']
+export const FOOT_OPTIONS: { value: string; label: string }[] = [
+  { value: 'destro', label: 'Destro' },
+  { value: 'sinistro', label: 'Sinistro' },
+  { value: 'ambidestro', label: 'Ambidestro' },
+]
 
-export const COGNITIVE_PARAMS = [
+export const GROUP_CATEGORIES: string[] = ['Esordienti', 'Pulcini', 'Primi Calci']
+
+export const COGNITIVE_PARAMS: CognitiveParam[] = [
   { field: 'scanning_rate',    label: 'SR',  italianLabel: 'Scanning Rate',  avgKey: 'avg_sr'  },
   { field: 'decision_quality', label: 'DQI', italianLabel: 'Dec. Quality',   avgKey: 'avg_dqi' },
   { field: 'anticipation',     label: 'AI',  italianLabel: 'Anticipazione',  avgKey: 'avg_ai'  },
@@ -25,17 +63,13 @@ export const COGNITIVE_PARAMS = [
   { field: 'verbal_comm',      label: 'VCI', italianLabel: 'Comunicazione',  avgKey: 'avg_vci' },
 ]
 
-// Configuration for event-based entry mode.
-// numerator_label / denominator_label describe what the coach is counting.
-// min_n is the denominator threshold for "reliable" data (null = AI uses numerator).
-// count_only = true means denominator is always 1 (AI: just count moves, no rate).
-export const METRIC_EVENT_CONFIG = {
+export const METRIC_EVENT_CONFIG: Record<MetricField, MetricEventConfig> = {
   scanning_rate: {
     metric_type:       'SR',
     numerator_label:   'Check pre-tocco',
-    denominator_label: 'Ricezioni in pressione',
-    rate_label:        'SR%',
-    min_n:             15,
+    denominator_label: 'Durata finestra (sec)',
+    rate_label:        'scan/s',
+    min_n:             6,
     count_only:        false,
   },
   decision_quality: {
@@ -72,20 +106,29 @@ export const METRIC_EVENT_CONFIG = {
   },
 }
 
-// Derived from COGNITIVE_PARAMS: maps Measurement field name → metric type string.
 export const FIELD_TO_METRIC = Object.fromEntries(
   COGNITIVE_PARAMS.map(({ field, label }) => [field, label])
-)
+) as Record<MetricField, MetricType>
 
-export const RELIABILITY_META = {
+export const RELIABILITY_META: Record<ReliabilityLevel, ReliabilityMeta> = {
   insufficient: { label: 'Dati insufficienti', color: 'text-red-500',    bg: 'bg-red-50'    },
   low:          { label: 'Affid. bassa',        color: 'text-orange-500', bg: 'bg-orange-50' },
   medium:       { label: 'Affid. media',        color: 'text-yellow-600', bg: 'bg-yellow-50' },
   high:         { label: 'Affid. alta',         color: 'text-green-600',  bg: 'bg-green-50'  },
 }
 
-// Derives a 1–10 score from raw event counts — mirrors backend observation_service.py.
-export function deriveScore(metricType, numerator, denominator) {
+export function deriveSRReliability(n: number): ReliabilityLevel {
+  if (n < 3)  return 'insufficient'
+  if (n < 6)  return 'low'
+  if (n < 12) return 'medium'
+  return 'high'
+}
+
+export function deriveScore(
+  metricType: MetricType,
+  numerator: number,
+  denominator: number,
+): number | null {
   if (metricType === 'SR' || metricType === 'DQI' || metricType === 'TRS') {
     if (denominator === 0) return null
     const rate = numerator / denominator
@@ -103,22 +146,25 @@ export function deriveScore(metricType, numerator, denominator) {
   return null
 }
 
-export function deriveReliability(metricType, numerator, denominator) {
-  const minN = METRIC_EVENT_CONFIG[
-    Object.keys(METRIC_EVENT_CONFIG).find(
-      (k) => METRIC_EVENT_CONFIG[k].metric_type === metricType
-    )
-  ]?.min_n ?? null
-
+export function deriveReliability(
+  metricType: MetricType,
+  numerator: number,
+  denominator: number,
+): ReliabilityLevel {
   if (metricType === 'AI') {
     if (numerator < 3)  return 'insufficient'
     if (numerator < 6)  return 'low'
     if (numerator < 10) return 'medium'
     return 'high'
   }
+  const field = (Object.keys(METRIC_EVENT_CONFIG) as MetricField[]).find(
+    (k) => METRIC_EVENT_CONFIG[k].metric_type === metricType,
+  )
+  const minN = field ? METRIC_EVENT_CONFIG[field].min_n : null
+  if (minN === null) return 'insufficient'
   const half = Math.floor(minN / 2)
-  if (denominator < half)      return 'insufficient'
-  if (denominator < minN)      return 'low'
-  if (denominator < minN * 2)  return 'medium'
+  if (denominator < half)     return 'insufficient'
+  if (denominator < minN)     return 'low'
+  if (denominator < minN * 2) return 'medium'
   return 'high'
 }

@@ -1,17 +1,24 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+import logging
 
-from app import user_store
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy.orm import Session
+
 from app.config import get_settings
+from app.database import get_db
 from app.limiter import limiter
-from app.schemas.auth import LoginRequest, TokenResponse, UserContext, UserResponse
+from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserContext, UserResponse
+from app.schemas.user import UserCreate
 from app.services.auth_service import (
     create_access_token,
     get_current_user,
     hash_password,
     verify_password,
 )
+from app.services.user_service import UserService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -22,17 +29,26 @@ _DUMMY_HASH = hash_password("DummyPassword1!")
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
-def login(request: Request, response: Response, body: LoginRequest):
-    record = user_store.get_by_email(body.email)
-    candidate_hash = record["hashed_password"] if record else _DUMMY_HASH
+def login(
+    request: Request,
+    response: Response,
+    body: LoginRequest,
+    db: Session = Depends(get_db),
+):
+    svc = UserService(db)
+    user = svc.get_by_email(body.email)
+    candidate_hash = user.hashed_password if user else _DUMMY_HASH
     is_valid = verify_password(body.password, candidate_hash)
-    if not record or not is_valid or not record.get("is_active", True):
+    rid = getattr(request.state, "request_id", "-")
+    if not user or not is_valid or not user.is_active:
+        logger.warning("[%s] Login fallito: email='%s'", rid, body.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenziali non valide",
         )
+    logger.info("[%s] Login riuscito: email='%s'", rid, body.email)
     settings = get_settings()
-    token = create_access_token(record)
+    token = create_access_token(user)
     is_production = settings.app_env == "production"
     response.set_cookie(
         key="ct_token",
@@ -46,11 +62,12 @@ def login(request: Request, response: Response, body: LoginRequest):
     return TokenResponse(
         access_token=token,
         user=UserResponse(
-            id=record["id"],
-            email=record["email"],
-            full_name=record.get("full_name"),
-            is_active=record.get("is_active", True),
-            roles=record.get("roles", []),
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            is_active=user.is_active,
+            status=getattr(user, "status", "active"),
+            roles=user.roles or [],
         ),
     )
 
@@ -68,6 +85,35 @@ def logout(response: Response):
     return {"message": "Logout effettuato"}
 
 
+@router.post("/register", response_model=UserResponse, status_code=201)
+@limiter.limit("5/minute")
+def register(
+    request: Request,
+    body: RegisterRequest,
+    db: Session = Depends(get_db),
+):
+    """Registrazione pubblica per allenatori. Account creato in stato pending."""
+    svc = UserService(db)
+    if svc.get_by_email(body.email):
+        raise HTTPException(status_code=409, detail="Email già in uso")
+    user = svc.create(UserCreate(
+        email=body.email,
+        password=body.password,
+        full_name=body.full_name,
+        roles=["allenatore"],
+        is_active=False,
+        status="pending",
+    ))
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        status=user.status,
+        roles=user.roles or [],
+    )
+
+
 @router.get("/me", response_model=UserResponse)
 def me(current_user: UserContext = Depends(get_current_user)):
     return UserResponse(
@@ -75,5 +121,6 @@ def me(current_user: UserContext = Depends(get_current_user)):
         email=current_user.email,
         full_name=current_user.full_name,
         is_active=current_user.is_active,
+        status=current_user.status,
         roles=current_user.roles,
     )

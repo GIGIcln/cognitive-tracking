@@ -1,7 +1,5 @@
 """Integration tests for /api/sessions endpoints."""
 
-import pytest
-
 SESSION_BODY = {
     "session_date": "2025-10-15",
     "session_type": "Allenamento",
@@ -212,8 +210,8 @@ def test_upsert_measurements_absent_player(pg_seeded):
     assert p2_updated["scanning_rate"] == 6.0
 
 
-def test_upsert_measurements_unknown_player_returns_404(pg_seeded):
-    """player_id inesistente causa 404 con messaggio esplicito."""
+def test_upsert_measurements_unknown_player_returns_422(pg_seeded):
+    """player_id inesistente causa 422 (input non processabile) con messaggio esplicito."""
     import uuid as _uuid
     c, h = pg_seeded["client"], pg_seeded["headers"]
     gid = pg_seeded["group_id"]
@@ -223,7 +221,7 @@ def test_upsert_measurements_unknown_player_returns_404(pg_seeded):
     res = c.post(f"/api/sessions/{sid}/measurements", headers=h, json={
         "measurements": [{"player_id": str(_uuid.uuid4()), "scanning_rate": 5.0}]
     })
-    assert res.status_code == 404
+    assert res.status_code == 422
     assert "non trovati" in res.json()["detail"].lower()
 
 
@@ -271,6 +269,27 @@ def test_get_session_rankings_nonexistent_returns_404(seeded):
     assert res.status_code == 404
 
 
+def test_get_session_rankings_tied_scores_share_rank_and_percentile(pg_seeded):
+    """Giocatori con avg_score identico devono ricevere lo stesso rank e lo stesso
+    percentile (dense ranking), non rank diversi basati sull'ordine arbitrario di sort."""
+    c, h = pg_seeded["client"], pg_seeded["headers"]
+    pid1, pid2 = pg_seeded["player_ids"]
+    gid = pg_seeded["group_id"]
+
+    sid = _create_session(c, h, gid)
+    # Entrambi i giocatori ricevono lo stesso punteggio su tutte le metriche → avg_score identico
+    c.post(f"/api/sessions/{sid}/measurements", headers=h,
+           json=_measurement_payload([pid1, pid2], [7.0, 7.0]))
+
+    res = c.get(f"/api/sessions/{sid}/rankings", headers=h)
+    assert res.status_code == 200
+    ranked = res.json()
+    assert len(ranked) == 2
+
+    assert ranked[0]["rank"] == ranked[1]["rank"] == 1, "rank uguale per punteggi identici"
+    assert ranked[0]["percentile"] == ranked[1]["percentile"], "percentile uguale per punteggi identici"
+
+
 # ── Score precision ───────────────────────────────────────────────────────────
 
 def test_measurement_accepts_score_10(pg_seeded):
@@ -305,8 +324,51 @@ def test_get_session_averages_returns_typed_response(seeded):
     assert "avg_vci" in data
 
 
-def test_get_session_rankings_nonexistent_returns_404(seeded):
-    import uuid
-    c, h = seeded["client"], seeded["headers"]
-    res = c.get(f"/api/sessions/{uuid.uuid4()}/rankings", headers=h)
-    assert res.status_code == 404
+# ── Gate allow_manual_scores ──────────────────────────────────────────────────
+
+def test_upsert_measurements_blocked_when_flag_off(pg_seeded, monkeypatch):
+    """POST /measurements deve rispondere 403 quando allow_manual_scores=False."""
+    from app.config import Settings
+    from unittest.mock import MagicMock
+
+    locked_settings = MagicMock(spec=Settings)
+    locked_settings.allow_manual_scores = False
+    monkeypatch.setattr("app.routers.sessions.get_settings", lambda: locked_settings)
+
+    c, h = pg_seeded["client"], pg_seeded["headers"]
+    pid = pg_seeded["player_ids"][0]
+    gid = pg_seeded["group_id"]
+
+    sid = _create_session(c, h, gid)
+    res = c.post(f"/api/sessions/{sid}/measurements", headers=h, json={
+        "measurements": [{"player_id": pid, "scanning_rate": 7.0}]
+    })
+    assert res.status_code == 403
+    assert "Conteggio" in res.json()["detail"]
+
+
+def test_events_endpoint_unaffected_by_flag_off(pg_seeded, monkeypatch):
+    """POST /events deve restare 200 indipendentemente da allow_manual_scores."""
+    from app.config import Settings
+    from unittest.mock import MagicMock
+
+    locked_settings = MagicMock(spec=Settings)
+    locked_settings.allow_manual_scores = False
+    monkeypatch.setattr("app.routers.sessions.get_settings", lambda: locked_settings)
+
+    c, h = pg_seeded["client"], pg_seeded["headers"]
+    pid = pg_seeded["player_ids"][0]
+    gid = pg_seeded["group_id"]
+
+    sid = _create_session(c, h, gid)
+    res = c.post(f"/api/sessions/{sid}/events", headers=h, json={
+        "events": [{
+            "player_id": pid,
+            "metric_type": "TRS",
+            "numerator": 3,
+            "denominator": 5,
+            "method": "video",
+            "codebook_version": "v1",
+        }]
+    })
+    assert res.status_code == 200

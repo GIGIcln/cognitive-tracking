@@ -1,67 +1,18 @@
-export async function exportReportPDF(contentId, filename) {
-  const { default: html2canvas } = await import('html2canvas')
-  const { default: jsPDF } = await import('jspdf')
+import api from '../api/axios'
+import { COGNITIVE_PARAMS } from '../constants/domain'
 
-  const exportButtons = document.getElementById('export-buttons')
-  const backBtn = document.getElementById('report-back-btn')
-  if (exportButtons) exportButtons.style.display = 'none'
-  if (backBtn) backBtn.style.display = 'none'
-
-  const pdf = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-  })
-
-  const pdfWidth = pdf.internal.pageSize.getWidth()
-  const pdfHeight = pdf.internal.pageSize.getHeight()
-  const margin = 8
-  const contentWidth = pdfWidth - margin * 2
-  let currentY = margin
-
-  document.querySelectorAll(`#${contentId} [class*="overflow-x"]`).forEach((el) => { el.scrollLeft = 0 })
-
-  const sections = Array.from(document.querySelectorAll(`#${contentId} .report-section`))
-  for (let idx = 0; idx < sections.length; idx++) {
-    const canvas = await html2canvas(sections[idx], {
-      scale: 2,
-      backgroundColor: '#ffffff',
-      useCORS: true,
-      windowWidth: 1200,
-      scrollX: 0,
-      scrollY: -window.scrollY,
-    })
-    const imgData = canvas.toDataURL('image/png')
-    const imgH = (canvas.height * contentWidth) / canvas.width
-
-    if (currentY > margin && currentY + imgH > pdfHeight - margin) {
-      pdf.addPage()
-      currentY = margin
-    }
-
-    pdf.addImage(imgData, 'PNG', margin, currentY, contentWidth, imgH)
-    currentY += imgH + 3
-
-    const isLast = idx === sections.length - 1
-    if (!isLast && currentY > pdfHeight - margin - 8) {
-      pdf.addPage()
-      currentY = margin
-    }
-  }
-
-  if (exportButtons) exportButtons.style.display = ''
-  if (backBtn) backBtn.style.display = ''
-  pdf.save(filename)
+export async function exportReportPDF(apiPath, filename) {
+  const response = await api.get(apiPath, { responseType: 'blob' })
+  const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export function exportPlayerCSV(playerName, history, targets) {
-  const params = [
-    { key: 'scanning_rate',    label: 'Scanning Rate',  code: 'SR'  },
-    { key: 'decision_quality', label: 'Decision Quality', code: 'DQI' },
-    { key: 'anticipation',     label: 'Anticipazione',  code: 'AI'  },
-    { key: 'transition_reset', label: 'Trans. Reset',   code: 'TRS' },
-    { key: 'verbal_comm',      label: 'Comunicazione',  code: 'VCI' },
-  ]
+  const params = COGNITIVE_PARAMS.map((p) => ({ key: p.field, label: p.italianLabel, code: p.label }))
 
   const headers = [
     'Data', 'Tipo sessione', 'Gruppo',
@@ -165,13 +116,7 @@ export function exportSessionTeamCSV(session, groupName, playerRankings, average
 }
 
 export function exportSessionPlayerCSV(playerLastName, playerFirstName, session, groupName, measurement, averages, targets) {
-  const params = [
-    { key: 'scanning_rate', avgKey: 'avg_sr', label: 'Scanning Rate', code: 'SR' },
-    { key: 'decision_quality', avgKey: 'avg_dqi', label: 'Decision Quality', code: 'DQI' },
-    { key: 'anticipation', avgKey: 'avg_ai', label: 'Anticipazione', code: 'AI' },
-    { key: 'transition_reset', avgKey: 'avg_trs', label: 'Trans. Reset', code: 'TRS' },
-    { key: 'verbal_comm', avgKey: 'avg_vci', label: 'Comunicazione', code: 'VCI' },
-  ]
+  const params = COGNITIVE_PARAMS.map((p) => ({ key: p.field, avgKey: p.avgKey, label: p.italianLabel, code: p.label }))
 
   const sessionDate = session?.session_date ? new Date(session.session_date).toLocaleDateString('it-IT') : ''
 

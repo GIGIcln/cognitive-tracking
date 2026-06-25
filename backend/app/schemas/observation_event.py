@@ -8,8 +8,9 @@ _VALID_METRIC_TYPES = {"SR", "DQI", "AI", "TRS", "VCI"}
 _VALID_METHODS = {"live", "video", "audio"}
 _VALID_CODEBOOK_VERSIONS = {"v1"}
 
-# SR/DQI/TRS are percentage metrics: numerator/denominator must be a valid ratio.
-_RATIO_METRICS = {"SR", "DQI", "TRS"}
+# DQI/TRS are percentage metrics: numerator ≤ denominator. SR is NOT included
+# because denominator = window seconds and scan rate can legally exceed 1 scan/sec.
+_RATIO_METRICS = {"DQI", "TRS"}
 # All metrics except AI require a meaningful denominator (AI is a pure count).
 _DENOMINATOR_REQUIRED_METRICS = {"SR", "DQI", "TRS", "VCI"}
 

@@ -1,40 +1,57 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { getSession, getMeasurements, getSessionAverages } from '../api/sessions'
 import { getGroup, getGroupTargets } from '../api/groups'
 
 export function useSessionTeamReport(sessionId) {
-  const [session, setSession] = useState(null)
-  const [groupName, setGroupName] = useState('')
-  const [measurements, setMeasurements] = useState([])
-  const [averages, setAverages] = useState(null)
-  const [targets, setTargets] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const sessionQuery = useQuery({
+    queryKey: ['session', sessionId],
+    queryFn: () => getSession(sessionId).then((r) => r.data),
+  })
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const sessRes = await getSession(sessionId)
-        const s = sessRes.data
-        setSession(s)
-        const [groupRes, measRes, avgRes, tgtRes] = await Promise.all([
-          getGroup(s.group_id),
-          getMeasurements(sessionId),
-          getSessionAverages(sessionId),
-          getGroupTargets(s.group_id),
-        ])
-        setGroupName(groupRes.data.name)
-        setMeasurements(measRes.data ?? [])
-        setAverages(avgRes.data)
-        setTargets(tgtRes.data ?? [])
-      } catch {
-        setError('Errore nel caricamento del report')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [sessionId])
+  // Fetch in parallel with session — only sessionId needed
+  const measQuery = useQuery({
+    queryKey: ['session-measurements', sessionId],
+    queryFn: () => getMeasurements(sessionId).then((r) => r.data ?? []),
+  })
 
-  return { session, groupName, measurements, averages, targets, loading, error }
+  const avgQuery = useQuery({
+    queryKey: ['session-averages', sessionId],
+    queryFn: () => getSessionAverages(sessionId).then((r) => r.data),
+  })
+
+  // Depends on session.group_id
+  const groupId = sessionQuery.data?.group_id
+
+  const groupQuery = useQuery({
+    queryKey: ['group', groupId],
+    queryFn: () => getGroup(groupId).then((r) => r.data),
+    enabled: !!groupId,
+  })
+
+  const targetsQuery = useQuery({
+    queryKey: ['group-targets', groupId],
+    queryFn: () => getGroupTargets(groupId).then((r) => r.data ?? []),
+    enabled: !!groupId,
+  })
+
+  const loading =
+    sessionQuery.isPending ||
+    measQuery.isPending ||
+    avgQuery.isPending ||
+    (!!groupId && (groupQuery.isPending || targetsQuery.isPending))
+
+  const error =
+    sessionQuery.isError || measQuery.isError || avgQuery.isError
+      ? 'Errore nel caricamento del report'
+      : ''
+
+  return {
+    session: sessionQuery.data ?? null,
+    groupName: groupQuery.data?.name ?? '',
+    measurements: measQuery.data ?? [],
+    averages: avgQuery.data ?? null,
+    targets: targetsQuery.data ?? [],
+    loading,
+    error,
+  }
 }

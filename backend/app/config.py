@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     allowed_origins: str = "http://localhost:5173"
     ntfy_topic: str = ""
+    allow_manual_scores: bool = False
 
     @property
     def origins_list(self) -> list[str]:

@@ -7,8 +7,8 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
-from app import user_store
 from app.config import get_settings
+from app.models.user import User
 from app.schemas.auth import UserContext
 
 _bearer = HTTPBearer(auto_error=False)
@@ -22,13 +22,19 @@ def verify_password(plain: str, hashed: str) -> bool:
     return _bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def create_access_token(record: dict) -> str:
-    """Genera un JWT con ruoli e group_ids embedded, evitando DB hit futuri."""
+def create_access_token(user: User) -> str:
+    """
+    Genera un JWT con tutti i dati utente embedded.
+    Zero DB hit per le successive richieste autenticate.
+    """
     settings = get_settings()
     payload = {
-        "sub": record["id"],
-        "roles": record.get("roles", []),
-        "group_ids": record.get("assigned_group_ids", []),
+        "sub": str(user.id),
+        "email": user.email,
+        "full_name": user.full_name,
+        "roles": user.roles or [],
+        "group_ids": user.assigned_group_ids or [],
+        "status": getattr(user, "status", "active"),
         "exp": datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes),
     }
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
@@ -41,7 +47,7 @@ def get_current_user(
     """
     Verifica il JWT e restituisce lo UserContext.
     Legge prima dal cookie HttpOnly, poi dall'header Authorization come fallback.
-    Unico I/O: dict lookup in-memory su user_store (O(1), nessuna query DB).
+    Zero DB hit: tutti i dati utente sono embedded nel token.
     """
     settings = get_settings()
     exc = HTTPException(
@@ -55,26 +61,19 @@ def get_current_user(
             raise exc
         token = credentials.credentials
     try:
-        payload = jwt.decode(
-            token,
-            settings.secret_key,
-            algorithms=[settings.algorithm],
-        )
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         user_id: str | None = payload.get("sub")
         if user_id is None:
             raise exc
     except JWTError:
         raise exc
 
-    record = user_store.get_by_id(user_id)
-    if record is None or not record.get("is_active", True):
-        raise exc
-
     return UserContext(
         id=user_id,
-        email=record["email"],
-        full_name=record.get("full_name"),
+        email=payload.get("email", ""),
+        full_name=payload.get("full_name"),
         roles=payload.get("roles", []),
         group_ids=payload.get("group_ids", []),
-        is_active=record.get("is_active", True),
+        is_active=True,
+        status=payload.get("status", "active"),
     )

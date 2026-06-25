@@ -11,9 +11,9 @@ export default defineConfig({
         enabled: false,
       },
       manifest: {
-        name: 'Cognitive Tracking',
-        short_name: 'CogTrack',
-        description: 'Monitoraggio cognitivo giocatori di calcio giovanile',
+        name: 'ASC.D Torino Club',
+        short_name: 'TC',
+        description: 'Gestionale sportivo settore giovanile ASC.D Torino Club',
         start_url: '/',
         display: 'standalone',
         background_color: '#0f172a',
@@ -88,7 +88,7 @@ export default defineConfig({
     allowedHosts: ['.trycloudflare.com'],
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: process.env.API_TARGET || 'http://localhost:8000',
         changeOrigin: true,
       }
     }

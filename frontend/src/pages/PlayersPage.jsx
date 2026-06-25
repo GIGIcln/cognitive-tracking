@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getPlayers, deletePlayer, bulkAssignPlayers } from '../api/players'
-import { getGroups } from '../api/groups'
 import PlayerFormModal from '../components/PlayerFormModal'
+import AvailabilityBadge from '../components/AvailabilityBadge'
 import { useAuth } from '../context/AuthContext'
+import { useSeasonGroup } from '../context/SeasonGroupContext'
 import { Pencil, Trash2 } from 'lucide-react'
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState([])
-  const [groups, setGroups] = useState([])
   const [selectedGroup, setSelectedGroup] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -21,6 +21,7 @@ export default function PlayersPage() {
   const [targetGroup, setTargetGroup] = useState('')
   const [assigning, setAssigning] = useState(false)
   const { isAdmin } = useAuth()
+  const { groups } = useSeasonGroup()
   const navigate = useNavigate()
 
   const loadPlayers = (groupId) => {
@@ -38,7 +39,6 @@ export default function PlayersPage() {
   }
 
   useEffect(() => {
-    getGroups().then((res) => setGroups(res.data))
     loadPlayers()
   }, [])
 
@@ -146,13 +146,14 @@ export default function PlayersPage() {
                   />
                 )}
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-gray-900">{p.last_name} {p.first_name}</span>
                     {p.position && (
                       <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
                         {p.position}
                       </span>
                     )}
+                    <AvailabilityBadge availability={p.availability} />
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">
                     {p.birth_year && `${p.birth_year}`}

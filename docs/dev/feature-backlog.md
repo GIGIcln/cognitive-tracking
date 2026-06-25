@@ -1,4 +1,4 @@
-# Feature Backlog — Cognitive Tracking
+# Feature Backlog — ASC.D Torino Club Gestionale
 
 > Guida tecnica per sviluppare le funzionalità pianificate.
 > Per ogni feature: cosa c'è già, cosa manca, dove lavorare.

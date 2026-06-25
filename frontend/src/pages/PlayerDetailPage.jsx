@@ -4,14 +4,18 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
 import { getPlayer, getPlayerHistory, getPlayerAssignments, getPlayerStreak } from '../api/players'
+import { listInjuries, createInjury, updateInjury, deleteInjury } from '../api/injuries'
+import { COGNITIVE_PARAMS } from '../constants/domain'
+import AvailabilityBadge from '../components/AvailabilityBadge'
 
-const METRICS = [
-  { key: 'scanning_rate',    label: 'SR',  color: '#8b5cf6' },
-  { key: 'decision_quality', label: 'DQI', color: '#3b82f6' },
-  { key: 'anticipation',     label: 'AI',  color: '#10b981' },
-  { key: 'transition_reset', label: 'TRS', color: '#f59e0b' },
-  { key: 'verbal_comm',      label: 'VCI', color: '#ef4444' },
-]
+const METRIC_COLORS = {
+  scanning_rate:    '#8b5cf6',
+  decision_quality: '#3b82f6',
+  anticipation:     '#10b981',
+  transition_reset: '#f59e0b',
+  verbal_comm:      '#ef4444',
+}
+const METRICS = COGNITIVE_PARAMS.map((p) => ({ key: p.field, label: p.label, color: METRIC_COLORS[p.field] }))
 
 function fmt(d) {
   return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
@@ -159,6 +163,216 @@ function MetricsTrend({ history, loading }) {
   )
 }
 
+const SEVERITY_LABELS = { lieve: 'Lieve', moderato: 'Moderato', grave: 'Grave' }
+const SEVERITY_COLORS = {
+  lieve:    'bg-amber-100 text-amber-700',
+  moderato: 'bg-orange-100 text-orange-700',
+  grave:    'bg-red-100 text-red-700',
+}
+const INJURY_TYPES = [
+  'Distorsione', 'Stiramento muscolare', 'Lesione muscolare', 'Contusione',
+  'Frattura', 'Lesione legamentosa', 'Tendinite', 'Altro',
+]
+
+function InjuryTab({ playerId }) {
+  const [injuries, setInjuries] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({
+    injury_type: '', start_date: '', severity: 'moderato',
+    expected_return: '', notes: '',
+  })
+
+  const reload = () => {
+    listInjuries(playerId)
+      .then((res) => setInjuries(res.data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { reload() }, [playerId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCreate = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await createInjury(playerId, {
+        injury_type: form.injury_type,
+        start_date: form.start_date,
+        severity: form.severity,
+        expected_return: form.expected_return || null,
+        notes: form.notes || null,
+      })
+      setForm({ injury_type: '', start_date: '', severity: 'moderato', expected_return: '', notes: '' })
+      setShowForm(false)
+      reload()
+    } catch {
+      // errore silenzioso, form rimane aperto
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleReturn = async (injuryId) => {
+    const today = new Date().toISOString().slice(0, 10)
+    await updateInjury(injuryId, { actual_return: today })
+    reload()
+  }
+
+  const handleDelete = async (injuryId) => {
+    if (!window.confirm('Eliminare questo infortunio?')) return
+    await deleteInjury(injuryId)
+    reload()
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="animate-spin rounded-full h-6 w-6 border-4 border-granata border-t-transparent" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          className="text-sm bg-granata text-white px-4 py-2 rounded-lg hover:bg-granata-dark transition-colors"
+        >
+          {showForm ? 'Annulla' : '+ Aggiungi infortunio'}
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleCreate} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Tipo infortunio</label>
+              <select
+                required
+                value={form.injury_type}
+                onChange={(e) => setForm((f) => ({ ...f, injury_type: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
+              >
+                <option value="">— seleziona —</option>
+                {INJURY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Gravità</label>
+              <select
+                value={form.severity}
+                onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
+              >
+                <option value="lieve">Lieve</option>
+                <option value="moderato">Moderato</option>
+                <option value="grave">Grave</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Data inizio</label>
+              <input
+                required type="date"
+                value={form.start_date}
+                onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Rientro previsto</label>
+              <input
+                type="date"
+                value={form.expected_return}
+                onChange={(e) => setForm((f) => ({ ...f, expected_return: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Note</label>
+            <textarea
+              rows={2}
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata resize-none"
+              placeholder="Note aggiuntive…"
+            />
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="text-sm bg-granata text-white px-4 py-2 rounded-lg hover:bg-granata-dark transition-colors disabled:opacity-50"
+            >
+              {saving ? 'Salvataggio…' : 'Salva'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {injuries.length === 0 ? (
+        <div className="text-center text-gray-400 py-12 text-sm">Nessun infortunio registrato</div>
+      ) : (
+        <div className="space-y-3">
+          {injuries.map((inj) => {
+            const isActive = !inj.actual_return
+            return (
+              <div key={inj.id} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-gray-900 text-sm">{inj.injury_type}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${SEVERITY_COLORS[inj.severity] ?? ''}`}>
+                        {SEVERITY_LABELS[inj.severity] ?? inj.severity}
+                      </span>
+                      {isActive && (
+                        <span className="text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full font-medium">
+                          Attivo
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1 space-y-0.5">
+                      <div>Inizio: {new Date(inj.start_date).toLocaleDateString('it-IT')}</div>
+                      {inj.expected_return && (
+                        <div>Rientro previsto: {new Date(inj.expected_return).toLocaleDateString('it-IT')}</div>
+                      )}
+                      {inj.actual_return && (
+                        <div>Rientro effettivo: {new Date(inj.actual_return).toLocaleDateString('it-IT')}</div>
+                      )}
+                      {inj.notes && <div className="text-gray-400 italic mt-1">{inj.notes}</div>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isActive && (
+                      <button
+                        onClick={() => handleReturn(inj.id)}
+                        className="text-xs text-green-600 hover:text-green-800 border border-green-200 px-2 py-1 rounded-lg transition-colors"
+                      >
+                        Segna rientro
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(inj.id)}
+                      className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                    >
+                      Elimina
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function PlayerDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -193,6 +407,7 @@ export default function PlayerDetailPage() {
         .catch(() => {})
         .finally(() => setAssignmentsLoading(false))
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, id])
 
   useEffect(() => {
@@ -203,6 +418,7 @@ export default function PlayerDetailPage() {
         .catch(() => {})
         .finally(() => setHistoryLoading(false))
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, id])
 
   if (loading) {
@@ -227,7 +443,10 @@ export default function PlayerDetailPage() {
           ←
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{player.last_name} {player.first_name}</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900">{player.last_name} {player.first_name}</h1>
+            <AvailabilityBadge availability={player.availability} />
+          </div>
           {player.current_group_name && (
             <div className="text-sm text-gray-500 mt-0.5">{player.current_group_name}</div>
           )}
@@ -240,6 +459,7 @@ export default function PlayerDetailPage() {
           { key: 'anagrafica', label: 'Anagrafica' },
           { key: 'gruppi',     label: 'Storico gruppi' },
           { key: 'trend',      label: 'Trend metriche' },
+          { key: 'infortuni',  label: 'Infortuni' },
         ].map(({ key, label }) => (
           <button
             key={key}
@@ -265,9 +485,15 @@ export default function PlayerDetailPage() {
           )}
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             {[
-              { label: 'Nome', value: `${player.last_name} ${player.first_name}` },
+              { label: 'Cognome e nome', value: `${player.last_name} ${player.first_name}` },
               { label: 'Anno di nascita', value: player.birth_year ?? '—' },
+              { label: 'Nazionalità', value: player.nationality ?? '—' },
               { label: 'Ruolo', value: player.position ?? '—' },
+              { label: 'Piede', value: player.foot
+                  ? player.foot.charAt(0).toUpperCase() + player.foot.slice(1)
+                  : '—' },
+              { label: 'N° maglia', value: player.jersey_number ?? '—' },
+              { label: 'Telefono', value: player.phone ?? '—' },
               { label: 'Gruppo attuale', value: player.current_group_name ?? '—' },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-center justify-between px-4 py-3">
@@ -301,6 +527,11 @@ export default function PlayerDetailPage() {
       {/* Trend metriche */}
       {activeTab === 'trend' && (
         <MetricsTrend history={history} loading={historyLoading} />
+      )}
+
+      {/* Infortuni */}
+      {activeTab === 'infortuni' && (
+        <InjuryTab playerId={id} />
       )}
     </div>
   )

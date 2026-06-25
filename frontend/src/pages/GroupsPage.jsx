@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { getGroups, createGroup, updateGroup, deleteGroup } from '../api/groups'
 import { LEVEL_COLORS, GROUP_CATEGORIES } from '../constants/domain'
 import { useAuth } from '../context/AuthContext'
+import { useSeasonGroup } from '../context/SeasonGroupContext'
 
 const LEVELS = Object.keys(LEVEL_COLORS)
 
@@ -26,16 +27,17 @@ export default function GroupsPage() {
   const [deletingId, setDeletingId] = useState(null)
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
+  const { selectedSeasonId } = useSeasonGroup()
 
   const load = () => {
     setLoading(true)
-    getGroups()
+    getGroups(selectedSeasonId || undefined)
       .then((res) => setGroups(res.data))
       .catch(() => setError('Errore nel caricamento'))
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [selectedSeasonId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const openCreate = () => {
     setEditingGroup(null)

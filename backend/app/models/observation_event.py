@@ -34,7 +34,7 @@ class ObservationEvent(Base):
     metric_type: Mapped[str] = mapped_column(String(10), nullable=False)
     numerator: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     denominator: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    method: Mapped[str] = mapped_column(String(10), nullable=False, default="live")
+    method: Mapped[str] = mapped_column(String(10), nullable=False, default="video")
     observer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     video_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
     codebook_version: Mapped[str] = mapped_column(String(16), nullable=False, server_default="v1")

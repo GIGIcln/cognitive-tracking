@@ -33,10 +33,11 @@ router = APIRouter(prefix="/groups", tags=["groups"])
 
 @router.get("", response_model=list[GroupResponse])
 def list_groups(
+    season_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
-    groups = GroupService(db).list(current_user.read_scope())
+    groups = GroupService(db).list(current_user.read_scope(), season_id=season_id)
     return [GroupResponse.model_validate(g) for g in groups]
 
 
@@ -98,7 +99,7 @@ def get_attendance(
     if data is None:
         raise HTTPException(status_code=404, detail="Gruppo non trovato")
     return GroupAttendanceResponse(
-        sessions=[AttendanceSessionInfo.model_validate(s) for s in data["sessions"]],
+        sessions=[AttendanceSessionInfo(id=s.id, session_date=s.session_date, session_type=s.session_type) for s in data["sessions"]],
         players=[AttendancePlayerInfo(id=p.id, first_name=p.first_name, last_name=p.last_name) for p in data["players"]],
         records=[AttendanceRecord(**r) for r in data["records"]],
     )

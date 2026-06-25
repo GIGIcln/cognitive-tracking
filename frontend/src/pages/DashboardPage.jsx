@@ -5,6 +5,8 @@ import { getCurrentSeason } from '../api/seasons'
 import { getPlayers, getAtRiskPlayers } from '../api/players'
 import { getSessions } from '../api/sessions'
 import { LEVEL_COLORS } from '../constants/domain'
+import AvailabilityBadge from '../components/AvailabilityBadge'
+import { useAuth } from '../context/AuthContext'
 
 const SESSION_TYPE_LABELS = {
   training: 'Allenamento',
@@ -25,6 +27,10 @@ function StatCard({ label, value, loading, sub }) {
 }
 
 export default function DashboardPage() {
+  const { user, isAdmin, isStaff } = useAuth()
+  const isCoach = user != null && !isStaff
+  const isReadOnly = isStaff && !isAdmin
+
   const [groups, setGroups] = useState([])
   const [season, setSeason] = useState(null)
   const [atRisk, setAtRisk] = useState([])
@@ -32,6 +38,7 @@ export default function DashboardPage() {
   const [totalPlayers, setTotalPlayers] = useState(null)
   const [totalSessions, setTotalSessions] = useState(null)
   const [recentSessions, setRecentSessions] = useState([])
+  const [injuredPlayers, setInjuredPlayers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const navigate = useNavigate()
@@ -41,13 +48,15 @@ export default function DashboardPage() {
       getGroups().catch(() => ({ data: [] })),
       getCurrentSeason().catch(() => ({ data: null })),
       getAtRiskPlayers().catch(() => ({ data: [] })),
-      getPlayers().catch(() => ({ data: { total: null } })),
+      getPlayers(undefined, 200).catch(() => ({ data: { items: [], total: null } })),
       getSessions(null, 5).catch(() => ({ data: { items: [], total: null } })),
     ]).then(([gr, se, ar, pl, ss]) => {
       setGroups(gr.data)
       setSeason(se.data)
       setAtRisk(ar.data ?? [])
+      const allPlayers = pl.data?.items ?? []
       setTotalPlayers(pl.data?.total ?? null)
+      setInjuredPlayers(allPlayers.filter((p) => p.availability && p.availability !== 'disponibile'))
       setTotalSessions(ss.data?.total ?? null)
       setRecentSessions(ss.data?.items ?? [])
     }).catch(() => setError('Errore nel caricamento'))
@@ -55,6 +64,8 @@ export default function DashboardPage() {
   }, [])
 
   const groupMap = Object.fromEntries(groups.map((g) => [g.id, g]))
+  // Per l'allenatore il backend restituisce solo il suo gruppo, quindi groups[0] è il suo gruppo
+  const myGroup = isCoach ? (groups[0] ?? null) : null
 
   const seasonLabel = (() => {
     if (!season) return '—'
@@ -68,14 +79,64 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {isCoach && myGroup ? myGroup.name : 'Dashboard'}
+          </h1>
+          {isCoach && myGroup && (
+            <p className="text-sm text-gray-500 mt-0.5">Il mio gruppo</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-1 shrink-0">
+          {isCoach && (
+            <Link
+              to="/sessions"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-granata text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity"
+            >
+              + Nuova sessione
+            </Link>
+          )}
+          {isReadOnly && (
+            <span className="text-xs bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full border border-gray-200">
+              Sola lettura
+            </span>
+          )}
+        </div>
+      </div>
 
       {error && <div className="text-red-600 text-sm">{error}</div>}
+
+      {/* Accesso rapido admin */}
+      {isAdmin && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {[
+            { label: 'Gestione utenti', to: '/impostazioni/utenti', desc: 'Attiva, sospendi, assegna ruoli' },
+            { label: 'Impostazioni stagione', to: '/impostazioni/stagione', desc: 'Stagione attiva e gruppi' },
+            { label: 'Rosa completa', to: '/players', desc: 'Tutti i giocatori registrati' },
+          ].map(({ label, to, desc }) => (
+            <Link
+              key={to}
+              to={to}
+              className="bg-white rounded-xl border border-gray-200 p-4 hover:border-granata hover:shadow-sm transition-all"
+            >
+              <div className="text-sm font-semibold text-gray-800">{label}</div>
+              <div className="text-xs text-gray-400 mt-1">{desc}</div>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard label="Stagione" value={seasonLabel} loading={loading} />
-        <StatCard label="Gruppi attivi" value={groups.length} loading={loading} />
+        {isCoach ? (
+          <StatCard label="Livello" value={myGroup?.level ?? '—'} loading={loading} />
+        ) : (
+          <StatCard label="Gruppi attivi" value={groups.length} loading={loading} />
+        )}
         <StatCard label="Giocatori" value={totalPlayers ?? '—'} loading={loading} />
         <StatCard label="Sessioni totali" value={totalSessions ?? '—'} loading={loading} />
       </div>
@@ -118,6 +179,39 @@ export default function DashboardPage() {
               {showAllRisk ? 'Mostra meno' : `Mostra tutti (${atRisk.length})`}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Infortuni attivi */}
+      {!loading && injuredPlayers.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-orange-700 font-semibold text-sm">
+              {injuredPlayers.length} {injuredPlayers.length === 1 ? 'giocatore' : 'giocatori'} non disponibili
+            </span>
+            <Link to="/players" className="text-xs text-orange-600 hover:text-orange-800 font-medium">
+              Vedi tutti →
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {injuredPlayers.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => navigate(`/players/${p.id}`)}
+                className="w-full flex items-center justify-between bg-white border border-orange-100 rounded-lg px-4 py-2.5 text-left hover:border-orange-300 hover:shadow-sm transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-900">
+                    {p.last_name} {p.first_name}
+                  </span>
+                  {p.current_group_name && (
+                    <span className="text-xs text-gray-400">{p.current_group_name}</span>
+                  )}
+                </div>
+                <AvailabilityBadge availability={p.availability} />
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

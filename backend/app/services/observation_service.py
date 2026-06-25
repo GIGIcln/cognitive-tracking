@@ -3,46 +3,37 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 
+from sqlalchemy import func, tuple_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from app.codebook import METRIC_MIN_N as _METRIC_MIN_N, METRIC_TO_FIELD as _METRIC_TO_FIELD
 from app.models.measurement import Measurement
 from app.models.observation_event import ObservationEvent
 from app.models.player import Player
 from app.schemas.observation_event import ObservationEventResponse, ObservationEventsBatchInput
 
-# Minimum denominator (or numerator for AI) before the data is considered reliable.
-_METRIC_MIN_N: dict[str, int] = {
-    "SR": 6,    # SR: numero di RICEZIONI (COUNT righe), non secondi.
-    "DQI": 20,
-    "TRS": 10,
-    "VCI": 8,   # denominator = minutes observed
-    # AI uses numerator as sample size; thresholds set in reliability_flag below
-}
-
-# Maps metric label → Measurement column name
-_METRIC_TO_FIELD: dict[str, str] = {
-    "SR": "scanning_rate",
-    "DQI": "decision_quality",
-    "AI": "anticipation",
-    "TRS": "transition_reset",
-    "VCI": "verbal_comm",
-}
-
 
 def reliability_flag(metric: str, n: int) -> str:
     """Return 'insufficient' | 'low' | 'medium' | 'high'."""
     if metric == "AI":
-        if n < 3:  return "insufficient"
-        if n < 6:  return "low"
-        if n < 10: return "medium"
+        if n < 3:
+            return "insufficient"
+        if n < 6:
+            return "low"
+        if n < 10:
+            return "medium"
         return "high"
 
     min_n = _METRIC_MIN_N[metric]
     half = min_n // 2
-    if n < half:      return "insufficient"
-    if n < min_n:     return "low"
-    if n < min_n * 2: return "medium"
+    if n < half:
+        return "insufficient"
+    if n < min_n:
+        return "low"
+    if n < min_n * 2:
+        return "medium"
     return "high"
 
 
@@ -168,13 +159,11 @@ class ObservationService:
             raise ValueError(f"Giocatori non trovati: {missing}")
 
         # 1. Delete previous rows only for the (player_id, metric_type) pairs in this batch
-        keys = {(ev.player_id, ev.metric_type) for ev in batch.events}
-        for player_id, metric_type in keys:
-            self.db.query(ObservationEvent).filter(
-                ObservationEvent.session_id == session_id,
-                ObservationEvent.player_id == player_id,
-                ObservationEvent.metric_type == metric_type,
-            ).delete(synchronize_session=False)
+        pairs = list({(ev.player_id, ev.metric_type) for ev in batch.events})
+        self.db.query(ObservationEvent).filter(
+            ObservationEvent.session_id == session_id,
+            tuple_(ObservationEvent.player_id, ObservationEvent.metric_type).in_(pairs),
+        ).delete(synchronize_session=False)
 
         # 2. Insert all incoming rows as new events
         for ev in batch.events:
@@ -208,41 +197,74 @@ class ObservationService:
             if score is not None:
                 player_updates[player_id][_METRIC_TO_FIELD[metric_type]] = score
 
+        existing_map: dict[uuid.UUID, Measurement] = {
+            m.player_id: m
+            for m in self.db.query(Measurement).filter(
+                Measurement.session_id == session_id,
+                Measurement.player_id.in_(player_updates.keys()),
+            ).all()
+        }
+
+        new_players: dict[uuid.UUID, dict] = {}
         for player_id, updates in player_updates.items():
-            existing = (
-                self.db.query(Measurement)
-                .filter(
-                    Measurement.session_id == session_id,
-                    Measurement.player_id == player_id,
-                )
-                .first()
-            )
+            existing = existing_map.get(player_id)
             if existing:
                 for field, value in updates.items():
                     setattr(existing, field, value)
             else:
-                # Use a SAVEPOINT so a concurrent INSERT (same session+player) rolls back
-                # only this sub-transaction and lets us fall through to an UPDATE instead.
-                try:
-                    with self.db.begin_nested():
-                        self.db.add(Measurement(
-                            session_id=session_id,
-                            player_id=player_id,
-                            group_id=group_id,
-                            **updates,
-                        ))
-                except IntegrityError:
-                    existing = (
-                        self.db.query(Measurement)
-                        .filter(
-                            Measurement.session_id == session_id,
-                            Measurement.player_id == player_id,
+                new_players[player_id] = updates
+
+        if new_players:
+            bind = getattr(self.db, "bind", None)
+            is_pg = bind is not None and bind.dialect.name == "postgresql"
+            if is_pg:
+                # Atomic upsert: avoids the SAVEPOINT race where two concurrent
+                # transactions both pass the "not found" check, one commits first,
+                # and the second silently drops the update after its SAVEPOINT
+                # rollback can't see the just-committed row within the outer tx.
+                # COALESCE preserves existing non-NULL fields not present in this batch.
+                _score_fields = list(_METRIC_TO_FIELD.values())
+                rows = [
+                    {
+                        "session_id": session_id,
+                        "player_id": pid,
+                        "group_id": group_id,
+                        **{f: upd.get(f) for f in _score_fields},
+                    }
+                    for pid, upd in new_players.items()
+                ]
+                ins = pg_insert(Measurement)
+                stmt = ins.values(rows).on_conflict_do_update(
+                    constraint="uq_measurement_session_player",
+                    set_={
+                        f: func.coalesce(ins.excluded[f], Measurement.__table__.c[f])
+                        for f in _score_fields
+                    },
+                )
+                self.db.execute(stmt)
+            else:
+                # SQLite path (tests only): no concurrent writers, SAVEPOINT is safe.
+                for player_id, updates in new_players.items():
+                    try:
+                        with self.db.begin_nested():
+                            self.db.add(Measurement(
+                                session_id=session_id,
+                                player_id=player_id,
+                                group_id=group_id,
+                                **updates,
+                            ))
+                    except IntegrityError:
+                        existing = (
+                            self.db.query(Measurement)
+                            .filter(
+                                Measurement.session_id == session_id,
+                                Measurement.player_id == player_id,
+                            )
+                            .first()
                         )
-                        .first()
-                    )
-                    if existing:
-                        for field, value in updates.items():
-                            setattr(existing, field, value)
+                        if existing:
+                            for field, value in updates.items():
+                                setattr(existing, field, value)
 
         self.db.commit()
 

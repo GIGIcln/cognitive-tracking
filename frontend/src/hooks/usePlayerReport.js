@@ -1,78 +1,69 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { getPlayer, getPlayerHistory } from '../api/players'
 import { getGroupTargets } from '../api/groups'
 import { getSessionAverages, getSessionRankings } from '../api/sessions'
 
 export function usePlayerReport(playerId) {
-  const [playerName, setPlayerName] = useState('')
-  const [playerFirstName, setPlayerFirstName] = useState('')
-  const [playerLastName, setPlayerLastName] = useState('')
-  const [playerPosition, setPlayerPosition] = useState(null)
-  const [history, setHistory] = useState([])
-  const [targets, setTargets] = useState([])
-  const [sessionAverages, setSessionAverages] = useState(null)
-  const [playerRanking, setPlayerRanking] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const playerQuery = useQuery({
+    queryKey: ['player', playerId],
+    queryFn: () => getPlayer(playerId).then((r) => r.data),
+  })
 
-  useEffect(() => {
-    const controller = new AbortController()
-    const signal = controller.signal
+  const historyQuery = useQuery({
+    queryKey: ['player-history', playerId],
+    queryFn: () => getPlayerHistory(playerId).then((r) => r.data),
+  })
 
-    const load = async () => {
-      try {
-        const [playerRes, historyRes] = await Promise.all([
-          getPlayer(playerId, { signal }),
-          getPlayerHistory(playerId, { signal }),
-        ])
+  const history = historyQuery.data ?? []
+  const last = history[history.length - 1] ?? null
 
-        const hist = historyRes.data
-        setHistory(hist)
+  const targetsQuery = useQuery({
+    queryKey: ['group-targets', last?.group_id],
+    queryFn: () => getGroupTargets(last.group_id).then((r) => r.data ?? []),
+    enabled: !!last,
+  })
 
-        const { first_name, last_name, position } = playerRes.data
-        setPlayerName(`${first_name} ${last_name}`)
-        setPlayerFirstName(first_name)
-        setPlayerLastName(last_name)
-        setPlayerPosition(position ?? null)
+  const avgQuery = useQuery({
+    queryKey: ['session-averages', last?.session_id],
+    queryFn: () => getSessionAverages(last.session_id).then((r) => r.data),
+    enabled: !!last,
+  })
 
-        if (hist.length > 0) {
-          const last = hist[hist.length - 1]
-          const [targetsRes, avgRes, rankingsRes] = await Promise.all([
-            getGroupTargets(last.group_id, { signal }),
-            getSessionAverages(last.session_id, { signal }),
-            getSessionRankings(last.session_id, { signal }).catch(() => ({ data: [] })),
-          ])
-          setTargets(targetsRes.data ?? [])
-          setSessionAverages(avgRes.data)
-          const rankings = rankingsRes.data ?? []
-          const mine = rankings.find((r) => r.player_id === playerId)
-          setPlayerRanking(mine ?? null)
-        }
-      } catch (err) {
-        if (err.code === 'ERR_CANCELED') return
-        if (err.response?.status === 404) {
-          setError('Giocatore non trovato')
-        } else {
-          setError('Errore nel caricamento del report')
-        }
-      } finally {
-        if (!signal.aborted) setLoading(false)
-      }
-    }
+  const rankingsQuery = useQuery({
+    queryKey: ['session-rankings', last?.session_id],
+    queryFn: () =>
+      getSessionRankings(last.session_id)
+        .then((r) => r.data ?? [])
+        .catch(() => []),
+    enabled: !!last,
+  })
 
-    load()
-    return () => controller.abort()
-  }, [playerId])
+  const player = playerQuery.data
+  const loading =
+    playerQuery.isPending ||
+    historyQuery.isPending ||
+    (history.length > 0 &&
+      (targetsQuery.isPending || avgQuery.isPending || rankingsQuery.isPending))
+
+  const error = playerQuery.isError
+    ? playerQuery.error?.response?.status === 404
+      ? 'Giocatore non trovato'
+      : 'Errore nel caricamento del report'
+    : historyQuery.isError || targetsQuery.isError || avgQuery.isError
+      ? 'Errore nel caricamento del report'
+      : ''
+
+  const rankings = rankingsQuery.data ?? []
 
   return {
-    playerName,
-    playerFirstName,
-    playerLastName,
-    playerPosition,
+    playerName: player ? `${player.first_name} ${player.last_name}` : '',
+    playerFirstName: player?.first_name ?? '',
+    playerLastName: player?.last_name ?? '',
+    playerPosition: player?.position ?? null,
     history,
-    targets,
-    sessionAverages,
-    playerRanking,
+    targets: targetsQuery.data ?? [],
+    sessionAverages: avgQuery.data ?? null,
+    playerRanking: rankings.find((r) => r.player_id === playerId) ?? null,
     loading,
     error,
   }

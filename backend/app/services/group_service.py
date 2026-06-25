@@ -25,13 +25,15 @@ class GroupService:
     def _current_season(self) -> Season | None:
         return self.db.query(Season).filter(Season.is_current.is_(True)).first()
 
-    def list(self, scope: list[uuid.UUID] | None) -> list[Group]:
-        season = self._current_season()
-        if not season:
-            return []
+    def list(self, scope: list[uuid.UUID] | None, season_id: uuid.UUID | None = None) -> list[Group]:
+        if season_id is None:
+            season = self._current_season()
+            if not season:
+                return []
+            season_id = season.id
         q = (
             self.db.query(Group)
-            .filter(Group.season_id == season.id, Group.is_active.is_(True))
+            .filter(Group.season_id == season_id, Group.is_active.is_(True))
             .order_by(Group.birth_year.desc(), Group.sub_group.asc())
         )
         if scope is not None:
@@ -148,7 +150,6 @@ class GroupService:
                 TrainingSession.session_date,
                 TrainingSession.session_type,
             )
-            .having(func.count(Measurement.id) > 0)
             .order_by(TrainingSession.session_date.asc())
             .offset(skip)
             .limit(limit)
@@ -173,6 +174,17 @@ class GroupService:
         if not self.db.get(Group, group_id):
             return None
 
+        players = (
+            self.db.query(Player)
+            .join(PlayerGroupAssignment, PlayerGroupAssignment.player_id == Player.id)
+            .filter(
+                PlayerGroupAssignment.group_id == group_id,
+                PlayerGroupAssignment.is_current.is_(True),
+            )
+            .order_by(Player.last_name.asc(), Player.first_name.asc())
+            .all()
+        )
+
         session_ids = [
             row.id for row in (
                 self.db.query(TrainingSession.id)
@@ -186,7 +198,7 @@ class GroupService:
             )
         ]
         if not session_ids:
-            return {"sessions": [], "players": [], "records": []}
+            return {"sessions": [], "players": players, "records": []}
 
         sessions = (
             self.db.query(TrainingSession)
@@ -195,23 +207,19 @@ class GroupService:
             .all()
         )
 
-        rows = (
-            self.db.query(Measurement, Player)
-            .join(Player, Player.id == Measurement.player_id)
+        measurements = (
+            self.db.query(Measurement)
             .filter(Measurement.session_id.in_(session_ids))
-            .order_by(Player.last_name.asc(), Player.first_name.asc())
             .all()
         )
-
-        seen_players: dict[uuid.UUID, Player] = {}
-        records = []
-        for m, p in rows:
-            seen_players[p.id] = p
-            records.append({"player_id": p.id, "session_id": m.session_id, "is_absent": m.is_absent})
+        records = [
+            {"player_id": m.player_id, "session_id": m.session_id, "is_absent": m.is_absent}
+            for m in measurements
+        ]
 
         return {
             "sessions": sessions,
-            "players": list(seen_players.values()),
+            "players": players,
             "records": records,
         }
 

@@ -1,4 +1,6 @@
-# REPO_ARCHITECTURE.md — Mappa del Progetto Cognitive Tracking
+# REPO_ARCHITECTURE.md — Mappa del Progetto Gestionale Sportivo
+
+> Il progetto è in transizione da cognitive tracking a gestionale sportivo completo. Il modulo cognitivo è integrato nella sezione Allenamenti. I nuovi moduli vengono aggiunti iterativamente — vedi TECHNICAL_ROADMAP.md sezione GS-*.
 
 > Documento di riferimento architetturale. Aggiornalo ad ogni decisione strutturale significativa.
 
@@ -59,8 +61,8 @@
 └──────────────────────┬──────────────────────────────┘
                        │ SQLAlchemy (sync, connection pool)
 ┌──────────────────────▼──────────────────────────────┐
-│  PostgreSQL 15                                      │
-│  9 migrazioni Alembic (0001 → 0009)                 │
+│  PostgreSQL 15 (RLS abilitata su tutte le tabelle)  │
+│  15 migrazioni Alembic (0001 → 0015)                │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -116,7 +118,7 @@ Season (stagione sportiva)
 ### Root
 
 ```
-cognitive-tracking/
+gestionale/
 ├── backend/           # API FastAPI + logica di business
 ├── frontend/          # SPA React + build Vite
 ├── docs/              # Documentazione tecnica e codebook
@@ -195,7 +197,8 @@ src/
 │   └── events.js      # getEvents(), upsertEvents() (observation events)
 │
 ├── context/
-│   └── AuthContext.jsx        # user, isLoading, login(), logout(), isAdmin
+│   ├── AuthContext.jsx        # user, isLoading, login(), logout(), isAdmin
+│   └── OfflineContext.jsx     # stato connessione + coda sync + syncError
 │
 ├── hooks/             # Custom hooks per data fetching con state
 │   ├── useTeamReport.js       # Dati per TeamReportPage (group + history + targets)
@@ -248,10 +251,16 @@ Tre ruoli con permessi differenziati, embedded nel JWT al login:
 | Ruolo | Lettura | Scrittura | Admin |
 |---|---|---|---|
 | `admin` | Tutti i gruppi | Tutti i gruppi | Sì (DELETE, PATCH protetti) |
-| `responsabile_tecnico` | Tutti i gruppi (read-only) | Nessuna | No |
+| `responsabile_tecnico` | Tutti i gruppi | **Nessuna** | No |
 | `allenatore` | Solo i propri `group_ids` | Solo i propri `group_ids` | No |
+| `allenatore` + `responsabile_tecnico` | Tutti i gruppi (responsabile prevale sul read) | Solo i propri `group_ids` (allenatore governa il write) | No |
 
-Lo scoping è applicato tramite `assert_group_access()` e `assert_write_access()` in `rbac.py`. Il lookup degli utenti è O(1) in-memory (nessuna query DB per ogni request).
+**Flusso utenti:**
+- `allenatore`: si auto-registra su `/register` → stato `pending` (nessun accesso ai dati) → admin assegna gruppo → accesso sbloccato.
+- `responsabile_tecnico`: creato direttamente dall'admin; nessuna auto-registrazione.
+- Il doppio ruolo viene assegnato dall'admin nel pannello utenti.
+
+Lo scoping è applicato tramite `assert_group_access()` e `assert_write_access()` in `rbac.py`. Il lookup degli utenti è O(1) in-memory (nessuna query DB per ogni request). **⚠️ Migrazione imminente su tabella DB — vedi GS-01 in TECHNICAL_ROADMAP.md.**
 
 ### Observation Events — Pipeline Cognitiva
 
@@ -345,6 +354,19 @@ make stop        # Killa i processi su 5173 e 8000
 make clean       # Rimuove __pycache__ e .pyc
 ```
 
+### Sviluppo con Docker Compose (alternativa a `make dev`)
+
+```bash
+# Prerequisito: Docker Desktop installato
+# Assicurarsi che backend/users.json esista (copiare da users.example.json)
+docker compose up --build
+```
+
+I servizi partono nell'ordine corretto (`db → backend → frontend`). `alembic upgrade head` viene eseguito automaticamente all'avvio del backend. Il proxy Vite instraderà `/api/*` verso il container backend tramite la variabile `API_TARGET`.
+
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8000`
+
 ### Gestione DB
 
 ```bash
@@ -356,7 +378,7 @@ make seed                              # Ri-esegue il seed (idempotente)
 ### Variabili d'ambiente (`backend/.env`)
 
 ```env
-DATABASE_URL=postgresql://user:pass@localhost:5432/cognitive_tracking
+DATABASE_URL=postgresql://user:pass@localhost:5432/gestionale
 SECRET_KEY=<hex-32-byte>
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
@@ -364,15 +386,17 @@ APP_ENV=development          # "production" disabilita /docs e /redoc
 ALLOWED_ORIGINS=http://localhost:5173
 ```
 
-### Test
+### Test e CI
 
 ```bash
-# Backend (richiede PostgreSQL locale configurato in conftest.py)
+# Backend (richiede PostgreSQL locale)
 cd backend && .venv/bin/pytest tests/ -v
 
 # Frontend
 cd frontend && npm test
 ```
+
+La pipeline CI (`.github/workflows/ci.yml`) esegue automaticamente ruff + pytest (con PostgreSQL 15 reale) + eslint + vitest + build ad ogni push su `main`/`feat/**` e su ogni PR.
 
 ### Produzione
 

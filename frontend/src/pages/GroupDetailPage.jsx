@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { getGroup, updateGroupTargets, getGroupChangelog, getGroupAttendance, getGroupPlayerStats } from '../api/groups'
+import { getGroup, updateGroupTargets, getGroupChangelog, getGroupAttendance, getGroupPlayerStats, getGroupHistory } from '../api/groups'
+import { getSessions } from '../api/sessions'
 import { deletePlayer } from '../api/players'
 import PlayerFormModal from '../components/PlayerFormModal'
 import { Pencil, Trash2 } from 'lucide-react'
-import { LEVEL_COLORS } from '../constants/domain'
+import { LEVEL_COLORS, COGNITIVE_PARAMS } from '../constants/domain'
 import { useAuth } from '../context/AuthContext'
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   Radar, ResponsiveContainer, Legend, Tooltip,
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
 
-const PARAMS = ['SR', 'DQI', 'AI', 'TRS', 'VCI']
+const PARAMS = COGNITIVE_PARAMS.map((p) => p.label)
 
 const FIELD_LABELS = {
   level: 'Livello',
@@ -156,7 +158,58 @@ function AttendanceGrid({ data, loading, limit, onLimitChange }) {
   )
 }
 
-const COMPARISON_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
+const COMPARISON_COLORS = [
+  '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6',
+  '#ef4444', '#06b6d4', '#f97316', '#84cc16',
+  '#ec4899', '#6366f1',
+]
+
+const HISTORY_COLORS = { SR: '#3b82f6', DQI: '#10b981', AI: '#f59e0b', TRS: '#8b5cf6', VCI: '#ef4444' }
+
+function GroupHistoryChart({ history, loading }) {
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="animate-spin rounded-full h-6 w-6 border-4 border-granata border-t-transparent" />
+      </div>
+    )
+  }
+  if (!history.length) {
+    return (
+      <div className="text-center text-gray-400 py-8 text-sm bg-white rounded-xl border border-gray-200">
+        Nessun dato di sessione disponibile
+      </div>
+    )
+  }
+  const lineData = history.map((h) => ({
+    date: new Date(h.session_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }),
+    SR: h.avg_sr != null ? +h.avg_sr.toFixed(2) : null,
+    DQI: h.avg_dqi != null ? +h.avg_dqi.toFixed(2) : null,
+    AI: h.avg_ai != null ? +h.avg_ai.toFixed(2) : null,
+    TRS: h.avg_trs != null ? +h.avg_trs.toFixed(2) : null,
+    VCI: h.avg_vci != null ? +h.avg_vci.toFixed(2) : null,
+  }))
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+      <div className="text-sm font-semibold text-gray-700 mb-3">Andamento sessioni</div>
+      <ResponsiveContainer width="100%" height={240}>
+        <LineChart data={lineData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+          <YAxis domain={[0, 10]} tick={{ fontSize: 10 }} />
+          <Tooltip
+            formatter={(v) => v != null ? v.toFixed(2) : '—'}
+            contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+          />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          {Object.entries(HISTORY_COLORS).map(([key, color]) => (
+            <Line key={key} type="monotone" dataKey={key} stroke={color} dot={false} strokeWidth={2} connectNulls />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
 const METRICS = [
   { key: 'avg_sr',  label: 'SR'  },
   { key: 'avg_dqi', label: 'DQI' },
@@ -191,27 +244,26 @@ function ComparisonView({ stats, loading, selected, onToggle }) {
     <div className="space-y-5">
       {/* Player selector */}
       <div>
-        <div className="text-xs text-gray-500 mb-2">Seleziona fino a 4 giocatori</div>
+        <div className="text-xs text-gray-500 mb-2">Seleziona i giocatori da confrontare</div>
         <div className="flex flex-wrap gap-2">
-          {stats.map((p, i) => {
+          {stats.map((p) => {
             const isSelected = selected.includes(p.player_id)
             const colorIdx = selected.indexOf(p.player_id)
+            const color = COMPARISON_COLORS[colorIdx % COMPARISON_COLORS.length]
             return (
               <button
                 key={p.player_id}
                 onClick={() => onToggle(p.player_id)}
                 className="px-3 py-1.5 rounded-full text-xs font-medium border transition-all"
                 style={isSelected ? {
-                  backgroundColor: COMPARISON_COLORS[colorIdx],
-                  borderColor: COMPARISON_COLORS[colorIdx],
+                  backgroundColor: color,
+                  borderColor: color,
                   color: '#fff',
                 } : {
                   backgroundColor: '#fff',
                   borderColor: '#d1d5db',
                   color: '#6b7280',
-                  opacity: selected.length >= 4 ? 0.5 : 1,
                 }}
-                disabled={!isSelected && selected.length >= 4}
               >
                 {p.last_name} {p.first_name}
                 <span className="ml-1.5 opacity-70">({p.session_count} ses.)</span>
@@ -237,17 +289,20 @@ function ComparisonView({ stats, loading, selected, onToggle }) {
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                {selectedStats.map((p, i) => (
-                  <Radar
-                    key={p.player_id}
-                    name={`${p.last_name} ${p.first_name}`}
-                    dataKey={`${p.last_name} ${p.first_name}`}
-                    fill={COMPARISON_COLORS[i]}
-                    fillOpacity={0.15}
-                    stroke={COMPARISON_COLORS[i]}
-                    strokeWidth={2}
-                  />
-                ))}
+                {selectedStats.map((p, i) => {
+                  const color = COMPARISON_COLORS[i % COMPARISON_COLORS.length]
+                  return (
+                    <Radar
+                      key={p.player_id}
+                      name={`${p.last_name} ${p.first_name}`}
+                      dataKey={`${p.last_name} ${p.first_name}`}
+                      fill={color}
+                      fillOpacity={0.15}
+                      stroke={color}
+                      strokeWidth={2}
+                    />
+                  )
+                })}
               </RadarChart>
             </ResponsiveContainer>
           </div>
@@ -259,7 +314,7 @@ function ComparisonView({ stats, loading, selected, onToggle }) {
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="text-left px-4 py-2.5 text-gray-600 font-medium text-xs">Metrica</th>
                   {selectedStats.map((p, i) => (
-                    <th key={p.player_id} className="text-center px-3 py-2.5 text-xs font-medium" style={{ color: COMPARISON_COLORS[i] }}>
+                    <th key={p.player_id} className="text-center px-3 py-2.5 text-xs font-medium" style={{ color: COMPARISON_COLORS[i % COMPARISON_COLORS.length] }}>
                       {p.last_name} {p.first_name}
                     </th>
                   ))}
@@ -366,12 +421,16 @@ export default function GroupDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const [changelog, setChangelog] = useState([])
   const [changelogLoading, setChangelogLoading] = useState(false)
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [attendance, setAttendance] = useState(null)
   const [attendanceLoading, setAttendanceLoading] = useState(false)
   const [attendanceLimit, setAttendanceLimit] = useState(20)
   const [playerStats, setPlayerStats] = useState([])
   const [playerStatsLoading, setPlayerStatsLoading] = useState(false)
   const [selectedPlayers, setSelectedPlayers] = useState([])
+  const [groupSessions, setGroupSessions] = useState([])
+  const [groupSessionsLoading, setGroupSessionsLoading] = useState(false)
   const { isAdmin } = useAuth()
 
   const load = () => {
@@ -391,15 +450,23 @@ export default function GroupDetailPage() {
       .finally(() => setLoading(false))
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [id])
 
   useEffect(() => {
     if (activeTab !== 'sviluppo') return
     setChangelogLoading(true)
-    getGroupChangelog(id)
-      .then((res) => setChangelog(res.data))
+    setHistoryLoading(true)
+    Promise.all([getGroupChangelog(id), getGroupHistory(id, 60)])
+      .then(([clRes, histRes]) => {
+        setChangelog(clRes.data)
+        setHistory(histRes.data)
+      })
       .catch(() => {})
-      .finally(() => setChangelogLoading(false))
+      .finally(() => {
+        setChangelogLoading(false)
+        setHistoryLoading(false)
+      })
   }, [activeTab, id])
 
   useEffect(() => {
@@ -419,6 +486,16 @@ export default function GroupDetailPage() {
       .then((res) => { setPlayerStats(res.data); setSelectedPlayers(res.data.slice(0, 2).map((p) => p.player_id)) })
       .catch(() => {})
       .finally(() => setPlayerStatsLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, id])
+
+  useEffect(() => {
+    if (activeTab !== 'sessioni') return
+    setGroupSessionsLoading(true)
+    getSessions(id, 200)
+      .then((res) => setGroupSessions(res.data.items ?? []))
+      .catch(() => {})
+      .finally(() => setGroupSessionsLoading(false))
   }, [activeTab, id])
 
   const handleSaveTargets = async () => {
@@ -489,6 +566,7 @@ export default function GroupDetailPage() {
         {[
           { key: 'players', label: 'Giocatori' },
           { key: 'targets', label: 'Target' },
+          { key: 'sessioni', label: 'Sessioni' },
           { key: 'sviluppo', label: 'Sviluppo' },
           { key: 'presenze', label: 'Presenze' },
           { key: 'confronto', label: 'Confronto' },
@@ -611,7 +689,11 @@ export default function GroupDetailPage() {
 
       {/* Sviluppo tab */}
       {activeTab === 'sviluppo' && (
-        <ChangelogTimeline entries={changelog} loading={changelogLoading} />
+        <div>
+          <GroupHistoryChart history={history} loading={historyLoading} />
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Modifiche gruppo</div>
+          <ChangelogTimeline entries={changelog} loading={changelogLoading} />
+        </div>
       )}
 
       {/* Presenze tab */}
@@ -631,9 +713,50 @@ export default function GroupDetailPage() {
           loading={playerStatsLoading}
           selected={selectedPlayers}
           onToggle={(id) => setSelectedPlayers((prev) =>
-            prev.includes(id) ? prev.filter((x) => x !== id) : prev.length < 4 ? [...prev, id] : prev
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
           )}
         />
+      )}
+
+      {/* Sessioni tab */}
+      {activeTab === 'sessioni' && (
+        <div>
+          {groupSessionsLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-6 w-6 border-4 border-granata border-t-transparent" />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {groupSessions.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => navigate(`/sessions/${s.id}`)}
+                  className="w-full bg-white rounded-xl border border-gray-200 px-4 py-3 text-left hover:border-granata hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {new Date(s.session_date).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {s.session_type}{s.duration_min ? ` · ${s.duration_min} min` : ''}
+                      </div>
+                      {s.notes && (
+                        <div className="text-xs text-gray-400 mt-1 truncate max-w-xs">{s.notes}</div>
+                      )}
+                    </div>
+                    <span className="text-gray-400">›</span>
+                  </div>
+                </button>
+              ))}
+              {!groupSessions.length && (
+                <div className="text-center text-gray-400 py-12 text-sm">
+                  Nessuna sessione registrata
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Targets tab */}

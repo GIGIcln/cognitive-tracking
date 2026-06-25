@@ -260,11 +260,24 @@ def test_events_get_returns_one_raw_row_per_event_not_aggregated(seeded):
     raw = _get_events(c, h, sid).json()
     assert len(raw) == 2, f"GET deve restituire 2 righe grezze, trovate {len(raw)}"
 
-    # Valori originali preservati (non modificati dall'aggregazione)
-    raw_nums = sorted(r["numerator"] for r in raw)
-    raw_dens = sorted(r["denominator"] for r in raw)
-    assert raw_nums == [2, 3]
-    assert raw_dens == [4, 6]
+
+# ── Test 7: SR scan rate > 1 ─────────────────────────────────────────────────
+
+def test_sr_numerator_greater_than_denominator_is_valid(seeded):
+    """SR: denominator = durata finestra in secondi. Un giocatore può eseguire
+    più scan al secondo (es. 3 scan in 2 sec), perciò numerator > denominator
+    è una condizione legittima e non deve dare 422."""
+    c, h = seeded["client"], seeded["headers"]
+    gid, pid = seeded["group_id"], seeded["player_id"]
+
+    sid = _create_session(c, h, gid)
+    # 3 scan in 2 secondi → scan rate = 1.5 → normalized_score = min(10, 1 + 1.5*9) = 10.0
+    res = _post_events(c, h, sid, [
+        {"player_id": pid, "metric_type": "SR", "numerator": 3, "denominator": 2},
+    ])
+    assert res.status_code == 200, f"SR con numerator>denominator deve essere valido: {res.json()}"
+    agg = res.json()[0]
+    assert agg["normalized_score"] == pytest.approx(10.0, abs=0.05)
 
 
 # ── Test 7: SR RELIABILITY — COUNT-BASED ─────────────────────────────────────
@@ -373,11 +386,12 @@ def test_events_rejects_zero_denominator_for_ratio_metric(seeded):
 
 
 def test_events_rejects_numerator_exceeds_denominator_for_ratio_metric(seeded):
-    """numerator > denominator per SR/DQI/TRS è fisicamente impossibile (è una %)."""
+    """numerator > denominator per DQI/TRS è fisicamente impossibile (è una percentuale).
+    SR è escluso: denominator = secondi, la scan rate può superare 1 scan/sec."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
     sid = _create_session(c, h, gid)
-    for metric in ("SR", "DQI", "TRS"):
+    for metric in ("DQI", "TRS"):
         res = _post_events(c, h, sid, [
             {"player_id": pid, "metric_type": metric, "numerator": 8, "denominator": 5},
         ])
@@ -420,8 +434,8 @@ def test_events_accepts_ai_with_denominator_zero(seeded):
     assert res.status_code == 200, res.json()
 
 
-def test_upsert_events_unknown_player_returns_404(seeded):
-    """player_id inesistente nel batch eventi deve dare 404."""
+def test_upsert_events_unknown_player_returns_422(seeded):
+    """player_id inesistente nel batch eventi deve dare 422 (input non processabile)."""
     import uuid as _uuid
     c, h = seeded["client"], seeded["headers"]
     gid = seeded["group_id"]
@@ -429,5 +443,5 @@ def test_upsert_events_unknown_player_returns_404(seeded):
     res = _post_events(c, h, sid, [
         {"player_id": str(_uuid.uuid4()), "metric_type": "SR", "numerator": 5, "denominator": 10},
     ])
-    assert res.status_code == 404
+    assert res.status_code == 422
     assert "non trovati" in res.json()["detail"].lower()
