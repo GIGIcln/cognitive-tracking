@@ -5,6 +5,7 @@ import { formatDateLong } from '../utils/dateUtils'
 import ToggleSwitch from '../components/ToggleSwitch'
 import NotesBlock from '../components/NotesBlock'
 import EventParamRow from '../components/EventParamRow'
+import SRMultiRowInput from '../components/SRMultiRowInput'
 import AttendanceTab from '../components/AttendanceTab'
 import { useSessionForm } from '../hooks/useSessionForm'
 
@@ -63,14 +64,16 @@ export default function SessionDetailPage() {
   const [section, setSection] = useState('presenze')
 
   const {
-    session, players, targetsMap, measurements, eventData,
+    session, players, targetsMap, measurements, eventData, srRows,
     entryMode, setEntryMode,
     loading, saving, error, saveOk,
     currentIndex, editingNotes, setEditingNotes, notesValue, setNotesValue,
     savingNotes, mixedVersionWarning, blocker,
     currentPlayer, currentM, total,
     handleChange, toggleAbsent, handleSave,
-    handleEventChange, handleEventSet, handleSaveNotes,
+    handleEventChange, handleEventSet,
+    addSRRow, updateSRRow, deleteSRRow,
+    handleSaveNotes,
     goToNext, goToPrev,
     getReliabilityOkCount, hasAnyEventData,
     insufficientCount, insufficientGateCount,
@@ -296,9 +299,21 @@ export default function SessionDetailPage() {
                 <p className="text-xs text-gray-400 mb-4">
                   Inserisci i conteggi osservati. Il punteggio 1–10 viene calcolato automaticamente.
                 </p>
-                {PARAMS.map(({ field }) => (
-                  <EventParamRow key={field} field={field} playerId={currentPlayer.id} eventData={eventData} targetsMap={targetsMap} onEventChange={handleEventChange} onEventSet={handleEventSet} />
-                ))}
+                {PARAMS.map(({ field }) =>
+                  field === 'scanning_rate' ? (
+                    <SRMultiRowInput
+                      key="sr"
+                      playerId={currentPlayer.id}
+                      rows={srRows[currentPlayer.id] ?? []}
+                      onAdd={() => addSRRow(currentPlayer.id)}
+                      onUpdate={(i, k, v) => updateSRRow(currentPlayer.id, i, k, v)}
+                      onDelete={(i) => deleteSRRow(currentPlayer.id, i)}
+                      targetsMap={targetsMap}
+                    />
+                  ) : (
+                    <EventParamRow key={field} field={field} playerId={currentPlayer.id} eventData={eventData} targetsMap={targetsMap} onEventChange={handleEventChange} onEventSet={handleEventSet} />
+                  )
+                )}
               </div>
             )}
 
@@ -538,9 +553,22 @@ export default function SessionDetailPage() {
 
                 {!m.is_absent && entryMode === 'event' && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    {PARAMS.map(({ field }) => (
-                      <EventParamRow key={field} field={field} playerId={p.id} compact eventData={eventData} targetsMap={targetsMap} onEventChange={handleEventChange} onEventSet={handleEventSet} />
-                    ))}
+                    {PARAMS.map(({ field }) =>
+                      field === 'scanning_rate' ? (
+                        <div key="sr" className="lg:col-span-2">
+                          <SRMultiRowInput
+                            playerId={p.id}
+                            rows={srRows[p.id] ?? []}
+                            onAdd={() => addSRRow(p.id)}
+                            onUpdate={(i, k, v) => updateSRRow(p.id, i, k, v)}
+                            onDelete={(i) => deleteSRRow(p.id, i)}
+                            targetsMap={targetsMap}
+                          />
+                        </div>
+                      ) : (
+                        <EventParamRow key={field} field={field} playerId={p.id} compact eventData={eventData} targetsMap={targetsMap} onEventChange={handleEventChange} onEventSet={handleEventSet} />
+                      )
+                    )}
                   </div>
                 )}
 

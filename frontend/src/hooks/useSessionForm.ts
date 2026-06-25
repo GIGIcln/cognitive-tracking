@@ -10,6 +10,7 @@ import {
   FIELD_TO_METRIC,
   METRIC_EVENT_CONFIG,
   deriveReliability,
+  deriveSRReliability,
 } from '../constants/domain'
 import { emptyEventRow } from '../types/eventRow'
 import type { EventRow } from '../types/eventRow'
@@ -76,6 +77,7 @@ export function useSessionForm(id: string) {
   const [targetsMap, setTargetsMap]     = useState<Record<string, GroupTarget>>({})
   const [measurements, setMeasurements] = useState<MeasurementsState>({})
   const [eventData, setEventData]       = useState<EventData>({})
+  const [srRows, setSrRows]             = useState<Record<string, EventRow[]>>({})
 
   const [entryMode, setEntryMode]           = useState<'score' | 'event'>('score')
   const [loading, setLoading]               = useState(true)
@@ -141,19 +143,27 @@ export function useSessionForm(id: string) {
         setMeasurements(init)
 
         const evMap: EventData = {}
+        const srRowsInit: Record<string, EventRow[]> = {}
         const seenVersions = new Set<string>()
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(eRes.data ?? [] as any[]).forEach((ev: any) => {
-          if (!evMap[ev.player_id]) evMap[ev.player_id] = {}
-          evMap[ev.player_id][ev.metric_type] = {
-            numerator:   ev.numerator,
-            denominator: ev.denominator,
-            method:      ev.method,
+          if (ev.metric_type === 'SR') {
+            if (!srRowsInit[ev.player_id]) srRowsInit[ev.player_id] = []
+            srRowsInit[ev.player_id].push({ numerator: ev.numerator, denominator: ev.denominator, method: ev.method })
+          } else {
+            if (!evMap[ev.player_id]) evMap[ev.player_id] = {}
+            evMap[ev.player_id][ev.metric_type] = {
+              numerator:   ev.numerator,
+              denominator: ev.denominator,
+              method:      ev.method,
+            }
           }
           if (ev.codebook_version) seenVersions.add(ev.codebook_version)
         })
+        setSrRows(srRowsInit)
         if (seenVersions.size > 1) setMixedVersionWarning(true)
-        const hasEvents = Object.keys(evMap).length > 0
+        const hasSREvents = Object.keys(srRowsInit).length > 0
+        const hasEvents = Object.keys(evMap).length > 0 || hasSREvents
         const hasScores = (s.measurements ?? []).some((m) =>
           PARAMS.some(({ field }) => (m as Record<string, unknown>)[field] != null),
         )
@@ -234,6 +244,29 @@ export function useSessionForm(id: string) {
     })
   }, [])
 
+  const addSRRow = useCallback((playerId: string) => {
+    setIsDirty(true)
+    setSrRows((prev) => ({ ...prev, [playerId]: [...(prev[playerId] ?? []), emptyEventRow()] }))
+  }, [])
+
+  const updateSRRow = useCallback((playerId: string, index: number, key: 'numerator' | 'denominator', value: number) => {
+    setIsDirty(true)
+    setSrRows((prev) => {
+      const rows = [...(prev[playerId] ?? [])]
+      rows[index] = { ...rows[index], [key]: Math.max(0, value) }
+      return { ...prev, [playerId]: rows }
+    })
+  }, [])
+
+  const deleteSRRow = useCallback((playerId: string, index: number) => {
+    setIsDirty(true)
+    setSrRows((prev) => {
+      const rows = [...(prev[playerId] ?? [])]
+      rows.splice(index, 1)
+      return { ...prev, [playerId]: rows }
+    })
+  }, [])
+
   const handleSaveEvents = async () => {
     setSaving(true); setSaveOk(false); setError('')
     try {
@@ -241,8 +274,13 @@ export function useSessionForm(id: string) {
       players.forEach((p) => {
         const absent = measurements[p.id]?.is_absent
         if (absent) return
+        // SR: una riga per ricezione (denominator = secondi, n = COUNT righe)
+        ;(srRows[p.id] ?? []).filter((r) => r.denominator > 0).forEach((row) => {
+          events.push({ player_id: p.id, metric_type: 'SR', numerator: row.numerator, denominator: row.denominator, method: row.method, observer_notes: null })
+        })
         const playerEvs = eventData[p.id] ?? {}
         PARAMS.forEach(({ field }) => {
+          if (field === 'scanning_rate') return  // gestito sopra come multi-riga
           const metricType = FIELD_TO_METRIC[field]
           const ev = playerEvs[metricType]
           if (!ev) return
@@ -301,7 +339,11 @@ export function useSessionForm(id: string) {
 
   const getReliabilityOkCount = useCallback((playerId: string): number => {
     let ok = 0
+    // SR: reliability basata su COUNT(righe valide)
+    const validSRRows = (srRows[playerId] ?? []).filter((r) => r.denominator > 0).length
+    if (validSRRows > 0 && (deriveSRReliability(validSRRows) === 'medium' || deriveSRReliability(validSRRows) === 'high')) ok++
     PARAMS.forEach(({ field }) => {
+      if (field === 'scanning_rate') return
       const metricType = FIELD_TO_METRIC[field]
       const ev = eventData[playerId]?.[metricType]
       if (!ev) return
@@ -312,19 +354,25 @@ export function useSessionForm(id: string) {
       if (rel === 'medium' || rel === 'high') ok++
     })
     return ok
-  }, [eventData])
+  }, [eventData, srRows])
 
-  const hasAnyEventData = useCallback((playerId: string): boolean =>
-    PARAMS.some(({ field }) => {
+  const hasAnyEventData = useCallback((playerId: string): boolean => {
+    if ((srRows[playerId] ?? []).some((r) => r.denominator > 0)) return true
+    return PARAMS.some(({ field }) => {
+      if (field === 'scanning_rate') return false
       const metricType = FIELD_TO_METRIC[field]
       const ev = eventData[playerId]?.[metricType]
       if (!ev) return false
       const cfg = METRIC_EVENT_CONFIG[field]
       return cfg.count_only ? ev.numerator > 0 : ev.numerator > 0 || ev.denominator > 0
-    }), [eventData])
+    })
+  }, [eventData, srRows])
 
-  const hasInsufficientMetric = useCallback((playerId: string): boolean =>
-    PARAMS.some(({ field }) => {
+  const hasInsufficientMetric = useCallback((playerId: string): boolean => {
+    const validSRRows = (srRows[playerId] ?? []).filter((r) => r.denominator > 0).length
+    if (validSRRows > 0 && deriveSRReliability(validSRRows) === 'insufficient') return true
+    return PARAMS.some(({ field }) => {
+      if (field === 'scanning_rate') return false
       const metricType = FIELD_TO_METRIC[field]
       const ev = eventData[playerId]?.[metricType]
       if (!ev) return false
@@ -332,7 +380,8 @@ export function useSessionForm(id: string) {
       if (cfg.count_only && ev.numerator === 0) return false
       if (!cfg.count_only && ev.numerator === 0 && ev.denominator === 0) return false
       return deriveReliability(metricType, ev.numerator, ev.denominator) === 'insufficient'
-    }), [eventData])
+    })
+  }, [eventData, srRows])
 
   const getScoreFilledCount = useCallback((playerId: string): number => {
     const m = measurements[playerId]
@@ -372,6 +421,7 @@ export function useSessionForm(id: string) {
     targetsMap,
     measurements,
     eventData,
+    srRows,
     entryMode,
     setEntryMode,
     loading,
@@ -395,6 +445,9 @@ export function useSessionForm(id: string) {
     handleSave,
     handleEventChange,
     handleEventSet,
+    addSRRow,
+    updateSRRow,
+    deleteSRRow,
     handleSaveNotes,
     goToNext,
     goToPrev,

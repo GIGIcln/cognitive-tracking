@@ -67,9 +67,9 @@ export const METRIC_EVENT_CONFIG: Record<MetricField, MetricEventConfig> = {
   scanning_rate: {
     metric_type:       'SR',
     numerator_label:   'Check pre-tocco',
-    denominator_label: 'Ricezioni in pressione',
-    rate_label:        'SR%',
-    min_n:             15,
+    denominator_label: 'Durata finestra (sec)',
+    rate_label:        'scan/s',
+    min_n:             6,
     count_only:        false,
   },
   decision_quality: {
@@ -115,6 +115,13 @@ export const RELIABILITY_META: Record<ReliabilityLevel, ReliabilityMeta> = {
   low:          { label: 'Affid. bassa',        color: 'text-orange-500', bg: 'bg-orange-50' },
   medium:       { label: 'Affid. media',        color: 'text-yellow-600', bg: 'bg-yellow-50' },
   high:         { label: 'Affid. alta',         color: 'text-green-600',  bg: 'bg-green-50'  },
+}
+
+export function deriveSRReliability(n: number): ReliabilityLevel {
+  if (n < 3)  return 'insufficient'
+  if (n < 6)  return 'low'
+  if (n < 12) return 'medium'
+  return 'high'
 }
 
 export function deriveScore(
