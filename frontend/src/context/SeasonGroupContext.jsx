@@ -45,11 +45,10 @@ export function SeasonGroupProvider({ children }) {
       }
 
       const storedGroup = localStorage.getItem('ctx_group')
-      if (!storedGroup || !groupList.find((g) => g.id === storedGroup)) {
-        const first = groupList[0]?.id ?? ''
-        _setGroupId(first)
-        if (first) localStorage.setItem('ctx_group', first)
-        else localStorage.removeItem('ctx_group')
+      if (storedGroup && !groupList.find((g) => g.id === storedGroup)) {
+        // valore salvato non più valido → resetta a "tutti"
+        _setGroupId('')
+        localStorage.removeItem('ctx_group')
       }
     })
   }, [])
