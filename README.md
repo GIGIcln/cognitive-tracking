@@ -76,7 +76,7 @@ Con `cloudflared` installato, `make dev` avvia automaticamente un tunnel pubblic
 ```bash
 brew install python node postgresql@15
 brew services start postgresql@15
-createdb ascd_gestionale   # solo prima volta
+createdb gestionale   # solo prima volta
 ```
 
 ### Prerequisiti Windows 11
@@ -108,7 +108,7 @@ $env:PATH += ";C:\Program Files\PostgreSQL\17\bin"
 
 ```cmd
 net start postgresql-x64-17
-psql -U postgres -c "CREATE DATABASE ascd_gestionale;"
+psql -U postgres -c "CREATE DATABASE gestionale;"
 ```
 
 > Se usi un database remoto (Supabase, Neon, ecc.) questo passaggio non serve — basta avere `psql` installato come client.
@@ -394,7 +394,7 @@ Il proxy Vite redirige `/api/*` → `http://localhost:8000` (vedi `vite.config.j
 
 | Variabile | Descrizione | Esempio |
 |---|---|---|
-| `DATABASE_URL` | Stringa di connessione PostgreSQL | `postgresql://user:pass@localhost:5432/ascd_gestionale` |
+| `DATABASE_URL` | Stringa di connessione PostgreSQL | `postgresql://user:pass@localhost:5432/gestionale` |
 | `SECRET_KEY` | Chiave segreta per firma JWT | Output di `openssl rand -hex 32` |
 | `ALGORITHM` | Algoritmo JWT | `HS256` (default) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Durata token | `60` (default) |

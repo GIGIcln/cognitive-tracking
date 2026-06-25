@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_USER: cogtrack
       POSTGRES_PASSWORD: cogtrack
-      POSTGRES_DB: ascd_gestionale
+      POSTGRES_DB: gestionale
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,7 +18,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://cogtrack:cogtrack@db:5432/ascd_gestionale}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://cogtrack:cogtrack@db:5432/gestionale}
       SECRET_KEY: ${SECRET_KEY:-change-me-generate-with-openssl-rand-hex-32}
       APP_ENV: development
       ALLOWED_ORIGINS: http://localhost:5173

@@ -12,7 +12,7 @@ export default defineConfig({
       },
       manifest: {
         name: 'ASC.D Torino Club',
-        short_name: 'ASC.D',
+        short_name: 'TC',
         description: 'Gestionale sportivo settore giovanile ASC.D Torino Club',
         start_url: '/',
         display: 'standalone',

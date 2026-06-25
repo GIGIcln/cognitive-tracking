@@ -1,6 +1,6 @@
 import { openDB } from 'idb';
 
-const DB_NAME = 'ascd-gestionale-offline';
+const DB_NAME = 'gestionale-offline';
 const STORE_NAME = 'sync_queue';
 const DB_VERSION = 1;
 
