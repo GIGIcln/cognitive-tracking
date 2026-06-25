@@ -83,7 +83,7 @@ I moduli seguenti sono pianificati nell'ordine indicato. Ogni modulo segue il so
 | **GS-04** Modulo Presenze | ✅ completato | Attendance per sessione, giustificazioni |
 | **GS-05** Modulo Partite | ✅ completato | Gare, risultati, formazioni, minutaggi |
 | **GS-06** Impostazioni gruppo (allenatore) | ✅ completato | Gate modalità punteggio in SessionDetailPage |
-| **GS-07** Infortuni & disponibilità | in sviluppo | InjuryLog, stato rosa, badge disponibilità |
+| **GS-07** Infortuni & disponibilità | ✅ completato | InjuryLog, stato rosa, badge disponibilità |
 | **GS-08** UI redesign: context bar + layout allargato | pianificato | Stagione/Gruppo sempre visibili in cima |
 
 ## Observation events (metriche cognitive)

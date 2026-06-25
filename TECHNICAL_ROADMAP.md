@@ -60,9 +60,9 @@ Non esiste uno store globale (Redux, Zustand, React Query). Ogni pagina fa fetch
 Le 5 metriche cognitive (SR, DQI, AI, TRS, VCI) sono definite in modo ridondante in: `frontend/src/constants/domain.js` (`COGNITIVE_PARAMS` + `METRIC_EVENT_CONFIG`), `PlayerDetailPage.jsx`, `GroupDetailPage.jsx`, `exportUtils.js` (due definizioni inline distinte), e `backend/app/services/observation_service.py` (`_METRIC_MIN_N`, `_METRIC_TO_FIELD`). Un cambio di etichetta o soglia richiede aggiornamenti in ≥5 file senza garanzie di coerenza.  
 _File:_ `frontend/src/constants/domain.js`, `frontend/src/pages/{Player,Group}DetailPage.jsx`, `frontend/src/utils/exportUtils.js`, `backend/app/services/observation_service.py`
 
-**[TD-12] Reliability preview SR disallineata tra frontend e backend**  
-Il backend calcola la reliability di SR su `COUNT(righe)` con soglia `min_n=6` (ricezioni = eventi registrati). Il frontend in `deriveReliability()` usa `denominator` dell'evento corrente con `min_n=15` (ricezioni in pressione per evento). La semantica è diversa: l'utente vede un badge di affidabilità durante l'inserimento che non corrisponde al valore definitivo calcolato dal backend. Filo aperto già registrato in `docs/dev/observation-events.md`.  
-_File:_ `frontend/src/constants/domain.js:38`, `backend/app/services/observation_service.py:18`
+**~~[TD-12] Reliability preview SR disallineata tra frontend e backend~~** ✅ Risolto con OL-09  
+`deriveSRReliability(n)` aggiunta in `domain.ts`; `useSessionForm.ts` usa `COUNT(righe valide)` come n per SR in tutti e tre i callback di reliability, escludendo SR da `deriveReliability()` (che usava denominator). Soglie 3/6/12 allineate al backend (`min_n=6`, `half=3`, `medium=min_n*2=12`).  
+_File:_ `frontend/src/constants/domain.ts`, `frontend/src/hooks/useSessionForm.ts`
 
 **[TD-13] `SessionDetailPage` monolite (930+ righe)**  
 La pagina gestisce contemporaneamente: caricamento di sessione, giocatori, target e misurazioni; due modalità di input (score vs event); calcolo affidabilità in-page con 3 helper locali; dirty tracking + `useBlocker` + `beforeunload`; rendering mobile (≈590 linee) e desktop (≈270 linee). `EventParamRow` (113 righe) e `NotesBlock` (60 righe) sono funzioni inline anziché componenti. Non è un problema urgente, ma rende la pagina difficile da testare e modificare in sicurezza.  
@@ -164,16 +164,14 @@ Estrarre dalla pagina monolite (930+ righe):
 Pre-requisito naturale per il passaggio a TypeScript (OL-03) perché riduce la superficie di ciascun file da tipizzare.  
 _File:_ `frontend/src/pages/SessionDetailPage.jsx`
 
-### OL-09 — Workflow SR multi-riga e allineamento reliability
+### ~~OL-09 — Workflow SR multi-riga e allineamento reliability~~ ✅ Completato
 
-Il codebook v1 specifica `una riga = una ricezione` per SR (denominator = durata finestra in secondi). Il frontend usa una riga aggregata (denominator = ricezioni totali), semantica incompatibile con il backend che calcola `n = COUNT(rows)`. La fix richiede:
-1. Aggiornare `METRIC_EVENT_CONFIG.scanning_rate.denominator_label` a "Durata finestra (sec)"
-2. Supportare l'inserimento di **multiple righe SR** nell'UI (`SessionDetailPage`) — una per ricezione
-3. Aggiornare la live preview reliability per SR: usare `COUNT(righe SR in inserimento)` con `min_n=6`
-4. Aggiornare `deriveScore('SR')` per gestire il nuovo denominator (secondi → scansioni/sec invece di scansioni/ricezione)
+- `denominator_label` aggiornato a "Durata finestra (sec)" in `domain.ts`
+- UI `SessionDetailPage`: multiple righe SR per giocatore (una per ricezione)
+- Live preview reliability SR: `deriveSRReliability(COUNT righe valide)` con soglie 3/6/12 — allineato al backend
+- `deriveScore('SR')`: denominator ora in secondi → scansioni/sec
 
-Sforzo medio. Pre-requisito: nessun dato reale ancora registrato (le definizioni sono congelate al primo dato).  
-_File:_ `frontend/src/constants/domain.js`, `frontend/src/pages/SessionDetailPage.jsx`
+_File:_ `frontend/src/constants/domain.ts`, `frontend/src/pages/SessionDetailPage.jsx`, `frontend/src/hooks/useSessionForm.ts`
 
 ### ~~OL-08 — Fonte unica di verità per le definizioni di metrica~~ ✅ Backend completato
 
@@ -279,11 +277,11 @@ Sezione `/impostazioni` per allenatore: giorni di allenamento della settimana, o
 
 ---
 
-### GS-07 — Infortuni & Disponibilità
+### ~~GS-07 — Infortuni & Disponibilità~~ ✅ Completato
 
 Dipende da: GS-03.
 
-Nuova tabella `injury_log`: (player_id, injury_type, start_date, expected_return, actual_return, severity, notes). Vista "stato rosa" nella sezione Rosa: lista giocatori con badge disponibilità (disponibile / infortunato / limitato). Alert automatici nella dashboard se giocatori chiave sono indisponibili.
+Tabella `injury_log` (player_id, injury_type, start_date, expected_return, actual_return, severity, notes). Vista "stato rosa" nella sezione Rosa con badge disponibilità (disponibile / infortunato / limitato).
 
 ---
 
