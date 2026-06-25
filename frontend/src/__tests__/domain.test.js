@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveScore, deriveReliability, FIELD_TO_METRIC } from '../constants/domain'
+import { deriveScore, deriveReliability, deriveSRReliability, FIELD_TO_METRIC } from '../constants/domain'
 
 // ── deriveScore ───────────────────────────────────────────────────────────────
 
@@ -76,18 +76,22 @@ describe('deriveScore — metrica sconosciuta', () => {
 
 // ── deriveReliability ─────────────────────────────────────────────────────────
 
-describe('deriveReliability — SR (min_n=15, half=7)', () => {
-  it('denominator < 7 → insufficient', () => {
-    expect(deriveReliability('SR', 3, 5)).toBe('insufficient')
+// SR usa deriveSRReliability(n) dove n = COUNT(righe per ricezione), min_n=6, half=3
+describe('deriveSRReliability — SR (min_n=6, half=3)', () => {
+  it('n < 3 → insufficient', () => {
+    expect(deriveSRReliability(0)).toBe('insufficient')
+    expect(deriveSRReliability(2)).toBe('insufficient')
   })
-  it('7 ≤ denominator < 15 → low', () => {
-    expect(deriveReliability('SR', 8, 10)).toBe('low')
+  it('3 ≤ n < 6 → low', () => {
+    expect(deriveSRReliability(3)).toBe('low')
+    expect(deriveSRReliability(5)).toBe('low')
   })
-  it('15 ≤ denominator < 30 → medium', () => {
-    expect(deriveReliability('SR', 15, 20)).toBe('medium')
+  it('6 ≤ n < 12 → medium', () => {
+    expect(deriveSRReliability(6)).toBe('medium')
+    expect(deriveSRReliability(11)).toBe('medium')
   })
-  it('denominator ≥ 30 → high', () => {
-    expect(deriveReliability('SR', 30, 30)).toBe('high')
+  it('n ≥ 12 → high', () => {
+    expect(deriveSRReliability(12)).toBe('high')
   })
 })
 
