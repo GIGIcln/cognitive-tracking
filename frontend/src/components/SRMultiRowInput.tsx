@@ -31,7 +31,7 @@ export default function SRMultiRowInput({ rows, onAdd, onUpdate, onDelete, targe
         : 'text-yellow-600'
 
   return (
-    <div className="mb-5">
+    <div className="mb-5" data-testid="sr-multi-row-input">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">

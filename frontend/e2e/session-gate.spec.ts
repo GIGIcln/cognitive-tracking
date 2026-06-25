@@ -20,7 +20,6 @@ const PLAYERS_RESPONSE = {
 }
 
 // ── Helper: mount the session page with all API calls mocked ─────────────────
-// Uses URL.pathname to avoid matching Vite source files (/src/api/*.js)
 
 async function mountSession(page: Parameters<typeof test>[1]) {
   await page.route(
@@ -50,46 +49,52 @@ async function mountSession(page: Parameters<typeof test>[1]) {
 
   await page.goto('/sessions/session-1')
 
-  // Wait until the save button is visible — confirms session + players loaded
-  await expect(page.getByRole('button', { name: /Salva sessione/ })).toBeVisible({ timeout: 12_000 })
+  // The page opens on "Presenze" tab — click "Cognitivo" to reveal save button
+  await page.getByRole('button', { name: 'Cognitivo' }).first().click()
+  await expect(page.getByRole('button', { name: 'Salva sessione', exact: true })).toBeVisible({ timeout: 12_000 })
 }
 
-// ── Compact EventParamRow selectors (desktop layout) ─────────────────────────
-// Each compact row is a .rounded-lg div containing the metric label text.
-// SR (count_only=false) has two inputs: index 0 → numerator, index 1 → denominator.
+// ── SR multi-row helpers ──────────────────────────────────────────────────────
+// SRMultiRowInput renders one row per reception.
+// Each row: input[min="0"] = numerator (check pre-tocco), input[min="1"] = denominator (sec).
+// Reliability = deriveSRReliability(n) where n = rows with denominator > 0.
+// <3 → insufficient (gate blocks), <6 → low, <12 → medium, ≥12 → high.
 
-function srInputs(page: Parameters<typeof test>[1]) {
-  const srRow = page.locator('.rounded-lg').filter({ hasText: 'Scanning Rate' })
-  return {
-    numerator: srRow.locator('input[type="number"]').nth(0),
-    denominator: srRow.locator('input[type="number"]').nth(1),
-  }
+function srSection(page: Parameters<typeof test>[1]) {
+  return page.getByTestId('sr-multi-row-input')
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+function addSRReception(page: Parameters<typeof test>[1]) {
+  return page.getByRole('button', { name: /Aggiungi ricezione/ })
+}
 
-// The desktop gate message is a <span class="...shrink-0 text-red-600...">.
-// The mobile counterpart is a <div> inside md:hidden — same text, different tag.
-// Using span.shrink-0 avoids strict-mode violations from the hidden mobile clone.
+function srDenominator(page: Parameters<typeof test>[1], rowIndex: number) {
+  // denominator inputs have min="1" (seconds); numerator have min="0"
+  return srSection(page).locator('input[type="number"][min="1"]').nth(rowIndex)
+}
+
+// ── Gate message selector (desktop) ──────────────────────────────────────────
+
 function desktopGateMsg(page: Parameters<typeof test>[1]) {
   return page.locator('span.shrink-0').filter({ hasText: /dati insufficienti/ })
 }
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
 test.describe('Gate di affidabilità (SessionDetailPage)', () => {
   test('dati SR insufficienti bloccano il salvataggio', async ({ page }) => {
     await mountSession(page)
 
     const saveBtn = page.getByRole('button', { name: 'Salva sessione', exact: true })
-    const { numerator, denominator } = srInputs(page)
 
     // Before any input: no gate message, save button enabled
     await expect(saveBtn).toBeEnabled()
     await expect(desktopGateMsg(page)).not.toBeVisible()
 
-    // SR: numerator=1, denominator=3 → reliability 'insufficient' (3 < floor(15/2)=7)
-    await numerator.fill('1')
-    await denominator.fill('3')
-    await denominator.press('Tab') // blur triggers React state update
+    // Add 1 reception: n=1 → deriveSRReliability(1) = 'insufficient' → gate blocks
+    await addSRReception(page).click()
+    await srDenominator(page, 0).fill('3')
+    await srDenominator(page, 0).press('Tab')
 
     await expect(desktopGateMsg(page)).toBeVisible({ timeout: 5_000 })
     await expect(saveBtn).toBeDisabled()
@@ -99,19 +104,21 @@ test.describe('Gate di affidabilità (SessionDetailPage)', () => {
     await mountSession(page)
 
     const saveBtn = page.getByRole('button', { name: 'Salva sessione', exact: true })
-    const { numerator, denominator } = srInputs(page)
 
-    // Enter insufficient data first
-    await numerator.fill('1')
-    await denominator.fill('3')
-    await denominator.press('Tab')
+    // 1 reception → n=1 → 'insufficient' → gate blocks
+    await addSRReception(page).click()
+    await srDenominator(page, 0).fill('3')
+    await srDenominator(page, 0).press('Tab')
 
     await expect(saveBtn).toBeDisabled()
     await expect(desktopGateMsg(page)).toBeVisible()
 
-    // Raise denominator to 20 → reliability 'medium' (20 >= min_n=15) → gate clears
-    await denominator.fill('20')
-    await denominator.press('Tab')
+    // Add 2 more receptions → n=3 → deriveSRReliability(3) = 'low' → gate clears
+    await addSRReception(page).click()
+    await srDenominator(page, 1).fill('3')
+    await addSRReception(page).click()
+    await srDenominator(page, 2).fill('3')
+    await srDenominator(page, 2).press('Tab')
 
     await expect(desktopGateMsg(page)).not.toBeVisible({ timeout: 5_000 })
     await expect(saveBtn).toBeEnabled()
