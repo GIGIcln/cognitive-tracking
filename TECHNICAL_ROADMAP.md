@@ -285,12 +285,13 @@ Tabella `injury_log` (player_id, injury_type, start_date, expected_return, actua
 
 ---
 
-### GS-08 — UI Redesign: Context Bar + Layout
+### ~~GS-08 — UI Redesign: Context Bar + Layout~~ ✅ Completato
 
-Dipende da: nessuno (refactoring UI puro, può procedere in parallelo).
+- **SeasonGroupContext**: stagione e gruppo attivi persistiti in `localStorage`; auto-selezione del primo disponibile; invalidazione automatica se il valore stored non esiste più. Consumato da `SessionsPage` (filtro gruppo bidirezionale).
+- **Layout allargato**: `max-w-4xl` → `max-w-6xl` in `MainLayout`.
+- **Sidebar collassabile**: `w-60` ↔ `w-16` icons-only, stato persistito in `localStorage`. Pill di toggle sull'edge destra.
+- **Context bar desktop**: selettori Stagione + Gruppo nella sidebar; compact strip sticky su mobile.
+- **Bottom nav mobile**: 4 voci primarie + drawer "Altro" per le secondarie.
+- **Dashboard role-specific**: non implementata — `DashboardPage` è ancora uniforme per tutti i ruoli. Da valutare come task separato se necessario.
 
-- **Context bar** permanente in cima: selettore Stagione + Gruppo attivo, persistito in `localStorage`. Filtra automaticamente i dati di ogni sezione.
-- **Layout allargato**: rimosso `max-w-4xl` fisso; le pagine lista usano tutta la larghezza, le pagine dettaglio si centrano con `max-w-5xl`.
-- **Sidebar collassabile** (icone-only) su schermi medi.
-- **Bottom nav mobile** ridotta a 4 voci + drawer per le secondarie.
-- **Dashboard role-specific**: contenuto diverso per admin / responsabile / allenatore sulla stessa route `/`.
+_File:_ `frontend/src/context/SeasonGroupContext.jsx`, `frontend/src/layouts/MainLayout.jsx`, `frontend/src/pages/SessionsPage.jsx`

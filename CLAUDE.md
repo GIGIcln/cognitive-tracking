@@ -84,7 +84,7 @@ I moduli seguenti sono pianificati nell'ordine indicato. Ogni modulo segue il so
 | **GS-05** Modulo Partite | ✅ completato | Gare, risultati, formazioni, minutaggi |
 | **GS-06** Impostazioni gruppo (allenatore) | ✅ completato | Gate modalità punteggio in SessionDetailPage |
 | **GS-07** Infortuni & disponibilità | ✅ completato | InjuryLog, stato rosa, badge disponibilità |
-| **GS-08** UI redesign: context bar + layout allargato | pianificato | Stagione/Gruppo sempre visibili in cima |
+| **GS-08** UI redesign: context bar + layout allargato | ✅ completato | SeasonGroupContext + sidebar collassabile + bottom nav mobile |
 
 ## Observation events (metriche cognitive)
 - Modello **per-evento** (`observation_events`, append-only); salvataggio batch idempotente (delete-per-pair + insert), non upsert.
