@@ -45,6 +45,18 @@ function ReliabilityChip({ ok, total }) {
   )
 }
 
+function ScoreCompletenessChip({ filled, total }) {
+  let cls
+  if (filled === total && total > 0) cls = 'bg-green-100 text-green-700'
+  else if (filled === 0)             cls = 'bg-red-100 text-red-700'
+  else                               cls = 'bg-yellow-100 text-yellow-700'
+  return (
+    <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${cls}`}>
+      {filled}/{total}
+    </span>
+  )
+}
+
 export default function SessionDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -52,7 +64,7 @@ export default function SessionDetailPage() {
 
   const {
     session, players, targetsMap, measurements, eventData,
-    entryMode,
+    entryMode, setEntryMode,
     loading, saving, error, saveOk,
     currentIndex, editingNotes, setEditingNotes, notesValue, setNotesValue,
     savingNotes, mixedVersionWarning, blocker,
@@ -62,6 +74,7 @@ export default function SessionDetailPage() {
     goToNext, goToPrev,
     getReliabilityOkCount, hasAnyEventData,
     insufficientCount, insufficientGateCount,
+    getScoreFilledCount, scoreEmptyCount,
   } = useSessionForm(id)
 
   if (loading) {
@@ -166,6 +179,23 @@ export default function SessionDetailPage() {
             ))}
           </div>
 
+          {/* Mode toggle — only in cognitivo tab */}
+          {section === 'cognitivo' && (
+            <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mt-2">
+              {[['score', 'Punteggio'], ['event', 'Conteggio eventi']].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  onClick={() => setEntryMode(mode)}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    entryMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Cognitivo: progress bar only when on cognitivo tab */}
           {section === 'cognitivo' && (
             <div className="flex items-center gap-2 mt-2">
@@ -214,6 +244,9 @@ export default function SessionDetailPage() {
               <div className="flex items-center gap-2 select-none shrink-0 ml-3">
                 {entryMode === 'event' && !currentM.is_absent && hasAnyEventData(currentPlayer.id) && (
                   <ReliabilityChip ok={getReliabilityOkCount(currentPlayer.id)} total={PARAMS.length} />
+                )}
+                {entryMode === 'score' && !currentM.is_absent && (
+                  <ScoreCompletenessChip filled={getScoreFilledCount(currentPlayer.id)} total={PARAMS.length} />
                 )}
                 <span className="text-sm text-gray-500">Assente</span>
                 <ToggleSwitch
@@ -293,6 +326,11 @@ export default function SessionDetailPage() {
           className="fixed left-0 right-0 bg-white border-t border-gray-200 p-3 z-20"
           style={{ bottom: 'calc(64px + env(safe-area-inset-bottom))' }}
         >
+          {entryMode === 'score' && currentIndex === total - 1 && scoreEmptyCount > 0 && (
+            <div className="text-xs text-amber-600 text-center mb-2">
+              ⚠ {scoreEmptyCount} giocator{scoreEmptyCount === 1 ? 'e' : 'i'} senza punteggi
+            </div>
+          )}
           {entryMode === 'event' && currentIndex === total - 1 && insufficientGateCount > 0 && (
             <div className="text-xs text-red-600 text-center mb-2">
               🚫 {insufficientGateCount} giocator{insufficientGateCount === 1 ? 'e' : 'i'} con dati insufficienti — salvataggio bloccato
@@ -388,6 +426,21 @@ export default function SessionDetailPage() {
 
         {section === 'cognitivo' && (
           <>
+        {/* Mode toggle */}
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit mb-5">
+          {[['score', 'Punteggio diretto'], ['event', 'Conteggio eventi']].map(([mode, label]) => (
+            <button
+              key={mode}
+              onClick={() => setEntryMode(mode)}
+              className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                entryMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         {error && (
           <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg mb-4 border border-red-200">{error}</div>
         )}
@@ -448,6 +501,9 @@ export default function SessionDetailPage() {
                   <div className="flex items-center gap-2 select-none">
                     {entryMode === 'event' && !m.is_absent && hasAnyEventData(p.id) && (
                       <ReliabilityChip ok={getReliabilityOkCount(p.id)} total={PARAMS.length} />
+                    )}
+                    {entryMode === 'score' && !m.is_absent && (
+                      <ScoreCompletenessChip filled={getScoreFilledCount(p.id)} total={PARAMS.length} />
                     )}
                     <span className="text-sm text-gray-500">Assente</span>
                     <ToggleSwitch checked={m.is_absent} onChange={() => toggleAbsent(p.id)} size="sm" />
@@ -513,6 +569,11 @@ export default function SessionDetailPage() {
         {/* Sticky save bar — solo tab cognitivo */}
         {section === 'cognitivo' && (
           <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-white border-t border-gray-200 p-4 flex items-center gap-3 z-20">
+            {entryMode === 'score' && scoreEmptyCount > 0 && (
+              <span className="text-amber-600 text-xs font-medium shrink-0">
+                ⚠ {scoreEmptyCount} giocator{scoreEmptyCount === 1 ? 'e' : 'i'} senza punteggi
+              </span>
+            )}
             {entryMode === 'event' && insufficientGateCount > 0 && (
               <span className="text-red-600 text-xs font-medium shrink-0">
                 🚫 {insufficientGateCount} giocator{insufficientGateCount === 1 ? 'e' : 'i'} con dati insufficienti

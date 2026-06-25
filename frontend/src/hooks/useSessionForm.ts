@@ -77,7 +77,7 @@ export function useSessionForm(id: string) {
   const [measurements, setMeasurements] = useState<MeasurementsState>({})
   const [eventData, setEventData]       = useState<EventData>({})
 
-  const [entryMode, setEntryMode]           = useState<'score' | 'event'>('event')
+  const [entryMode, setEntryMode]           = useState<'score' | 'event'>('score')
   const [loading, setLoading]               = useState(true)
   const [saving, setSaving]                 = useState(false)
   const [error, setError]                   = useState('')
@@ -153,7 +153,12 @@ export function useSessionForm(id: string) {
           if (ev.codebook_version) seenVersions.add(ev.codebook_version)
         })
         if (seenVersions.size > 1) setMixedVersionWarning(true)
-        if (Object.keys(evMap).length > 0) setEntryMode('event')
+        const hasEvents = Object.keys(evMap).length > 0
+        const hasScores = (s.measurements ?? []).some((m) =>
+          PARAMS.some(({ field }) => (m as Record<string, unknown>)[field] != null),
+        )
+        if (hasEvents) setEntryMode('event')
+        else if (!hasScores) setEntryMode('event')
         setEventData(evMap)
       } catch {
         setError('Errore nel caricamento della sessione')
@@ -329,6 +334,12 @@ export function useSessionForm(id: string) {
       return deriveReliability(metricType, ev.numerator, ev.denominator) === 'insufficient'
     }), [eventData])
 
+  const getScoreFilledCount = useCallback((playerId: string): number => {
+    const m = measurements[playerId]
+    if (!m) return 0
+    return PARAMS.filter(({ field }) => m[field] !== '' && m[field] != null).length
+  }, [measurements])
+
   const currentPlayer = players[currentIndex]
   const currentM = currentPlayer ? (measurements[currentPlayer.id] ?? emptyMeasurement()) : null
   const total = players.length
@@ -344,6 +355,14 @@ export function useSessionForm(id: string) {
     ? players.filter((p) => {
         const m = measurements[p.id] ?? emptyMeasurement()
         return !m.is_absent && hasAnyEventData(p.id) && hasInsufficientMetric(p.id)
+      }).length
+    : 0
+
+  const scoreEmptyCount = entryMode === 'score'
+    ? players.filter((p) => {
+        const m = measurements[p.id] ?? emptyMeasurement()
+        if (m.is_absent) return false
+        return PARAMS.every(({ field }) => m[field] === '' || m[field] == null)
       }).length
     : 0
 
@@ -384,5 +403,7 @@ export function useSessionForm(id: string) {
     hasInsufficientMetric,
     insufficientCount,
     insufficientGateCount,
+    getScoreFilledCount,
+    scoreEmptyCount,
   }
 }
