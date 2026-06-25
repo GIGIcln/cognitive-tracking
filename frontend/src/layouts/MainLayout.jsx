@@ -20,7 +20,7 @@ const allNavItems = [
   { to: '/players', label: 'Giocatori', icon: User },
 ]
 
-const staffNavItem  = { to: '/seasons',      label: 'Stagioni',     icon: Calendar }
+const staffNavItem    = { to: '/seasons',      label: 'Stagioni',     icon: Calendar }
 const settingsNavItem = { to: '/impostazioni', label: 'Impostazioni', icon: Settings }
 
 const roleLabel = (role) => ({
@@ -54,11 +54,7 @@ function NavItem({ to, label, icon: Icon, end, collapsed, onClick }) {
 
 function LayoutInner() {
   const { user, logout, isAdmin, isStaff } = useAuth()
-  const {
-    seasons, groups,
-    selectedSeasonId, selectedGroupId,
-    setSelectedSeasonId, setSelectedGroupId,
-  } = useSeasonGroup()
+  const { groups, selectedGroupId, setSelectedGroupId } = useSeasonGroup()
 
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('sidebar_collapsed') === 'true'
@@ -88,7 +84,7 @@ function LayoutInner() {
     <div className="min-h-screen flex bg-gray-50">
 
       {/* ── Sidebar desktop ── */}
-      <aside className={`hidden md:flex flex-col ${sidebarW} bg-white border-r border-gray-200 fixed top-0 bottom-0 left-0 z-10 transition-[width] duration-200`}>
+      <aside className={`hidden md:flex flex-col ${sidebarW} bg-white border-r border-gray-200 fixed top-0 bottom-0 left-0 z-10 transition-[width] duration-200 relative`}>
 
         {/* Logo */}
         <div className="bg-granata px-3 py-4 flex items-center gap-3 min-h-[68px] shrink-0">
@@ -98,23 +94,17 @@ function LayoutInner() {
           )}
         </div>
 
-        {/* Context bar — stagione + gruppo */}
-        {!collapsed && (
-          <div className="px-3 py-2.5 border-b border-gray-100 bg-gray-50 shrink-0">
-            <div className="mb-2">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Stagione</p>
-              <select
-                value={selectedSeasonId}
-                onChange={(e) => setSelectedSeasonId(e.target.value)}
-                className="w-full text-xs text-gray-700 bg-white border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-granata"
-              >
-                {seasons.length === 0 && <option value="">—</option>}
-                {seasons.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+        {/* Context bar — solo gruppo (stagione in impostazioni admin) */}
+        <div className={`border-b border-gray-100 bg-gray-50 shrink-0 ${collapsed ? 'px-2 py-2' : 'px-3 py-2.5'}`}>
+          {collapsed ? (
+            <div
+              className="flex items-center justify-center w-10 h-10 mx-auto rounded-lg bg-white border border-gray-200 text-gray-400"
+              title={groups.find((g) => g.id === selectedGroupId)?.name ?? 'Tutti i gruppi'}
+            >
+              <Users size={16} strokeWidth={1.75} />
             </div>
-            <div>
+          ) : (
+            <>
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Gruppo</p>
               <select
                 value={selectedGroupId}
@@ -126,9 +116,9 @@ function LayoutInner() {
                   <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
               </select>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
 
         <OfflineBanner />
 
@@ -139,25 +129,12 @@ function LayoutInner() {
               <NavItem key={item.to} {...item} collapsed={collapsed} />
             ))}
           </div>
-
           <div className="pt-2 border-t border-gray-100 space-y-0.5">
             <NavItem {...settingsNavItem} collapsed={collapsed} />
-            <button
-              onClick={toggleCollapsed}
-              title={collapsed ? 'Espandi sidebar' : 'Comprimi sidebar'}
-              className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-lg text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors ${
-                collapsed ? 'justify-center' : ''
-              }`}
-            >
-              {collapsed
-                ? <ChevronRight size={16} strokeWidth={1.75} />
-                : <><ChevronLeft size={16} strokeWidth={1.75} /><span>Comprimi</span></>
-              }
-            </button>
           </div>
         </nav>
 
-        {/* User footer */}
+        {/* User footer (solo espansa) */}
         {!collapsed && (
           <div className="p-4 border-t border-gray-200 shrink-0">
             <p className="text-sm font-medium text-gray-700 truncate">
@@ -182,27 +159,29 @@ function LayoutInner() {
             </button>
           </div>
         )}
+
+        {/* Pill di collapse — posizione assoluta sull'edge destra, sempre alla stessa Y */}
+        <button
+          onClick={toggleCollapsed}
+          title={collapsed ? 'Espandi sidebar' : 'Comprimi sidebar'}
+          className="absolute top-1/2 -translate-y-1/2 -right-3 w-6 h-6 bg-white border border-gray-200 rounded-full shadow-sm flex items-center justify-center z-20 text-gray-400 hover:text-granata hover:border-granata transition-colors"
+        >
+          {collapsed
+            ? <ChevronRight size={13} strokeWidth={2.5} />
+            : <ChevronLeft  size={13} strokeWidth={2.5} />
+          }
+        </button>
       </aside>
 
       {/* ── Main content ── */}
       <div className={`flex-1 ${marginL} pb-20 md:pb-0 transition-[margin] duration-200 min-w-0`}>
 
-        {/* Mobile context bar */}
-        <div className="md:hidden bg-white border-b border-gray-200 px-4 py-2 flex gap-2 sticky top-0 z-10">
-          <select
-            value={selectedSeasonId}
-            onChange={(e) => setSelectedSeasonId(e.target.value)}
-            className="flex-1 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1.5 focus:outline-none"
-          >
-            {seasons.length === 0 && <option value="">Stagione</option>}
-            {seasons.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+        {/* Mobile context bar — solo gruppo */}
+        <div className="md:hidden bg-white border-b border-gray-200 px-4 py-2 sticky top-0 z-10">
           <select
             value={selectedGroupId}
             onChange={(e) => setSelectedGroupId(e.target.value)}
-            className="flex-1 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1.5 focus:outline-none"
+            className="w-full text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-3 py-2 focus:outline-none min-h-[40px]"
           >
             <option value="">Tutti i gruppi</option>
             {groups.map((g) => (
@@ -261,7 +240,7 @@ function LayoutInner() {
               <span className="text-sm font-semibold text-gray-700">Altro</span>
               <button
                 onClick={() => setDrawerOpen(false)}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <X size={18} />
               </button>
@@ -274,7 +253,7 @@ function LayoutInner() {
                   end={end}
                   onClick={() => setDrawerOpen(false)}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    `flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors ${
                       isActive
                         ? 'bg-granata/10 text-granata'
                         : 'text-gray-700 hover:bg-gray-100'
@@ -295,7 +274,7 @@ function LayoutInner() {
               </p>
               <button
                 onClick={logout}
-                className="text-xs text-red-500 hover:text-red-700 transition-colors ml-3 shrink-0"
+                className="text-xs text-red-500 hover:text-red-700 transition-colors ml-3 shrink-0 min-h-[44px] px-2"
               >
                 Esci →
               </button>

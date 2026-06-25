@@ -23,6 +23,7 @@ const SessionTeamReportPage = lazy(() => import('./pages/SessionTeamReportPage')
 const SessionPlayerReportPage = lazy(() => import('./pages/SessionPlayerReportPage'))
 const SeasonsPage = lazy(() => import('./pages/SeasonsPage'))
 const UsersAdminPage = lazy(() => import('./pages/UsersAdminPage'))
+const SeasonSettingsPage = lazy(() => import('./pages/SeasonSettingsPage'))
 const MatchesPage = lazy(() => import('./pages/MatchesPage'))
 const MatchDetailPage = lazy(() => import('./pages/MatchDetailPage'))
 
@@ -94,6 +95,10 @@ function App() {
               <Route
                 path="utenti"
                 element={<Suspense fallback={<PageLoader />}><UsersAdminPage /></Suspense>}
+              />
+              <Route
+                path="stagione"
+                element={<Suspense fallback={<PageLoader />}><SeasonSettingsPage /></Suspense>}
               />
             </Route>
           </Route>

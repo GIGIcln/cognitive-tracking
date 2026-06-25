@@ -5,7 +5,10 @@ export default function SettingsPage() {
   const { isAdmin } = useAuth()
 
   const tabs = [
-    ...(isAdmin ? [{ to: '/impostazioni/utenti', label: 'Utenti' }] : []),
+    ...(isAdmin ? [
+      { to: '/impostazioni/stagione', label: 'Stagione' },
+      { to: '/impostazioni/utenti',   label: 'Utenti' },
+    ] : []),
     { to: '/impostazioni/profilo', label: 'Profilo' },
   ]
 
