@@ -33,7 +33,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="Cognitive Tracking API",
+    title="ASC.D Torino Club — Gestionale Sportivo",
     version="1.0.0",
     docs_url="/docs" if _docs_enabled else None,
     redoc_url="/redoc" if _docs_enabled else None,

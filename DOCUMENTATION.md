@@ -1,8 +1,8 @@
-# Cognitive Tracking — Manuale d'uso per lo Staff Tecnico
+# ASC.D Torino Club — Manuale d'uso per lo Staff Tecnico
 
-## Cos'è Cognitive Tracking
+## Il Gestionale Sportivo
 
-Cognitive Tracking è uno strumento di monitoraggio per lo staff tecnico del settore giovanile. Permette di osservare, registrare e tracciare nel tempo cinque **parametri cognitivi** per ciascun giocatore durante le sessioni di allenamento, confrontando i dati con target calibrati per categoria e livello.
+Il gestionale è uno strumento per lo staff tecnico del settore giovanile. Permette di gestire la rosa, le sessioni di allenamento, le partite, le presenze e di osservare, registrare e tracciare nel tempo cinque **parametri cognitivi** per ciascun giocatore, confrontando i dati con target calibrati per categoria e livello.
 
 L'obiettivo non è giudicare il talento atletico, ma misurare **quanto il giocatore è "presente" cognitivamente** durante il gioco: se guarda, pensa, anticipa, si adatta e comunica.
 

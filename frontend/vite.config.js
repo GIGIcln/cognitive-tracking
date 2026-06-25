@@ -11,9 +11,9 @@ export default defineConfig({
         enabled: false,
       },
       manifest: {
-        name: 'Cognitive Tracking',
-        short_name: 'CogTrack',
-        description: 'Monitoraggio cognitivo giocatori di calcio giovanile',
+        name: 'ASC.D Torino Club',
+        short_name: 'ASC.D',
+        description: 'Gestionale sportivo settore giovanile ASC.D Torino Club',
         start_url: '/',
         display: 'standalone',
         background_color: '#0f172a',

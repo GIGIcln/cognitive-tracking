@@ -118,7 +118,7 @@ Season (stagione sportiva)
 ### Root
 
 ```
-cognitive-tracking/
+ascd-gestionale/
 ├── backend/           # API FastAPI + logica di business
 ├── frontend/          # SPA React + build Vite
 ├── docs/              # Documentazione tecnica e codebook
@@ -378,7 +378,7 @@ make seed                              # Ri-esegue il seed (idempotente)
 ### Variabili d'ambiente (`backend/.env`)
 
 ```env
-DATABASE_URL=postgresql://user:pass@localhost:5432/cognitive_tracking
+DATABASE_URL=postgresql://user:pass@localhost:5432/ascd_gestionale
 SECRET_KEY=<hex-32-byte>
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
