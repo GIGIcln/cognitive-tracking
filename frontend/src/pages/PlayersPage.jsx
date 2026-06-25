@@ -1,15 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getPlayers, deletePlayer, bulkAssignPlayers } from '../api/players'
-import { getGroups } from '../api/groups'
 import PlayerFormModal from '../components/PlayerFormModal'
 import AvailabilityBadge from '../components/AvailabilityBadge'
 import { useAuth } from '../context/AuthContext'
+import { useSeasonGroup } from '../context/SeasonGroupContext'
 import { Pencil, Trash2 } from 'lucide-react'
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState([])
-  const [groups, setGroups] = useState([])
   const [selectedGroup, setSelectedGroup] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -22,6 +21,7 @@ export default function PlayersPage() {
   const [targetGroup, setTargetGroup] = useState('')
   const [assigning, setAssigning] = useState(false)
   const { isAdmin } = useAuth()
+  const { groups } = useSeasonGroup()
   const navigate = useNavigate()
 
   const loadPlayers = (groupId) => {
@@ -39,7 +39,6 @@ export default function PlayersPage() {
   }
 
   useEffect(() => {
-    getGroups().then((res) => setGroups(res.data))
     loadPlayers()
   }, [])
 

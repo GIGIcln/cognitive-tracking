@@ -38,7 +38,7 @@ function PageLoader() {
 
 function SettingsIndex() {
   const { isAdmin } = useAuth()
-  return <Navigate to={isAdmin ? '/impostazioni/stagione' : '/impostazioni/profilo'} replace />
+  return <Navigate to={isAdmin ? '/impostazioni/utenti' : '/impostazioni/profilo'} replace />
 }
 
 function App() {

@@ -1,6 +1,7 @@
 import api from './axios'
 
-export const getGroups = () => api.get('/groups')
+export const getGroups = (seasonId) =>
+  api.get('/groups', { params: { ...(seasonId ? { season_id: seasonId } : {}) } })
 export const getGroup = (id) => api.get(`/groups/${id}`)
 export const createGroup = (data) => api.post('/groups', data)
 export const updateGroup = (id, data) => api.patch(`/groups/${id}`, data)

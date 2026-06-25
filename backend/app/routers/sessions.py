@@ -63,6 +63,7 @@ def _get_session_or_404(db: Session, session_id: uuid.UUID) -> TrainingSession:
 @router.get("", response_model=Page[SessionResponse])
 def list_sessions(
     group_id: uuid.UUID | None = None,
+    season_id: uuid.UUID | None = None,
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -72,11 +73,11 @@ def list_sessions(
     svc = SessionService(db)
     if group_id is not None:
         assert_group_access(current_user, group_id)
-        sessions = svc.list(group_id, skip, limit)
-        total = svc.count(group_id=group_id)
+        sessions = svc.list(group_id, skip, limit, season_id=season_id)
+        total = svc.count(group_id=group_id, season_id=season_id)
     else:
-        sessions = svc.list(None, skip, limit, allowed_group_ids=scope)
-        total = svc.count(allowed_group_ids=scope)
+        sessions = svc.list(None, skip, limit, allowed_group_ids=scope, season_id=season_id)
+        total = svc.count(allowed_group_ids=scope, season_id=season_id)
     return Page(items=[SessionResponse.model_validate(s) for s in sessions], total=total, limit=limit, skip=skip)
 
 

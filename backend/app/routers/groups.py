@@ -33,10 +33,11 @@ router = APIRouter(prefix="/groups", tags=["groups"])
 
 @router.get("", response_model=list[GroupResponse])
 def list_groups(
+    season_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
     current_user: UserContext = Depends(require_auth),
 ):
-    groups = GroupService(db).list(current_user.read_scope())
+    groups = GroupService(db).list(current_user.read_scope(), season_id=season_id)
     return [GroupResponse.model_validate(g) for g in groups]
 
 

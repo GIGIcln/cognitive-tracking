@@ -54,7 +54,7 @@ function NavItem({ to, label, icon: Icon, end, collapsed, onClick }) {
 
 function LayoutInner() {
   const { user, logout, isAdmin, isStaff } = useAuth()
-  const { groups, selectedGroupId, setSelectedGroupId } = useSeasonGroup()
+  const { seasons, groups, selectedSeasonId, setSelectedSeasonId, selectedGroupId, setSelectedGroupId } = useSeasonGroup()
 
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('sidebar_collapsed') === 'true'
@@ -94,7 +94,7 @@ function LayoutInner() {
           )}
         </div>
 
-        {/* Context bar — solo gruppo (stagione in impostazioni admin) */}
+        {/* Context bar — stagione (admin) + gruppo */}
         <div className={`border-b border-gray-100 bg-gray-50 shrink-0 ${collapsed ? 'px-2 py-2' : 'px-3 py-2.5'}`}>
           {collapsed ? (
             <div
@@ -105,6 +105,20 @@ function LayoutInner() {
             </div>
           ) : (
             <>
+              {isAdmin && seasons.length > 0 && (
+                <div className="mb-2">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Stagione</p>
+                  <select
+                    value={selectedSeasonId}
+                    onChange={(e) => setSelectedSeasonId(e.target.value)}
+                    className="w-full text-xs text-gray-700 bg-white border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-granata"
+                  >
+                    {seasons.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Gruppo</p>
               <select
                 value={selectedGroupId}
@@ -176,12 +190,23 @@ function LayoutInner() {
       {/* ── Main content ── */}
       <div className={`flex-1 ${marginL} pb-20 md:pb-0 transition-[margin] duration-200 min-w-0`}>
 
-        {/* Mobile context bar — solo gruppo */}
-        <div className="md:hidden bg-white border-b border-gray-200 px-4 py-2 sticky top-0 z-10">
+        {/* Mobile context bar — stagione (admin) + gruppo */}
+        <div className="md:hidden bg-white border-b border-gray-200 px-4 py-2 sticky top-0 z-10 flex gap-2">
+          {isAdmin && seasons.length > 0 && (
+            <select
+              value={selectedSeasonId}
+              onChange={(e) => setSelectedSeasonId(e.target.value)}
+              className="flex-1 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-3 py-2 focus:outline-none min-h-[40px]"
+            >
+              {seasons.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          )}
           <select
             value={selectedGroupId}
             onChange={(e) => setSelectedGroupId(e.target.value)}
-            className="w-full text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-3 py-2 focus:outline-none min-h-[40px]"
+            className="flex-1 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-3 py-2 focus:outline-none min-h-[40px]"
           >
             <option value="">Tutti i gruppi</option>
             {groups.map((g) => (

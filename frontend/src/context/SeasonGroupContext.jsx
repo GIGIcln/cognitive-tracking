@@ -26,32 +26,39 @@ export function SeasonGroupProvider({ children }) {
     else localStorage.removeItem('ctx_group')
   }, [])
 
+  // Fase 1: carica le stagioni e risolve la stagione selezionata
   useEffect(() => {
-    Promise.all([
-      getSeasons().catch(() => ({ data: [] })),
-      getGroups().catch(() => ({ data: [] })),
-    ]).then(([se, gr]) => {
-      const seasonList = Array.isArray(se.data) ? se.data : []
-      const groupList = Array.isArray(gr.data) ? gr.data : []
-      setSeasons(seasonList)
-      setGroups(groupList)
+    getSeasons()
+      .then((se) => {
+        const seasonList = Array.isArray(se.data) ? se.data : []
+        setSeasons(seasonList)
 
-      const storedSeason = localStorage.getItem('ctx_season')
-      if (!storedSeason || !seasonList.find((s) => s.id === storedSeason)) {
-        const first = seasonList[0]?.id ?? ''
-        _setSeasonId(first)
-        if (first) localStorage.setItem('ctx_season', first)
-        else localStorage.removeItem('ctx_season')
-      }
-
-      const storedGroup = localStorage.getItem('ctx_group')
-      if (storedGroup && !groupList.find((g) => g.id === storedGroup)) {
-        // valore salvato non più valido → resetta a "tutti"
-        _setGroupId('')
-        localStorage.removeItem('ctx_group')
-      }
-    })
+        const storedSeason = localStorage.getItem('ctx_season')
+        if (!storedSeason || !seasonList.find((s) => s.id === storedSeason)) {
+          const first = seasonList[0]?.id ?? ''
+          _setSeasonId(first)
+          if (first) localStorage.setItem('ctx_season', first)
+          else localStorage.removeItem('ctx_season')
+        }
+      })
+      .catch(() => {})
   }, [])
+
+  // Fase 2: ricarica i gruppi ogni volta che cambia la stagione selezionata
+  useEffect(() => {
+    getGroups(selectedSeasonId || undefined)
+      .then((gr) => {
+        const groupList = Array.isArray(gr.data) ? gr.data : []
+        setGroups(groupList)
+
+        const storedGroup = localStorage.getItem('ctx_group')
+        if (storedGroup && !groupList.find((g) => g.id === storedGroup)) {
+          _setGroupId('')
+          localStorage.removeItem('ctx_group')
+        }
+      })
+      .catch(() => {})
+  }, [selectedSeasonId])
 
   const selectedSeason = seasons.find((s) => s.id === selectedSeasonId) ?? null
   const selectedGroup  = groups.find((g) => g.id === selectedGroupId)  ?? null

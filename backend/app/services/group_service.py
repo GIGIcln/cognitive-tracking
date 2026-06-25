@@ -25,13 +25,15 @@ class GroupService:
     def _current_season(self) -> Season | None:
         return self.db.query(Season).filter(Season.is_current.is_(True)).first()
 
-    def list(self, scope: list[uuid.UUID] | None) -> list[Group]:
-        season = self._current_season()
-        if not season:
-            return []
+    def list(self, scope: list[uuid.UUID] | None, season_id: uuid.UUID | None = None) -> list[Group]:
+        if season_id is None:
+            season = self._current_season()
+            if not season:
+                return []
+            season_id = season.id
         q = (
             self.db.query(Group)
-            .filter(Group.season_id == season.id, Group.is_active.is_(True))
+            .filter(Group.season_id == season_id, Group.is_active.is_(True))
             .order_by(Group.birth_year.desc(), Group.sub_group.asc())
         )
         if scope is not None:

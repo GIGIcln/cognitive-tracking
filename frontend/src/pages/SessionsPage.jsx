@@ -125,7 +125,7 @@ function CalendarView({ sessions, groups, calMonth, setCalMonth, navigate }) {
 }
 
 export default function SessionsPage() {
-  const { groups, selectedGroupId, setSelectedGroupId } = useSeasonGroup()
+  const { groups, selectedGroupId, setSelectedGroupId, selectedSeasonId } = useSeasonGroup()
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -168,11 +168,11 @@ export default function SessionsPage() {
 
   useEffect(() => {
     setLoading(true)
-    getSessions(selectedGroupId || undefined)
+    getSessions(selectedGroupId || undefined, undefined, selectedSeasonId || undefined)
       .then((res) => setSessions(res.data.items ?? []))
       .catch(() => setError('Errore nel caricamento'))
       .finally(() => setLoading(false))
-  }, [selectedGroupId])
+  }, [selectedGroupId, selectedSeasonId])
 
   const handleCreate = async (e) => {
     e.preventDefault()
