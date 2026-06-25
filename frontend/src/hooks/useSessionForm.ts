@@ -165,7 +165,7 @@ export function useSessionForm(id: string) {
         const hasSREvents = Object.keys(srRowsInit).length > 0
         const hasEvents = Object.keys(evMap).length > 0 || hasSREvents
         const hasScores = (s.measurements ?? []).some((m) =>
-          PARAMS.some(({ field }) => (m as Record<string, unknown>)[field] != null),
+          PARAMS.some(({ field }) => (m as unknown as Record<string, unknown>)[field] != null),
         )
         if (hasEvents) setEntryMode('event')
         else if (!hasScores) setEntryMode('event')
