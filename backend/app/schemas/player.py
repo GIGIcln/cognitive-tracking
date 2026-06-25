@@ -69,6 +69,7 @@ class PlayerResponse(BaseModel):
     is_active: bool
     notes: str | None
     current_group_name: str | None = None
+    availability: str = "disponibile"
 
     model_config = {"from_attributes": True}
 

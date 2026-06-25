@@ -6,7 +6,7 @@
 - **Frontend:** React 18 (Vite), Tailwind CSS, React Router v6, Axios, Recharts (grafici), jsPDF/html2canvas (export), idb (IndexedDB).
 - **Backend:** FastAPI (Python), Pydantic v2 (validazione/settings), Uvicorn, slowapi (rate limiting), GZipMiddleware.
 - **Database:** PostgreSQL 15+ con SQLAlchemy 2.0 (ORM asincrono/sincrono, Mapped types) e Alembic (migrazioni). RLS abilitato su tutte le tabelle public.
-- **Auth:** JWT (python-jose) con bcrypt. Utenti in `backend/users.json` (gitignored) — **migrazione imminente su tabella `users` nel DB** (vedi GS-01 in TECHNICAL_ROADMAP.md). Gli allenatori si auto-registrano (stato `pending` finché l'admin non assegna il gruppo); i responsabili tecnici vengono creati direttamente dall'admin. Ruoli embedded nel token, zero DB hit per request.
+- **Auth:** JWT (python-jose) con bcrypt. Utenti in tabella `users` PostgreSQL (`UserService` + `GET/POST/PATCH/DELETE /api/users`). `users.json` usato solo come seed locale in sviluppo. Gli allenatori si auto-registrano via `POST /api/auth/register` (stato `pending` finché l'admin attiva l'account); i responsabili tecnici vengono creati dall'admin. Ruoli embedded nel token, zero DB hit per request.
 
 ## 2. Navigazione e Struttura UI
 
@@ -77,13 +77,13 @@ I moduli seguenti sono pianificati nell'ordine indicato. Ogni modulo segue il so
 
 | Modulo | Stato | Note |
 |---|---|---|
-| **GS-01** Migrazione auth su DB + registrazione allenatori | pianificato | Pre-requisito per tutti gli altri |
-| **GS-02** Pannello admin utenti (assegnazione ruoli/gruppi) | pianificato | Dipende da GS-01 |
-| **GS-03** Anagrafica giocatore estesa | pianificato | Dati personali, ruolo tattico, documenti |
-| **GS-04** Modulo Presenze | pianificato | Attendance per sessione, giustificazioni |
-| **GS-05** Modulo Partite | pianificato | Gare, risultati, formazioni, minutaggi |
-| **GS-06** Impostazioni gruppo (allenatore) | pianificato | Giorni allenamento, configurazioni gruppo |
-| **GS-07** Infortuni & disponibilità | pianificato | InjuryLog, stato rosa |
+| **GS-01** Migrazione auth su DB + registrazione allenatori | ✅ completato | `users` table, `/auth/register`, `UsersAdminPage` |
+| **GS-02** Pannello admin utenti (assegnazione ruoli/gruppi) | ✅ completato | `/impostazioni/utenti`, CRUD `/api/users` |
+| **GS-03** Anagrafica giocatore estesa | ✅ completato | Dati personali, ruolo tattico, documenti |
+| **GS-04** Modulo Presenze | ✅ completato | Attendance per sessione, giustificazioni |
+| **GS-05** Modulo Partite | ✅ completato | Gare, risultati, formazioni, minutaggi |
+| **GS-06** Impostazioni gruppo (allenatore) | ✅ completato | Gate modalità punteggio in SessionDetailPage |
+| **GS-07** Infortuni & disponibilità | in sviluppo | InjuryLog, stato rosa, badge disponibilità |
 | **GS-08** UI redesign: context bar + layout allargato | pianificato | Stagione/Gruppo sempre visibili in cima |
 
 ## Observation events (metriche cognitive)

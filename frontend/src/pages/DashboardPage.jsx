@@ -5,6 +5,7 @@ import { getCurrentSeason } from '../api/seasons'
 import { getPlayers, getAtRiskPlayers } from '../api/players'
 import { getSessions } from '../api/sessions'
 import { LEVEL_COLORS } from '../constants/domain'
+import AvailabilityBadge from '../components/AvailabilityBadge'
 
 const SESSION_TYPE_LABELS = {
   training: 'Allenamento',
@@ -32,6 +33,7 @@ export default function DashboardPage() {
   const [totalPlayers, setTotalPlayers] = useState(null)
   const [totalSessions, setTotalSessions] = useState(null)
   const [recentSessions, setRecentSessions] = useState([])
+  const [injuredPlayers, setInjuredPlayers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const navigate = useNavigate()
@@ -41,13 +43,15 @@ export default function DashboardPage() {
       getGroups().catch(() => ({ data: [] })),
       getCurrentSeason().catch(() => ({ data: null })),
       getAtRiskPlayers().catch(() => ({ data: [] })),
-      getPlayers().catch(() => ({ data: { total: null } })),
+      getPlayers(undefined, 200).catch(() => ({ data: { items: [], total: null } })),
       getSessions(null, 5).catch(() => ({ data: { items: [], total: null } })),
     ]).then(([gr, se, ar, pl, ss]) => {
       setGroups(gr.data)
       setSeason(se.data)
       setAtRisk(ar.data ?? [])
+      const allPlayers = pl.data?.items ?? []
       setTotalPlayers(pl.data?.total ?? null)
+      setInjuredPlayers(allPlayers.filter((p) => p.availability && p.availability !== 'disponibile'))
       setTotalSessions(ss.data?.total ?? null)
       setRecentSessions(ss.data?.items ?? [])
     }).catch(() => setError('Errore nel caricamento'))
@@ -118,6 +122,39 @@ export default function DashboardPage() {
               {showAllRisk ? 'Mostra meno' : `Mostra tutti (${atRisk.length})`}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Infortuni attivi */}
+      {!loading && injuredPlayers.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-orange-700 font-semibold text-sm">
+              {injuredPlayers.length} {injuredPlayers.length === 1 ? 'giocatore' : 'giocatori'} non disponibili
+            </span>
+            <Link to="/players" className="text-xs text-orange-600 hover:text-orange-800 font-medium">
+              Vedi tutti →
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {injuredPlayers.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => navigate(`/players/${p.id}`)}
+                className="w-full flex items-center justify-between bg-white border border-orange-100 rounded-lg px-4 py-2.5 text-left hover:border-orange-300 hover:shadow-sm transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-900">
+                    {p.last_name} {p.first_name}
+                  </span>
+                  {p.current_group_name && (
+                    <span className="text-xs text-gray-400">{p.current_group_name}</span>
+                  )}
+                </div>
+                <AvailabilityBadge availability={p.availability} />
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

@@ -22,7 +22,7 @@ from app.database import get_db
 from app.limiter import limiter as _rate_limiter
 from app.main import app as fastapi_app
 from app.models.base import Base
-from app.models import user, player, season, group, assignment, group_target, measurement, training_session  # noqa: F401
+from app.models import user, player, season, group, assignment, group_target, measurement, training_session, injury_log  # noqa: F401
 from app.models.group import Group as GroupModel
 from app.models.player import Player
 from app.models.season import Season

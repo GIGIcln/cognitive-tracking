@@ -13,12 +13,13 @@ from app.rbac import assert_group_access, require_admin, require_auth
 from app.schemas.auth import UserContext
 from app.schemas.pagination import Page
 from app.schemas.player import AssignRequest, BulkAssignRequest, PlayerAssignmentResponse, PlayerCreate, PlayerHistoryItemResponse, PlayerResponse, PlayerUpdate
+from app.services.injury_service import InjuryService
 from app.services.player_service import PlayerService
 
 router = APIRouter(prefix="/players", tags=["players"])
 
 
-def _to_response(player: Player, group_name: str | None) -> PlayerResponse:
+def _to_response(player: Player, group_name: str | None, availability: str = "disponibile") -> PlayerResponse:
     return PlayerResponse(
         id=player.id,
         first_name=player.first_name,
@@ -28,6 +29,7 @@ def _to_response(player: Player, group_name: str | None) -> PlayerResponse:
         is_active=player.is_active,
         notes=player.notes,
         current_group_name=group_name,
+        availability=availability,
     )
 
 
@@ -43,6 +45,7 @@ def list_players(
 ):
     scope = current_user.read_scope()
     svc = PlayerService(db)
+    inj_svc = InjuryService(db)
     if group_id is not None:
         assert_group_access(current_user, group_id)
         rows = svc.list(group_id, skip, limit)
@@ -50,7 +53,8 @@ def list_players(
     else:
         rows = svc.list(None, skip, limit, allowed_group_ids=scope)
         total = svc.count(allowed_group_ids=scope)
-    return Page(items=[_to_response(p, g) for p, g in rows], total=total, limit=limit, skip=skip)
+    items = [_to_response(p, g, inj_svc.get_availability(p.id)) for p, g in rows]
+    return Page(items=items, total=total, limit=limit, skip=skip)
 
 
 @router.get("/at-risk", response_model=list[dict[str, Any]])
@@ -76,7 +80,8 @@ def get_player(
     if row is None:
         raise HTTPException(status_code=404, detail="Giocatore non trovato")
     player, group_name = row
-    return _to_response(player, group_name)
+    availability = InjuryService(db).get_availability(player_id)
+    return _to_response(player, group_name, availability)
 
 
 @router.get("/{player_id}/assignments", response_model=list[PlayerAssignmentResponse])

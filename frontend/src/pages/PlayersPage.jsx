@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { getPlayers, deletePlayer, bulkAssignPlayers } from '../api/players'
 import { getGroups } from '../api/groups'
 import PlayerFormModal from '../components/PlayerFormModal'
+import AvailabilityBadge from '../components/AvailabilityBadge'
 import { useAuth } from '../context/AuthContext'
 import { Pencil, Trash2 } from 'lucide-react'
 
@@ -146,13 +147,14 @@ export default function PlayersPage() {
                   />
                 )}
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-gray-900">{p.last_name} {p.first_name}</span>
                     {p.position && (
                       <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
                         {p.position}
                       </span>
                     )}
+                    <AvailabilityBadge availability={p.availability} />
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">
                     {p.birth_year && `${p.birth_year}`}

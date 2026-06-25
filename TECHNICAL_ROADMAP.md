@@ -220,37 +220,28 @@ _File:_ `frontend/src/constants/domain.js`, `frontend/src/pages/SessionDetailPag
 
 Sequenza di sviluppo pianificata. Ogni modulo è bloccante per il successivo dove indicato.
 
-### GS-01 — Migrazione Auth su DB + Registrazione Allenatori 🔴 PRIORITÀ IMMEDIATA
+### ~~GS-01 — Migrazione Auth su DB + Registrazione Allenatori~~ ✅ Completato
 
 Pre-requisito bloccante per tutti i nuovi moduli. Sostituisce TD-01 e OL-02.
 
-**Backend:**
-- Nuova tabella `users` (id, email, hashed_password, roles[], assigned_group_ids[], is_active, status: `pending|active`, created_at)
-- Migrazione dati da `users.json` → tabella `users`
-- `user_store.py` diventa un thin wrapper su query DB (stesso pattern JWT, zero impatto sulle guard RBAC esistenti)
-- `POST /api/auth/register` (pubblico, crea allenatore in stato `pending`)
-- Endpoint admin: `GET /api/admin/users`, `PATCH /api/admin/users/{id}` (assegna ruolo, gruppo, attiva account)
-- Audit log accessi (ultima login, IP)
-
-**Frontend:**
-- Pagina `/register` (form nome, email, password — solo allenatori)
-- Stato post-registrazione: schermata "In attesa di assegnazione gruppo" per account pending
-- Pannello `/impostazioni/utenti` (solo admin): lista utenti, assegnazione ruolo + gruppo, attivazione
-
-**RBAC da aggiornare:**
-- `read_scope()`: se ruoli contengono `responsabile_tecnico` o `admin` → `None`; altrimenti → `set[group_ids]`
-- Il doppio ruolo (`allenatore` + `responsabile_tecnico`) viene assegnato dall'admin e gestito correttamente dalla logica sopra
+- Tabella `users` DB-based con `id`, `email`, `hashed_password`, `roles[]`, `assigned_group_ids[]`, `is_active`, `status`, `created_at`
+- Login 100% DB-based via `UserService`; `users.json` usato solo per seed locale in sviluppo
+- `POST /api/auth/register` crea allenatore in stato `pending`
+- `GET /auth/me` restituisce utente corrente dal JWT
+- `ProtectedRoute` gestisce stato `pending` → `PendingPage`
+- Pannello `/impostazioni/utenti` (admin-only): `GET/POST/PATCH/DELETE /api/users`
+- Test copertura: `tests/test_users.py`
 
 ---
 
-### GS-02 — Pannello Admin Utenti
+### ~~GS-02 — Pannello Admin Utenti~~ ✅ Completato
 
-Dipende da: GS-01.
+Dipende da: GS-01. Implementato insieme a GS-01.
 
-Sezione `/impostazioni` per admin:
-- Lista tutti gli utenti con stato, ruolo, gruppo assegnato
+- `UsersAdminPage.jsx` in `/impostazioni/utenti` (solo admin)
+- Lista utenti con stato, ruolo, gruppo assegnato
 - Attiva/sospende account, cambia ruolo, assegna/rimuove gruppo
-- Filtra per stato (pending, attivi, sospesi)
+- Elimina utente (con guard auto-eliminazione)
 
 ---
 

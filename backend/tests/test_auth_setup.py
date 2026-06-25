@@ -16,7 +16,7 @@ def _token(client, credentials) -> dict:
 # ── Autenticazione base ───────────────────────────────────────────────────────
 
 def test_setup_endpoint_removed(client):
-    """L'endpoint /auth/setup non esiste più — gli utenti si gestiscono via users.json."""
+    """L'endpoint /auth/setup non esiste più — gli utenti si gestiscono via DB (/api/users)."""
     res = client.post("/api/auth/setup", json={
         "email": "x@x.com", "password": "Pass123!", "full_name": "X"
     })

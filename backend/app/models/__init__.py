@@ -9,6 +9,7 @@ from app.models.measurement import Measurement
 from app.models.group_target import GroupTarget
 from app.models.observation_event import ObservationEvent
 from app.models.group_change_log import GroupChangeLog
+from app.models.injury_log import InjuryLog
 
 __all__ = [
     "Base",
@@ -22,4 +23,5 @@ __all__ = [
     "GroupTarget",
     "ObservationEvent",
     "GroupChangeLog",
+    "InjuryLog",
 ]
