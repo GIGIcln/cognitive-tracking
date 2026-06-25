@@ -84,7 +84,7 @@ function LayoutInner() {
     <div className="min-h-screen flex bg-gray-50">
 
       {/* ── Sidebar desktop ── */}
-      <aside className={`hidden md:flex flex-col ${sidebarW} bg-white border-r border-gray-200 fixed top-0 bottom-0 left-0 z-10 transition-[width] duration-200 relative`}>
+      <aside className={`hidden md:flex flex-col ${sidebarW} bg-white border-r border-gray-200 fixed top-0 bottom-0 left-0 z-10 transition-[width] duration-200`}>
 
         {/* Logo */}
         <div className="bg-granata px-3 py-4 flex items-center gap-3 min-h-[68px] shrink-0">
