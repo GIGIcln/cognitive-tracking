@@ -61,7 +61,10 @@ async function mountSession(page: Parameters<typeof test>[1]) {
 // <3 → insufficient (gate blocks), <6 → low, <12 → medium, ≥12 → high.
 
 function srSection(page: Parameters<typeof test>[1]) {
-  return page.getByTestId('sr-multi-row-input')
+  // The page renders two SRMultiRowInput instances: one in md:hidden (mobile, pb-40)
+  // and one in hidden md:block (desktop, pb-28). Scope to the desktop section to
+  // avoid targeting the hidden mobile clone.
+  return page.locator('.pb-28').getByTestId('sr-multi-row-input')
 }
 
 function addSRReception(page: Parameters<typeof test>[1]) {
