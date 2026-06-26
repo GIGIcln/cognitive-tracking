@@ -12,10 +12,17 @@ import {
   Radar, ResponsiveContainer, Legend, Tooltip,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
+import type { GroupDetail, PlayerInGroup, Target, GroupHistoryItem, GroupChangeLog, PlayerStats, Session } from '../types/api'
+
+type AttendanceData = {
+  sessions: Array<{ id: string; session_date: string; session_type: string }>
+  players: Array<{ id: string; first_name: string; last_name: string }>
+  records: Array<{ player_id: string; session_id: string; is_absent: boolean }>
+}
 
 const PARAMS = COGNITIVE_PARAMS.map((p) => p.label)
 
-const FIELD_LABELS = {
+const FIELD_LABELS: Record<string, string> = {
   level: 'Livello',
   category: 'Categoria',
   birth_year: 'Anno di nascita',
@@ -24,9 +31,14 @@ const FIELD_LABELS = {
   name: 'Nome',
 }
 
-const SESSION_TYPE_SHORT = { training: 'All', match: 'Par', test: 'Test' }
+const SESSION_TYPE_SHORT: Record<string, string> = { training: 'All', match: 'Par', test: 'Test' }
 
-function AttendanceGrid({ data, loading, limit, onLimitChange }) {
+function AttendanceGrid({ data, loading, limit, onLimitChange }: {
+  data: AttendanceData | null
+  loading: boolean
+  limit: number
+  onLimitChange: (n: number) => void
+}) {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -40,14 +52,14 @@ function AttendanceGrid({ data, loading, limit, onLimitChange }) {
   const records = data?.records ?? []
 
   // Build lookup: playerIdStr -> sessionIdStr -> is_absent
-  const lookup = {}
+  const lookup: Record<string, Record<string, boolean>> = {}
   for (const r of records) {
     const pid = String(r.player_id)
     if (!lookup[pid]) lookup[pid] = {}
     lookup[pid][String(r.session_id)] = r.is_absent
   }
 
-  const pct = (n, d) => d === 0 ? '—' : `${Math.round((n / d) * 100)}%`
+  const pct = (n: number, d: number) => d === 0 ? '—' : `${Math.round((n / d) * 100)}%`
 
   return (
     <div>
@@ -166,7 +178,7 @@ const COMPARISON_COLORS = [
 
 const HISTORY_COLORS = { SR: '#3b82f6', DQI: '#10b981', AI: '#f59e0b', TRS: '#8b5cf6', VCI: '#ef4444' }
 
-function GroupHistoryChart({ history, loading }) {
+function GroupHistoryChart({ history, loading }: { history: GroupHistoryItem[]; loading: boolean }) {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -198,7 +210,7 @@ function GroupHistoryChart({ history, loading }) {
           <XAxis dataKey="date" tick={{ fontSize: 10 }} />
           <YAxis domain={[0, 10]} tick={{ fontSize: 10 }} />
           <Tooltip
-            formatter={(v) => v != null ? v.toFixed(2) : '—'}
+            formatter={(v) => typeof v === 'number' ? v.toFixed(2) : '—'}
             contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -218,7 +230,12 @@ const METRICS = [
   { key: 'avg_vci', label: 'VCI' },
 ]
 
-function ComparisonView({ stats, loading, selected, onToggle }) {
+function ComparisonView({ stats, loading, selected, onToggle }: {
+  stats: PlayerStats[]
+  loading: boolean
+  selected: string[]
+  onToggle: (playerId: string) => void
+}) {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -233,9 +250,10 @@ function ComparisonView({ stats, loading, selected, onToggle }) {
   const selectedStats = stats.filter((p) => selected.includes(p.player_id))
 
   const radarData = METRICS.map(({ key, label }) => {
-    const entry = { metric: label }
+    const entry: Record<string, string | number | null> = { metric: label }
     selectedStats.forEach((p) => {
-      entry[`${p.last_name} ${p.first_name}`] = p[key] !== null ? +p[key].toFixed(2) : null
+      const val = (p as unknown as Record<string, number | null>)[key]
+      entry[`${p.last_name} ${p.first_name}`] = val !== null && val != null ? +val.toFixed(2) : null
     })
     return entry
   })
@@ -285,7 +303,7 @@ function ComparisonView({ stats, loading, selected, onToggle }) {
                 <PolarAngleAxis dataKey="metric" tick={{ fontSize: 12 }} />
                 <PolarRadiusAxis domain={[0, 10]} tick={{ fontSize: 10 }} />
                 <Tooltip
-                  formatter={(v) => v !== null ? v.toFixed(2) : '—'}
+                  formatter={(v) => typeof v === 'number' ? v.toFixed(2) : '—'}
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -322,13 +340,13 @@ function ComparisonView({ stats, loading, selected, onToggle }) {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {METRICS.map(({ key, label }) => {
-                  const values = selectedStats.map((p) => p[key])
-                  const max = Math.max(...values.filter((v) => v !== null))
+                  const values = selectedStats.map((p) => (p as unknown as Record<string, number | null>)[key])
+                  const max = Math.max(...values.filter((v): v is number => v !== null))
                   return (
                     <tr key={key}>
                       <td className="px-4 py-2.5 font-semibold text-gray-700 text-xs">{label}</td>
                       {selectedStats.map((p) => {
-                        const v = p[key]
+                        const v = (p as unknown as Record<string, number | null>)[key]
                         const isTop = v !== null && v === max && selectedStats.length > 1
                         return (
                           <td key={p.player_id} className="px-3 py-2.5 text-center">
@@ -350,7 +368,7 @@ function ComparisonView({ stats, loading, selected, onToggle }) {
   )
 }
 
-function ChangelogTimeline({ entries, loading }) {
+function ChangelogTimeline({ entries, loading }: { entries: GroupChangeLog[]; loading: boolean }) {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -407,44 +425,45 @@ export default function GroupDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('players')
-  const [group, setGroup] = useState(null)
-  const [players, setPlayers] = useState([])
-  const [targets, setTargets] = useState([])
+  const [group, setGroup] = useState<GroupDetail | null>(null)
+  const [players, setPlayers] = useState<PlayerInGroup[]>([])
+  const [targets, setTargets] = useState<Target[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showAddPlayer, setShowAddPlayer] = useState(false)
   const [editingTargets, setEditingTargets] = useState(false)
-  const [targetEdits, setTargetEdits] = useState([])
+  const [targetEdits, setTargetEdits] = useState<Target[]>([])
   const [saving, setSaving] = useState(false)
-  const [editPlayer, setEditPlayer] = useState(null)
-  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, player: null })
+  const [editPlayer, setEditPlayer] = useState<PlayerInGroup | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; player: PlayerInGroup | null }>({ open: false, player: null })
   const [deleting, setDeleting] = useState(false)
-  const [changelog, setChangelog] = useState([])
+  const [changelog, setChangelog] = useState<GroupChangeLog[]>([])
   const [changelogLoading, setChangelogLoading] = useState(false)
-  const [history, setHistory] = useState([])
+  const [history, setHistory] = useState<GroupHistoryItem[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
-  const [attendance, setAttendance] = useState(null)
+  const [attendance, setAttendance] = useState<AttendanceData | null>(null)
   const [attendanceLoading, setAttendanceLoading] = useState(false)
   const [attendanceLimit, setAttendanceLimit] = useState(20)
-  const [playerStats, setPlayerStats] = useState([])
+  const [playerStats, setPlayerStats] = useState<PlayerStats[]>([])
   const [playerStatsLoading, setPlayerStatsLoading] = useState(false)
-  const [selectedPlayers, setSelectedPlayers] = useState([])
-  const [groupSessions, setGroupSessions] = useState([])
+  const [selectedPlayers, setSelectedPlayers] = useState<string[]>([])
+  const [groupSessions, setGroupSessions] = useState<Session[]>([])
   const [groupSessionsLoading, setGroupSessionsLoading] = useState(false)
   const { isAdmin } = useAuth()
 
   const load = () => {
     setLoading(true)
-    getGroup(id)
+    getGroup(id!)
       .then((res) => {
-        setGroup(res.data)
-        const sorted = (res.data.players ?? []).sort((a, b) =>
+        const g = res.data as GroupDetail
+        setGroup(g)
+        const sorted = (g.players ?? []).sort((a, b) =>
           a.last_name.localeCompare(b.last_name, 'it') ||
           a.first_name.localeCompare(b.first_name, 'it')
         )
         setPlayers(sorted)
-        setTargets(res.data.targets ?? [])
-        setTargetEdits(res.data.targets ?? [])
+        setTargets(g.targets ?? [])
+        setTargetEdits(g.targets ?? [])
       })
       .catch(() => setError('Errore nel caricamento'))
       .finally(() => setLoading(false))
@@ -457,10 +476,10 @@ export default function GroupDetailPage() {
     if (activeTab !== 'sviluppo') return
     setChangelogLoading(true)
     setHistoryLoading(true)
-    Promise.all([getGroupChangelog(id), getGroupHistory(id, 60)])
+    Promise.all([getGroupChangelog(id!), getGroupHistory(id!, 60)])
       .then(([clRes, histRes]) => {
-        setChangelog(clRes.data)
-        setHistory(histRes.data)
+        setChangelog(clRes.data as GroupChangeLog[])
+        setHistory(histRes.data as GroupHistoryItem[])
       })
       .catch(() => {})
       .finally(() => {
@@ -472,8 +491,8 @@ export default function GroupDetailPage() {
   useEffect(() => {
     if (activeTab !== 'presenze') return
     setAttendanceLoading(true)
-    getGroupAttendance(id, attendanceLimit)
-      .then((res) => setAttendance(res.data))
+    getGroupAttendance(id!, attendanceLimit)
+      .then((res) => setAttendance(res.data as AttendanceData))
       .catch(() => {})
       .finally(() => setAttendanceLoading(false))
   }, [activeTab, id, attendanceLimit])
@@ -482,8 +501,12 @@ export default function GroupDetailPage() {
     if (activeTab !== 'confronto') return
     if (playerStats.length) return
     setPlayerStatsLoading(true)
-    getGroupPlayerStats(id)
-      .then((res) => { setPlayerStats(res.data); setSelectedPlayers(res.data.slice(0, 2).map((p) => p.player_id)) })
+    getGroupPlayerStats(id!)
+      .then((res) => {
+        const ps = res.data as PlayerStats[]
+        setPlayerStats(ps)
+        setSelectedPlayers(ps.slice(0, 2).map((p) => p.player_id))
+      })
       .catch(() => {})
       .finally(() => setPlayerStatsLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -492,8 +515,8 @@ export default function GroupDetailPage() {
   useEffect(() => {
     if (activeTab !== 'sessioni') return
     setGroupSessionsLoading(true)
-    getSessions(id, 200)
-      .then((res) => setGroupSessions(res.data.items ?? []))
+    getSessions(id!, 200)
+      .then((res) => setGroupSessions((res.data.items ?? []) as Session[]))
       .catch(() => {})
       .finally(() => setGroupSessionsLoading(false))
   }, [activeTab, id])
@@ -501,7 +524,7 @@ export default function GroupDetailPage() {
   const handleSaveTargets = async () => {
     setSaving(true)
     try {
-      await updateGroupTargets(id, targetEdits)
+      await updateGroupTargets(id!, targetEdits)
       setTargets(targetEdits)
       setEditingTargets(false)
     } catch {
@@ -514,7 +537,7 @@ export default function GroupDetailPage() {
   const handleDeletePlayer = async () => {
     setDeleting(true)
     try {
-      await deletePlayer(deleteConfirm.player.id)
+      await deletePlayer(deleteConfirm.player!.id)
       setDeleteConfirm({ open: false, player: null })
       load()
     } catch {
@@ -524,7 +547,7 @@ export default function GroupDetailPage() {
     }
   }
 
-  const updateTargetField = (param, field, value) => {
+  const updateTargetField = (param: string, field: keyof Target, value: string) => {
     setTargetEdits((prev) =>
       prev.map((t) =>
         t.parameter === param ? { ...t, [field]: parseFloat(value) || 0 } : t
@@ -663,7 +686,7 @@ export default function GroupDetailPage() {
               <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
                 <p className="text-sm text-gray-700 mb-4">
                   Sei sicuro di voler rimuovere{' '}
-                  <strong>{deleteConfirm.player.last_name} {deleteConfirm.player.first_name}</strong>?
+                  <strong>{deleteConfirm.player?.last_name} {deleteConfirm.player?.first_name}</strong>?
                 </p>
                 <div className="flex gap-2">
                   <button

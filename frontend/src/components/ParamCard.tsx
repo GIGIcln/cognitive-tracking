@@ -1,16 +1,11 @@
 import type { GroupTarget } from '../utils/reportUtils'
-
-interface MeasurementRow {
-  player_id: string
-  last_name: string
-  [key: string]: unknown
-}
+import type { Measurement } from '../types/api'
 
 interface ParamCardProps {
   field: string
   italianLabel: string
   target: GroupTarget | undefined
-  measurements: MeasurementRow[]
+  measurements: Measurement[]
 }
 
 function cellClass(val: number, target: GroupTarget | undefined): string {
@@ -21,10 +16,11 @@ function cellClass(val: number, target: GroupTarget | undefined): string {
 }
 
 export default function ParamCard({ field, italianLabel, target, measurements }: ParamCardProps) {
+  const asMap = (m: Measurement) => m as unknown as Record<string, number | null>
   const withValue = [...measurements]
-    .filter((m) => m[field] != null)
-    .sort((a, b) => (b[field] as number) - (a[field] as number))
-  const withoutValue = measurements.filter((m) => m[field] == null)
+    .filter((m) => asMap(m)[field] != null)
+    .sort((a, b) => (asMap(b)[field] ?? 0) - (asMap(a)[field] ?? 0))
+  const withoutValue = measurements.filter((m) => asMap(m)[field] == null)
   const allSorted = [...withValue, ...withoutValue]
 
   return (
@@ -34,7 +30,7 @@ export default function ParamCard({ field, italianLabel, target, measurements }:
       </div>
       <div className="max-h-[220px] overflow-y-auto space-y-1">
         {allSorted.map((m, i) => {
-          const val = m[field] as number | null | undefined
+          const val = asMap(m)[field] as number | null | undefined
           const hasValue = val != null
           return (
             <div key={m.player_id} className="flex items-center justify-between gap-2 py-0.5">

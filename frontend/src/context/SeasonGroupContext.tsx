@@ -1,18 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { getSeasons } from '../api/seasons'
 import { getGroups } from '../api/groups'
-
-interface Season {
-  id: string
-  name: string
-  [key: string]: unknown
-}
-
-interface Group {
-  id: string
-  name: string
-  [key: string]: unknown
-}
+import type { Season, Group } from '../types/api'
 
 interface SeasonGroupContextValue {
   seasons: Season[]

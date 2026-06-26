@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import React from 'react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
@@ -7,8 +8,9 @@ import { getPlayer, getPlayerHistory, getPlayerAssignments, getPlayerStreak } fr
 import { listInjuries, createInjury, updateInjury, deleteInjury } from '../api/injuries'
 import { COGNITIVE_PARAMS } from '../constants/domain'
 import AvailabilityBadge from '../components/AvailabilityBadge'
+import type { Player, PlayerAssignment, PlayerHistoryItem, InjuryLog } from '../types/api'
 
-const METRIC_COLORS = {
+const METRIC_COLORS: Record<string, string> = {
   scanning_rate:    '#8b5cf6',
   decision_quality: '#3b82f6',
   anticipation:     '#10b981',
@@ -17,15 +19,15 @@ const METRIC_COLORS = {
 }
 const METRICS = COGNITIVE_PARAMS.map((p) => ({ key: p.field, label: p.label, color: METRIC_COLORS[p.field] }))
 
-function fmt(d) {
+function fmt(d: string) {
   return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
 }
 
-function fmtFull(d) {
+function fmtFull(d: string) {
   return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function GroupsTimeline({ assignments, loading }) {
+function GroupsTimeline({ assignments, loading }: { assignments: PlayerAssignment[]; loading: boolean }) {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -62,8 +64,8 @@ function GroupsTimeline({ assignments, loading }) {
   )
 }
 
-function MetricsTrend({ history, loading }) {
-  const [visible, setVisible] = useState(new Set(METRICS.map((m) => m.key)))
+function MetricsTrend({ history, loading }: { history: PlayerHistoryItem[]; loading: boolean }) {
+  const [visible, setVisible] = useState<Set<string>>(new Set(METRICS.map((m) => m.key)))
 
   if (loading) {
     return (
@@ -86,7 +88,7 @@ function MetricsTrend({ history, loading }) {
     verbal_comm: h.verbal_comm,
   }))
 
-  const toggle = (key) =>
+  const toggle = (key: string) =>
     setVisible((prev) => {
       const next = new Set(prev)
       if (next.has(key)) { if (next.size > 1) next.delete(key) } else next.add(key)
@@ -132,7 +134,7 @@ function MetricsTrend({ history, loading }) {
               contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
               formatter={(v, name) => {
                 const m = METRICS.find((x) => x.key === name)
-                return [v !== null ? v.toFixed(1) : '—', m?.label ?? name]
+                return [typeof v === 'number' ? v.toFixed(1) : '—', m?.label ?? name]
               }}
               labelFormatter={(label, payload) => {
                 const group = payload?.[0]?.payload?.group
@@ -163,8 +165,8 @@ function MetricsTrend({ history, loading }) {
   )
 }
 
-const SEVERITY_LABELS = { lieve: 'Lieve', moderato: 'Moderato', grave: 'Grave' }
-const SEVERITY_COLORS = {
+const SEVERITY_LABELS: Record<string, string> = { lieve: 'Lieve', moderato: 'Moderato', grave: 'Grave' }
+const SEVERITY_COLORS: Record<string, string> = {
   lieve:    'bg-amber-100 text-amber-700',
   moderato: 'bg-orange-100 text-orange-700',
   grave:    'bg-red-100 text-red-700',
@@ -174,8 +176,8 @@ const INJURY_TYPES = [
   'Frattura', 'Lesione legamentosa', 'Tendinite', 'Altro',
 ]
 
-function InjuryTab({ playerId }) {
-  const [injuries, setInjuries] = useState([])
+function InjuryTab({ playerId }: { playerId: string }) {
+  const [injuries, setInjuries] = useState<InjuryLog[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -193,7 +195,7 @@ function InjuryTab({ playerId }) {
 
   useEffect(() => { reload() }, [playerId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleCreate = async (e) => {
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setSaving(true)
     try {
@@ -214,13 +216,13 @@ function InjuryTab({ playerId }) {
     }
   }
 
-  const handleReturn = async (injuryId) => {
+  const handleReturn = async (injuryId: string) => {
     const today = new Date().toISOString().slice(0, 10)
     await updateInjury(injuryId, { actual_return: today })
     reload()
   }
 
-  const handleDelete = async (injuryId) => {
+  const handleDelete = async (injuryId: string) => {
     if (!window.confirm('Eliminare questo infortunio?')) return
     await deleteInjury(injuryId)
     reload()
@@ -376,24 +378,24 @@ function InjuryTab({ playerId }) {
 export default function PlayerDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [player, setPlayer] = useState(null)
+  const [player, setPlayer] = useState<Player | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('anagrafica')
-  const [assignments, setAssignments] = useState([])
+  const [assignments, setAssignments] = useState<PlayerAssignment[]>([])
   const [assignmentsLoading, setAssignmentsLoading] = useState(false)
-  const [history, setHistory] = useState([])
+  const [history, setHistory] = useState<PlayerHistoryItem[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
-  const [streak, setStreak] = useState(null)
+  const [streak, setStreak] = useState<number | null>(null)
 
   useEffect(() => {
     Promise.all([
-      getPlayer(id),
-      getPlayerStreak(id),
+      getPlayer(id!),
+      getPlayerStreak(id!),
     ])
       .then(([playerRes, streakRes]) => {
-        setPlayer(playerRes.data)
-        setStreak(streakRes.data.streak)
+        setPlayer(playerRes.data as Player)
+        setStreak(streakRes.data.streak as number)
       })
       .catch(() => setError('Giocatore non trovato'))
       .finally(() => setLoading(false))
@@ -402,8 +404,8 @@ export default function PlayerDetailPage() {
   useEffect(() => {
     if (activeTab === 'gruppi' && !assignments.length) {
       setAssignmentsLoading(true)
-      getPlayerAssignments(id)
-        .then((res) => setAssignments(res.data))
+      getPlayerAssignments(id!)
+        .then((res) => setAssignments(res.data as PlayerAssignment[]))
         .catch(() => {})
         .finally(() => setAssignmentsLoading(false))
     }
@@ -413,8 +415,8 @@ export default function PlayerDetailPage() {
   useEffect(() => {
     if (activeTab === 'trend' && !history.length) {
       setHistoryLoading(true)
-      getPlayerHistory(id)
-        .then((res) => setHistory(res.data))
+      getPlayerHistory(id!)
+        .then((res) => setHistory(res.data as PlayerHistoryItem[]))
         .catch(() => {})
         .finally(() => setHistoryLoading(false))
     }
@@ -478,7 +480,7 @@ export default function PlayerDetailPage() {
       {/* Anagrafica */}
       {activeTab === 'anagrafica' && (
         <div className="space-y-3">
-          {streak >= 2 && (
+          {streak != null && streak >= 2 && (
             <div className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
               🔥 {streak} sessioni ottimo consecutive
             </div>
@@ -531,7 +533,7 @@ export default function PlayerDetailPage() {
 
       {/* Infortuni */}
       {activeTab === 'infortuni' && (
-        <InjuryTab playerId={id} />
+        <InjuryTab playerId={id!} />
       )}
     </div>
   )

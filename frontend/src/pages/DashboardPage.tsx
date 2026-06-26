@@ -7,14 +7,16 @@ import { getSessions } from '../api/sessions'
 import { LEVEL_COLORS } from '../constants/domain'
 import AvailabilityBadge from '../components/AvailabilityBadge'
 import { useAuth } from '../context/AuthContext'
+import type { Group, Season, AtRiskPlayer, RecentSession, Player } from '../types/api'
 
-const SESSION_TYPE_LABELS = {
+const SESSION_TYPE_LABELS: Record<string, string> = {
   training: 'Allenamento',
   match: 'Partita',
   test: 'Test',
 }
 
-function StatCard({ label, value, loading, sub }) {
+type StatCardProps = { label: string; value: string | number; loading: boolean; sub?: string }
+function StatCard({ label, value, loading, sub }: StatCardProps) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="text-sm text-gray-500 mb-1">{label}</div>
@@ -31,14 +33,14 @@ export default function DashboardPage() {
   const isCoach = user != null && !isStaff
   const isReadOnly = isStaff && !isAdmin
 
-  const [groups, setGroups] = useState([])
-  const [season, setSeason] = useState(null)
-  const [atRisk, setAtRisk] = useState([])
+  const [groups, setGroups] = useState<Group[]>([])
+  const [season, setSeason] = useState<Season | null>(null)
+  const [atRisk, setAtRisk] = useState<AtRiskPlayer[]>([])
   const [showAllRisk, setShowAllRisk] = useState(false)
-  const [totalPlayers, setTotalPlayers] = useState(null)
-  const [totalSessions, setTotalSessions] = useState(null)
-  const [recentSessions, setRecentSessions] = useState([])
-  const [injuredPlayers, setInjuredPlayers] = useState([])
+  const [totalPlayers, setTotalPlayers] = useState<number | null>(null)
+  const [totalSessions, setTotalSessions] = useState<number | null>(null)
+  const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
+  const [injuredPlayers, setInjuredPlayers] = useState<Player[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const navigate = useNavigate()
@@ -54,7 +56,7 @@ export default function DashboardPage() {
       setGroups(gr.data)
       setSeason(se.data)
       setAtRisk(ar.data ?? [])
-      const allPlayers = pl.data?.items ?? []
+      const allPlayers = (pl.data?.items ?? []) as Player[]
       setTotalPlayers(pl.data?.total ?? null)
       setInjuredPlayers(allPlayers.filter((p) => p.availability && p.availability !== 'disponibile'))
       setTotalSessions(ss.data?.total ?? null)
@@ -63,7 +65,7 @@ export default function DashboardPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const groupMap = Object.fromEntries(groups.map((g) => [g.id, g]))
+  const groupMap = Object.fromEntries(groups.map((g) => [g.id, g])) as Record<string, Group | undefined>
   // Per l'allenatore il backend restituisce solo il suo gruppo, quindi groups[0] è il suo gruppo
   const myGroup = isCoach ? (groups[0] ?? null) : null
 
@@ -255,7 +257,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {group && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${LEVEL_COLORS[group.level] ?? 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${LEVEL_COLORS[group.level as keyof typeof LEVEL_COLORS] ?? 'bg-gray-100 text-gray-600'}`}>
                         {group.level}
                       </span>
                     )}

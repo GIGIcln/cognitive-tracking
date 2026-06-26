@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import React from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -12,7 +13,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
     setLoading(true)
@@ -20,9 +21,8 @@ export default function LoginPage() {
       await login(email, password)
       navigate('/', { replace: true })
     } catch (error) {
-      const msg = error.response?.data?.detail
-        || error.message
-        || 'Errore sconosciuto'
+      const err = error as { response?: { data?: { detail?: string } }; message?: string }
+      const msg = err.response?.data?.detail || err.message || 'Errore sconosciuto'
       setError(msg)
     } finally {
       setLoading(false)

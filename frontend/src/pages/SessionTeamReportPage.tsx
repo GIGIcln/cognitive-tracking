@@ -17,18 +17,19 @@ import { COGNITIVE_PARAMS } from '../constants/domain'
 import { formatDateShort } from '../utils/dateUtils'
 import { generateComment } from '../utils/reportUtils'
 import { useSessionTeamReport } from '../hooks/useSessionTeamReport'
+import type { Target, Measurement } from '../types/api'
 
 const PARAMS = COGNITIVE_PARAMS
 const TEAM_FIELD_KEYS = ['avg_sr', 'avg_dqi', 'avg_ai', 'avg_trs', 'avg_vci']
 
-function cellClass(val, target) {
+function cellClass(val: number | null | undefined, target: Target | null | undefined) {
   if (val == null || !target) return 'text-gray-400'
   if (val >= target.ottimo_min) return 'bg-emerald-50 text-emerald-800 font-semibold'
   if (val <= target.insufficient_max) return 'bg-red-50 text-red-800 font-semibold'
   return 'bg-amber-50 text-amber-800 font-semibold'
 }
 
-function StatusDot({ val, target }) {
+function StatusDot({ val, target }: { val: number | null | undefined; target: Target | null | undefined }) {
   const cls =
     val == null || !target ? 'bg-gray-200' :
     val >= target.ottimo_min ? 'bg-emerald-500' :
@@ -41,7 +42,7 @@ export default function SessionTeamReportPage() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
   const { session, groupName, measurements, averages, targets, loading, error } =
-    useSessionTeamReport(sessionId)
+    useSessionTeamReport(sessionId!)
   const [pdfLoading, setPdfLoading] = useState(false)
 
   const targetsMap = useMemo(
@@ -84,7 +85,7 @@ export default function SessionTeamReportPage() {
     [targets]
   )
 
-  function avgCellClass(val) {
+  function avgCellClass(val: number | null) {
     if (val == null || avgInsufficient == null || avgOttimo == null) return 'text-gray-400'
     if (val >= avgOttimo) return 'bg-emerald-50 text-emerald-800 font-bold'
     if (val <= avgInsufficient) return 'bg-red-50 text-red-800 font-bold'

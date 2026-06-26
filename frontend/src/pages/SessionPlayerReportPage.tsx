@@ -24,7 +24,7 @@ import { useSessionPlayerReport } from '../hooks/useSessionPlayerReport'
 
 const PARAMS = COGNITIVE_PARAMS
 
-function RankBadge({ ranking }) {
+function RankBadge({ ranking }: { ranking: { rank: number; total: number; percentile: number } | null | undefined }) {
   if (!ranking || ranking.total < 2) return null
   const { rank, total, percentile } = ranking
   const cls =
@@ -39,7 +39,7 @@ function RankBadge({ ranking }) {
   )
 }
 
-function StatusDot({ val, target }) {
+function StatusDot({ val, target }: { val: number | null | undefined; target: { ottimo_min: number; insufficient_max: number } | null | undefined }) {
   const cls =
     val == null || !target ? 'bg-gray-200' :
     val >= target.ottimo_min ? 'bg-emerald-500' :
@@ -64,7 +64,7 @@ export default function SessionPlayerReportPage() {
     targets,
     loading,
     error,
-  } = useSessionPlayerReport(sessionId, playerId)
+  } = useSessionPlayerReport(sessionId!, playerId!)
   const [pdfLoading, setPdfLoading] = useState(false)
 
   const targetsMap = useMemo(
@@ -185,7 +185,7 @@ export default function SessionPlayerReportPage() {
             <button
               onClick={() =>
                 exportSessionPlayerCSV(
-                  playerLastName, playerFirstName, session, groupName, measurement, averages, targets
+                  playerLastName, playerFirstName, session, groupName, measurement as unknown as Record<string, unknown>, averages, targets
                 )
               }
               className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold text-white transition-colors"
@@ -203,7 +203,7 @@ export default function SessionPlayerReportPage() {
             key={field}
             code={label}
             label={italianLabel}
-            value={measurement[field]}
+            value={(measurement as unknown as Record<string, number | null> | null)?.[field]}
             target={targetsMap[label]}
           />
         ))}
@@ -269,7 +269,7 @@ export default function SessionPlayerReportPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {PARAMS.map(({ field, label, italianLabel }) => {
-                const val = measurement[field]
+                const val = (measurement as unknown as Record<string, number | null> | null)?.[field]
                 const t = targetsMap[label]
                 const rowBg =
                   val == null || !t ? '' :
@@ -332,14 +332,14 @@ export default function SessionPlayerReportPage() {
       )}
 
       {/* NOTE GIOCATORE */}
-      {measurement.notes && (
+      {measurement?.notes && (
         <div className="bg-white rounded-xl border border-gray-200 p-5 report-section">
           <div className="mb-3">
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Note</div>
             <div className="text-sm font-bold text-gray-800 mt-0.5">Osservazioni sessione</div>
           </div>
           <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-            {measurement.notes}
+            {measurement?.notes}
           </p>
         </div>
       )}

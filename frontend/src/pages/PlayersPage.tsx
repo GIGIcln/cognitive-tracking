@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getPlayers, deletePlayer, bulkAssignPlayers } from '../api/players'
 import PlayerFormModal from '../components/PlayerFormModal'
@@ -6,29 +6,30 @@ import AvailabilityBadge from '../components/AvailabilityBadge'
 import { useAuth } from '../context/AuthContext'
 import { useSeasonGroup } from '../context/SeasonGroupContext'
 import { Pencil, Trash2 } from 'lucide-react'
+import type { Player } from '../types/api'
 
 export default function PlayersPage() {
-  const [players, setPlayers] = useState([])
+  const [players, setPlayers] = useState<Player[]>([])
   const [selectedGroup, setSelectedGroup] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCreate, setShowCreate] = useState(false)
-  const [editPlayer, setEditPlayer] = useState(null)
-  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, player: null })
+  const [editPlayer, setEditPlayer] = useState<Player | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; player: Player | null }>({ open: false, player: null })
   const [deleting, setDeleting] = useState(false)
   const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState(new Set())
+  const [selected, setSelected] = useState(new Set<string>())
   const [targetGroup, setTargetGroup] = useState('')
   const [assigning, setAssigning] = useState(false)
   const { isAdmin } = useAuth()
   const { groups } = useSeasonGroup()
   const navigate = useNavigate()
 
-  const loadPlayers = (groupId) => {
+  const loadPlayers = (groupId?: string) => {
     setLoading(true)
     getPlayers(groupId || undefined)
       .then((res) => {
-        const sorted = res.data.items.sort((a, b) =>
+        const sorted = (res.data.items as Player[]).sort((a, b) =>
           a.last_name.localeCompare(b.last_name, 'it') ||
           a.first_name.localeCompare(b.first_name, 'it')
         )
@@ -42,7 +43,7 @@ export default function PlayersPage() {
     loadPlayers()
   }, [])
 
-  const handleGroupChange = (e) => {
+  const handleGroupChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedGroup(e.target.value)
     setQuery('')
     loadPlayers(e.target.value)
@@ -71,7 +72,7 @@ export default function PlayersPage() {
   const handleDelete = async () => {
     setDeleting(true)
     try {
-      await deletePlayer(deleteConfirm.player.id)
+      await deletePlayer(deleteConfirm.player!.id)
       setDeleteConfirm({ open: false, player: null })
       loadPlayers(selectedGroup)
     } catch {
@@ -240,7 +241,7 @@ export default function PlayersPage() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
             <p className="text-sm text-gray-700 mb-4">
               Sei sicuro di voler rimuovere{' '}
-              <strong>{deleteConfirm.player.last_name} {deleteConfirm.player.first_name}</strong>?
+              <strong>{deleteConfirm.player?.last_name} {deleteConfirm.player?.first_name}</strong>?
             </p>
             <div className="flex gap-2">
               <button

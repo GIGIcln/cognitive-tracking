@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { COGNITIVE_PARAMS, FIELD_TO_METRIC } from '../constants/domain'
+import type { MetricField } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
 import ToggleSwitch from '../components/ToggleSwitch'
 import NotesBlock from '../components/NotesBlock'
@@ -8,22 +9,23 @@ import EventParamRow from '../components/EventParamRow'
 import SRMultiRowInput from '../components/SRMultiRowInput'
 import AttendanceTab from '../components/AttendanceTab'
 import { useSessionForm } from '../hooks/useSessionForm'
+import type { GroupTarget } from '../utils/reportUtils'
 
 const PARAMS = COGNITIVE_PARAMS
 
 // ── Score-mode helpers ────────────────────────────────────────────────────────
 
-function valueBadgeClass(value, targetsMap, field) {
+function valueBadgeClass(value: string | number | null, targetsMap: Record<string, GroupTarget>, field: MetricField) {
   const param = FIELD_TO_METRIC[field]
   const t = targetsMap[param]
   if (!t || value === '' || value == null) return 'border-gray-300 bg-white'
-  const v = parseFloat(value)
+  const v = parseFloat(String(value))
   if (v <= t.insufficient_max) return 'border-red-300 bg-red-50 text-red-800'
   if (v >= t.ottimo_min)       return 'border-green-300 bg-green-50 text-green-800'
   return 'border-yellow-300 bg-yellow-50 text-yellow-800'
 }
 
-function getMobileBtnClass(n, selectedValue, targetsMap, field) {
+function getMobileBtnClass(n: number, selectedValue: string | number | null, targetsMap: Record<string, GroupTarget>, field: MetricField) {
   const isSelected = Number(selectedValue) === n
   if (!isSelected) return 'bg-gray-100 text-gray-600 active:bg-gray-200'
   const param = FIELD_TO_METRIC[field]
@@ -34,7 +36,7 @@ function getMobileBtnClass(n, selectedValue, targetsMap, field) {
   return 'bg-granata text-white scale-105 ring-2 ring-yellow-400 ring-offset-1'
 }
 
-function ReliabilityChip({ ok, total }) {
+function ReliabilityChip({ ok, total }: { ok: number; total: number }) {
   let cls
   if (ok >= total)                     cls = 'bg-green-100 text-green-700'
   else if (ok >= Math.ceil(total / 2)) cls = 'bg-yellow-100 text-yellow-700'
@@ -46,7 +48,7 @@ function ReliabilityChip({ ok, total }) {
   )
 }
 
-function ScoreCompletenessChip({ filled, total }) {
+function ScoreCompletenessChip({ filled, total }: { filled: number; total: number }) {
   let cls
   if (filled === total && total > 0) cls = 'bg-green-100 text-green-700'
   else if (filled === 0)             cls = 'bg-red-100 text-red-700'
@@ -78,7 +80,7 @@ export default function SessionDetailPage() {
     getReliabilityOkCount, hasAnyEventData,
     insufficientCount, insufficientGateCount,
     getScoreFilledCount, scoreEmptyCount,
-  } = useSessionForm(id)
+  } = useSessionForm(id!)
 
   if (loading) {
     return (
@@ -188,7 +190,7 @@ export default function SessionDetailPage() {
               {[['score', 'Punteggio'], ['event', 'Conteggio eventi']].map(([mode, label]) => (
                 <button
                   key={mode}
-                  onClick={() => setEntryMode(mode)}
+                  onClick={() => setEntryMode(mode as 'score' | 'event')}
                   className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
                     entryMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
                   }`}
@@ -217,7 +219,7 @@ export default function SessionDetailPage() {
 
         {/* Presenze tab */}
         {section === 'presenze' && (
-          <AttendanceTab sessionId={id} players={players} />
+          <AttendanceTab sessionId={id!} players={players} />
         )}
 
         {/* Cognitivo tab */}
@@ -436,7 +438,7 @@ export default function SessionDetailPage() {
         </div>
 
         {section === 'presenze' && (
-          <AttendanceTab sessionId={id} players={players} />
+          <AttendanceTab sessionId={id!} players={players} />
         )}
 
         {section === 'cognitivo' && (
@@ -446,7 +448,7 @@ export default function SessionDetailPage() {
           {[['score', 'Punteggio diretto'], ['event', 'Conteggio eventi']].map(([mode, label]) => (
             <button
               key={mode}
-              onClick={() => setEntryMode(mode)}
+              onClick={() => setEntryMode(mode as 'score' | 'event')}
               className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 entryMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}

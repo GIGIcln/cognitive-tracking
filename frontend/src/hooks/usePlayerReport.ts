@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getPlayer, getPlayerHistory } from '../api/players'
 import { getGroupTargets } from '../api/groups'
 import { getSessionAverages, getSessionRankings } from '../api/sessions'
+import type { Target, PlayerHistoryItem } from '../types/api'
 
 export function usePlayerReport(playerId: string) {
   const playerQuery = useQuery({
@@ -57,12 +58,12 @@ export function usePlayerReport(playerId: string) {
 
   return {
     playerName: player ? `${player.first_name} ${player.last_name}` : '',
-    playerFirstName: player?.first_name ?? '',
-    playerLastName: player?.last_name ?? '',
-    playerPosition: player?.position ?? null,
-    history,
-    targets: targetsQuery.data ?? [],
-    sessionAverages: avgQuery.data ?? null,
+    playerFirstName: (player?.first_name ?? '') as string,
+    playerLastName: (player?.last_name ?? '') as string,
+    playerPosition: (player?.position ?? null) as string | null,
+    history: (historyQuery.data ?? []) as PlayerHistoryItem[],
+    targets: (targetsQuery.data ?? []) as Target[],
+    sessionAverages: (avgQuery.data ?? null) as Record<string, number> | null,
     playerRanking: (rankings as { player_id: string; [key: string]: unknown }[]).find((r) => r.player_id === playerId) ?? null,
     loading,
     error,

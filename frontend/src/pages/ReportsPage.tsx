@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getPlayers } from '../api/players'
 import { getGroups } from '../api/groups'
+import type { Player, Group } from '../types/api'
 
 export default function ReportsPage() {
   const navigate = useNavigate()
-  const [players, setPlayers] = useState([])
-  const [groups, setGroups] = useState([])
+  const [players, setPlayers] = useState<Player[]>([])
+  const [groups, setGroups] = useState<Group[]>([])
   const [selectedPlayer, setSelectedPlayer] = useState('')
   const [selectedGroup, setSelectedGroup] = useState('')
   const [loading, setLoading] = useState(true)

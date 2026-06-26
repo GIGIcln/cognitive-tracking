@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { listMatches } from '../api/matches'
 import MatchFormModal from '../components/MatchFormModal'
 import { useAuth } from '../context/AuthContext'
+import type { Match } from '../types/api'
 
-const HOME_AWAY_LABEL = { home: 'Casa', away: 'Trasferta', neutral: 'Neutro' }
-const MATCH_TYPE_LABEL = { campionato: 'Campionato', coppa: 'Coppa', amichevole: 'Amichevole' }
+const HOME_AWAY_LABEL: Record<string, string> = { home: 'Casa', away: 'Trasferta', neutral: 'Neutro' }
+const MATCH_TYPE_LABEL: Record<string, string> = { campionato: 'Campionato', coppa: 'Coppa', amichevole: 'Amichevole' }
 
-function resultChip(m) {
+function resultChip(m: Match) {
   if (m.score_home == null || m.score_away == null) return null
   const diff = m.score_home - m.score_away
   if (diff > 0) return <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">V</span>
@@ -15,14 +16,14 @@ function resultChip(m) {
   return <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">P</span>
 }
 
-function fmtDate(d) {
+function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 export default function MatchesPage() {
   const navigate = useNavigate()
   const { isStaff } = useAuth()
-  const [matches, setMatches] = useState([])
+  const [matches, setMatches] = useState<Match[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
 
@@ -39,7 +40,7 @@ export default function MatchesPage() {
   const played = matches.filter((m) => m.score_home != null && m.score_away != null)
   const scheduled = matches.filter((m) => m.score_home == null || m.score_away == null)
 
-  const MatchCard = ({ m }) => (
+  const MatchCard = ({ m }: { m: Match }) => (
     <div
       key={m.id}
       onClick={() => navigate(`/partite/${m.id}`)}

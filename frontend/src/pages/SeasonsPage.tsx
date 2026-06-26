@@ -1,19 +1,20 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { getSeasons, createSeason, getSeasonStats } from '../api/seasons'
+import type { Season, SeasonStats } from '../types/api'
 
-function formatDate(d) {
+function formatDate(d: string | null | undefined) {
   if (!d) return '—'
   return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 export default function SeasonsPage() {
-  const [seasons, setSeasons] = useState([])
+  const [seasons, setSeasons] = useState<Season[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', start_date: '', end_date: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [stats, setStats] = useState(null)
+  const [stats, setStats] = useState<SeasonStats | null>(null)
 
   const current = seasons.find((s) => s.is_current) ?? null
   const archived = seasons.filter((s) => !s.is_current)
@@ -21,8 +22,9 @@ export default function SeasonsPage() {
   useEffect(() => {
     getSeasons()
       .then((res) => {
-        setSeasons(res.data)
-        const cur = res.data.find((s) => s.is_current)
+        const data = res.data as Season[]
+        setSeasons(data)
+        const cur = data.find((s) => s.is_current)
         if (cur) {
           getSeasonStats(cur.id)
             .then((r) => setStats(r.data))
@@ -33,7 +35,7 @@ export default function SeasonsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleCreate = async (e) => {
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
     setSaving(true)
@@ -182,13 +184,13 @@ export default function SeasonsPage() {
               </div>
               {stats.total_sessions > 0 && (
                 <div className="grid grid-cols-5 gap-2 text-center">
-                  {[
+                  {([
                     ['SR',  stats.avg_sr],
                     ['DQI', stats.avg_dqi],
                     ['AI',  stats.avg_ai],
                     ['TRS', stats.avg_trs],
                     ['VCI', stats.avg_vci],
-                  ].map(([label, val]) => (
+                  ] as [string, number | null][]).map(([label, val]) => (
                     <div key={label} className="bg-gray-50 rounded-lg py-2">
                       <div className="text-sm font-bold text-gray-800">
                         {val != null ? val.toFixed(1) : '—'}

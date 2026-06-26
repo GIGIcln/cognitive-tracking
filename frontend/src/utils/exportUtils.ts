@@ -1,13 +1,9 @@
 import api from '../api/axios'
 import { COGNITIVE_PARAMS } from '../constants/domain'
 import type { GroupTarget } from './reportUtils'
+import type { PlayerHistoryItem } from '../types/api'
 
-interface PlayerHistoryEntry {
-  session_date: string
-  session_type: string
-  group_name: string
-  [key: string]: unknown
-}
+type PlayerHistoryEntry = PlayerHistoryItem
 
 interface PlayerRankingEntry {
   last_name: string
@@ -100,7 +96,8 @@ export function exportPlayerCSV(
       s.group_name,
     ]
     params.forEach((p) => {
-      const val = (s[p.key] !== null && s[p.key] !== undefined) ? (s[p.key] as string | number) : ''
+      const raw = (s as unknown as Record<string, unknown>)[p.key]
+      const val = (raw !== null && raw !== undefined) ? (raw as string | number) : ''
       const t = targets.find((t) => t.parameter === p.code)
       const targetStr = t ? `<=${t.insufficient_max}/>=${t.ottimo_min}` : ''
       row.push(val as string | number, targetStr)

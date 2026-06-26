@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { listUsers, updateUser, deleteUser } from '../api/users'
 import { getGroups } from '../api/groups'
+import type { User, Group } from '../types/api'
 
-const STATUS_LABEL = { pending: 'In attesa', active: 'Attivo', suspended: 'Sospeso' }
-const STATUS_COLOR = {
+const STATUS_LABEL: Record<string, string> = { pending: 'In attesa', active: 'Attivo', suspended: 'Sospeso' }
+const STATUS_COLOR: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-700',
   active: 'bg-green-100 text-green-700',
   suspended: 'bg-red-100 text-red-700',
@@ -11,11 +12,11 @@ const STATUS_COLOR = {
 const ROLES = ['admin', 'responsabile_tecnico', 'allenatore']
 
 export default function UsersAdminPage() {
-  const [users, setUsers] = useState([])
-  const [groups, setGroups] = useState([])
+  const [users, setUsers] = useState<User[]>([])
+  const [groups, setGroups] = useState<Group[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [saving, setSaving] = useState(null)
+  const [saving, setSaving] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([listUsers(), getGroups()])
@@ -27,7 +28,7 @@ export default function UsersAdminPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const patch = async (userId, body) => {
+  const patch = async (userId: string, body: Record<string, unknown>) => {
     setSaving(userId)
     try {
       const res = await updateUser(userId, body)
@@ -39,31 +40,32 @@ export default function UsersAdminPage() {
     }
   }
 
-  const remove = async (userId) => {
+  const remove = async (userId: string) => {
     if (!window.confirm('Eliminare questo utente?')) return
     setSaving(userId)
     try {
       await deleteUser(userId)
       setUsers((prev) => prev.filter((u) => u.id !== userId))
     } catch (err) {
-      setError(err.response?.data?.detail || 'Errore durante l\'eliminazione')
+      const e = err as { response?: { data?: { detail?: string } } }
+      setError(e.response?.data?.detail || 'Errore durante l\'eliminazione')
     } finally {
       setSaving(null)
     }
   }
 
-  const toggleRole = (user, role) => {
+  const toggleRole = (user: User, role: string) => {
     const roles = user.roles.includes(role)
       ? user.roles.filter((r) => r !== role)
       : [...user.roles, role]
     patch(user.id, { roles })
   }
 
-  const setGroup = (user, groupId) => {
+  const setGroup = (user: User, groupId: string) => {
     patch(user.id, { assigned_group_ids: groupId ? [groupId] : [] })
   }
 
-  const setStatus = (user, status) => {
+  const setStatus = (user: User, status: string) => {
     patch(user.id, { status })
   }
 

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { getGroup, getGroupHistory, getGroupTargets } from '../api/groups'
 import { getMeasurements } from '../api/sessions'
+import type { Target, GroupHistoryItem, Measurement } from '../types/api'
 
 export function useTeamReport(groupId: string) {
   const groupQuery = useQuery({
@@ -39,10 +40,10 @@ export function useTeamReport(groupId: string) {
       : ''
 
   return {
-    groupName: groupQuery.data?.name ?? '',
-    history,
-    targets: targetsQuery.data ?? [],
-    measurements: measQuery.data ?? [],
+    groupName: (groupQuery.data?.name ?? '') as string,
+    history: (historyQuery.data ?? []) as GroupHistoryItem[],
+    targets: (targetsQuery.data ?? []) as Target[],
+    measurements: (measQuery.data ?? []) as Measurement[],
     loading,
     error,
   }

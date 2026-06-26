@@ -29,7 +29,7 @@ import { usePlayerReport } from '../hooks/usePlayerReport'
 const PARAMS = COGNITIVE_PARAMS
 const PLAYER_FIELD_KEYS = ['scanning_rate', 'decision_quality', 'anticipation', 'transition_reset', 'verbal_comm']
 
-function RankBadge({ ranking }) {
+function RankBadge({ ranking }: { ranking: { rank: number; total: number; percentile: number } | null | undefined }) {
   if (!ranking || ranking.total < 2) return null
   const { rank, total, percentile } = ranking
   const cls =
@@ -44,7 +44,7 @@ function RankBadge({ ranking }) {
   )
 }
 
-function StatusDot({ val, target }) {
+function StatusDot({ val, target }: { val: number | null | undefined; target: { ottimo_min: number; insufficient_max: number } | null | undefined }) {
   const cls =
     val == null || !target ? 'bg-gray-200' :
     val >= target.ottimo_min ? 'bg-emerald-500' :
@@ -53,7 +53,7 @@ function StatusDot({ val, target }) {
   return <span className={`inline-block w-2 h-2 rounded-full ${cls}`} />
 }
 
-function DeltaBadge({ pct }) {
+function DeltaBadge({ pct }: { pct: number | null | undefined }) {
   if (pct == null) return <span className="text-gray-300 text-xs">—</span>
   const cls = pct > 0 ? 'text-emerald-600' : pct < 0 ? 'text-red-500' : 'text-gray-400'
   return (
@@ -77,9 +77,9 @@ export default function PlayerReportPage() {
     playerRanking,
     loading,
     error,
-  } = usePlayerReport(playerId)
+  } = usePlayerReport(playerId!)
   const [pdfLoading, setPdfLoading] = useState(false)
-  const [hiddenLines, setHiddenLines] = useState({})
+  const [hiddenLines, setHiddenLines] = useState<Record<string, boolean>>({})
   const [sessionLimit, setSessionLimit] = useState('all')
   const [sessionTypeFilter, setSessionTypeFilter] = useState('all')
 
@@ -111,7 +111,7 @@ export default function PlayerReportPage() {
 
   const comment =
     lastSession && targets.length
-      ? generateComment(playerName, lastSession, targets, history, PLAYER_FIELD_KEYS)
+      ? generateComment(playerName, lastSession as unknown as Record<string, number | null | undefined>, targets, history as unknown as Record<string, number | null | undefined>[], PLAYER_FIELD_KEYS)
       : null
 
   const sessionDate = lastSession?.session_date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
@@ -131,10 +131,11 @@ export default function PlayerReportPage() {
     if (filteredHistory.length < 2) return {}
     const first = filteredHistory[0]
     const last = filteredHistory[filteredHistory.length - 1]
+    const asMap = (h: typeof first) => h as unknown as Record<string, number | null>
     return Object.fromEntries(
       PARAMS.map(({ field }) => {
-        const a = first[field]
-        const b = last[field]
+        const a = asMap(first)[field]
+        const b = asMap(last)[field]
         if (a == null || b == null || a === 0) return [field, null]
         return [field, ((b - a) / a) * 100]
       })
@@ -144,7 +145,8 @@ export default function PlayerReportPage() {
   const { lineData, hasRegression } = useMemo(() => {
     const xs = filteredHistory.map((_, i) => i)
     const avgValues = filteredHistory.map((h) => {
-      const vals = PARAMS.map(({ field }) => h[field]).filter((v) => v != null)
+      const hMap = h as unknown as Record<string, number | null>
+      const vals = PARAMS.map(({ field }) => hMap[field]).filter((v): v is number => v != null)
       return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
     })
     const validXs = xs.filter((_, i) => avgValues[i] != null)
@@ -152,7 +154,7 @@ export default function PlayerReportPage() {
     const reg = linearRegression(validXs, validYs)
     const data = filteredHistory.map((h, i) => ({
       date: formatDateShort(h.session_date),
-      ...Object.fromEntries(PARAMS.map(({ field, label }) => [label, h[field]])),
+      ...Object.fromEntries(PARAMS.map(({ field, label }) => [label, (h as unknown as Record<string, number | null>)[field]])),
       ...(reg ? { Trend: parseFloat((reg.slope * i + reg.intercept).toFixed(2)) } : {}),
     }))
     return { lineData: data, hasRegression: reg !== null }
@@ -167,8 +169,8 @@ export default function PlayerReportPage() {
     [targets]
   )
 
-  const handleLegendClick = (data) => {
-    setHiddenLines((prev) => ({ ...prev, [data.dataKey]: !prev[data.dataKey] }))
+  const handleLegendClick = (data: { dataKey?: string }) => {
+    if (data.dataKey) setHiddenLines((prev) => ({ ...prev, [data.dataKey!]: !prev[data.dataKey!] }))
   }
 
   if (loading) {
@@ -223,7 +225,7 @@ export default function PlayerReportPage() {
                     {lastSession.group_name} · {formatDateShort(lastSession.session_date)} · {lastSession.session_type}
                   </span>
                 )}
-                <RankBadge ranking={playerRanking} />
+                <RankBadge ranking={playerRanking as { rank: number; total: number; percentile: number } | null} />
               </div>
             </div>
           </div>
@@ -335,7 +337,7 @@ export default function PlayerReportPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {PARAMS.map(({ field, label, italianLabel }) => {
-                    const val = lastSession[field]
+                    const val = (lastSession as unknown as Record<string, number | null> | null)?.[field]
                     const t = targetsMap[label]
                     const rowBg =
                       val == null || !t ? '' :
@@ -434,7 +436,7 @@ export default function PlayerReportPage() {
                       contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 12 }}
                     />
                     <Legend
-                      onClick={handleLegendClick}
+                      onClick={handleLegendClick as unknown as () => void}
                       style={{ cursor: 'pointer' }}
                       wrapperStyle={{ fontSize: 11 }}
                     />

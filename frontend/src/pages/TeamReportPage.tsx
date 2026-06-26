@@ -23,14 +23,16 @@ import { useTeamReport } from '../hooks/useTeamReport'
 const PARAMS = COGNITIVE_PARAMS
 const TEAM_FIELD_KEYS = ['avg_sr', 'avg_dqi', 'avg_ai', 'avg_trs', 'avg_vci']
 
-function cellClass(val, target) {
+import type { Target, GroupHistoryItem, Measurement } from '../types/api'
+
+function cellClass(val: number | null | undefined, target: Target | null | undefined) {
   if (val == null || !target) return 'text-gray-400'
   if (val >= target.ottimo_min) return 'bg-emerald-50 text-emerald-800 font-semibold'
   if (val <= target.insufficient_max) return 'bg-red-50 text-red-800 font-semibold'
   return 'bg-amber-50 text-amber-800 font-semibold'
 }
 
-function StatusDot({ val, target }) {
+function StatusDot({ val, target }: { val: number | null | undefined; target: Target | null | undefined }) {
   const cls =
     val == null || !target ? 'bg-gray-200' :
     val >= target.ottimo_min ? 'bg-emerald-500' :
@@ -42,20 +44,20 @@ function StatusDot({ val, target }) {
 export default function TeamReportPage() {
   const { groupId } = useParams()
   const navigate = useNavigate()
-  const { groupName, history, targets, measurements, loading, error } = useTeamReport(groupId)
-  const [hiddenLines, setHiddenLines] = useState({})
+  const { groupName, history, targets, measurements, loading, error } = useTeamReport(groupId!)
+  const [hiddenLines, setHiddenLines] = useState<Record<string, boolean>>({})
   const [pdfLoading, setPdfLoading] = useState(false)
 
   // All hooks must be called before any early return
   const lastEntry = history.length > 0 ? history[history.length - 1] : null
 
   const targetsMap = useMemo(
-    () => Object.fromEntries(targets.map((t) => [t.parameter, t])),
+    () => Object.fromEntries(targets.map((t: Target) => [t.parameter, t])),
     [targets]
   )
 
   const lineData = useMemo(
-    () => history.map((h) => ({
+    () => history.map((h: GroupHistoryItem) => ({
       date: formatDateShort(h.session_date),
       SR: h.avg_sr,
       DQI: h.avg_dqi,
@@ -93,18 +95,18 @@ export default function TeamReportPage() {
 
   const comment = useMemo(
     () => lastEntry && targets.length
-      ? generateComment('La squadra', lastEntry, targets, history, TEAM_FIELD_KEYS)
+      ? generateComment('La squadra', lastEntry as unknown as Record<string, number | null | undefined>, targets, history as unknown as Record<string, number | null | undefined>[], TEAM_FIELD_KEYS)
       : null,
     [lastEntry, targets, history]
   )
 
   const sessionDate = lastEntry?.session_date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
 
-  const handleLegendClick = (data) => {
-    setHiddenLines((prev) => ({ ...prev, [data.dataKey]: !prev[data.dataKey] }))
+  const handleLegendClick = (data: { dataKey?: string }) => {
+    if (data.dataKey) setHiddenLines((prev) => ({ ...prev, [data.dataKey!]: !prev[data.dataKey!] }))
   }
 
-  function avgCellClass(val) {
+  function avgCellClass(val: number | null | undefined) {
     if (val == null || avgInsufficient == null || avgOttimo == null) return 'text-gray-400'
     if (val >= avgOttimo) return 'bg-emerald-50 text-emerald-800 font-bold'
     if (val <= avgInsufficient) return 'bg-red-50 text-red-800 font-bold'
@@ -195,7 +197,7 @@ export default function TeamReportPage() {
                 key={label}
                 code={label}
                 label={italianLabel}
-                value={lastEntry?.[avgKey]}
+                value={(lastEntry as unknown as Record<string, number | null>)?.[avgKey]}
                 target={targetsMap[label]}
               />
             ))}
@@ -234,7 +236,7 @@ export default function TeamReportPage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {PARAMS.map(({ label, italianLabel, avgKey }) => {
-                  const val = lastEntry?.[avgKey]
+                  const val = (lastEntry as unknown as Record<string, number | null>)?.[avgKey]
                   const t = targetsMap[label]
                   const rowBg =
                     val == null || !t ? '' :
@@ -410,7 +412,7 @@ export default function TeamReportPage() {
                       contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 12 }}
                     />
                     <Legend
-                      onClick={handleLegendClick}
+                      onClick={handleLegendClick as unknown as () => void}
                       style={{ cursor: 'pointer' }}
                       wrapperStyle={{ fontSize: 11 }}
                     />

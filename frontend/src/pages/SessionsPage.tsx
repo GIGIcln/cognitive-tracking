@@ -1,18 +1,19 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { useNavigate, NavigateFunction } from 'react-router-dom'
 import { getSessions, createSession, deleteSession } from '../api/sessions'
 import { getCurrentSeason } from '../api/seasons'
 import { SESSION_TYPES, GROUP_CATEGORIES } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
 import { useAuth } from '../context/AuthContext'
 import { useSeasonGroup } from '../context/SeasonGroupContext'
+import type { Session, Group } from '../types/api'
 
-const SESSION_TYPE_COLOR = {
+const SESSION_TYPE_COLOR: Record<string, string> = {
   'SSG':            'bg-blue-500',
   'Partita a tema': 'bg-amber-500',
   'Partita':        'bg-red-500',
 }
-const SESSION_TYPE_ABBR = {
+const SESSION_TYPE_ABBR: Record<string, string> = {
   'SSG':            'SSG',
   'Partita a tema': 'P.T.',
   'Partita':        'Par',
@@ -20,16 +21,18 @@ const SESSION_TYPE_ABBR = {
 
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom']
 
-function buildCalendarGrid(year, month, sessions) {
+type CalendarCell = { day: number | null; iso: string | null; sessions: Session[] }
+
+function buildCalendarGrid(year: number, month: number, sessions: Session[]): CalendarCell[] {
   const firstDay = new Date(year, month, 1)
   const startOffset = (firstDay.getDay() + 6) % 7
   const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const byDate = {}
+  const byDate: Record<string, Session[]> = {}
   sessions.forEach((s) => {
     byDate[s.session_date] ??= []
     byDate[s.session_date].push(s)
   })
-  const cells = Array.from({ length: startOffset }, () => ({ day: null, iso: null, sessions: [] }))
+  const cells: CalendarCell[] = Array.from({ length: startOffset }, () => ({ day: null, iso: null, sessions: [] }))
   for (let d = 1; d <= daysInMonth; d++) {
     const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     cells.push({ day: d, iso, sessions: byDate[iso] ?? [] })
@@ -37,7 +40,15 @@ function buildCalendarGrid(year, month, sessions) {
   return cells
 }
 
-function CalendarView({ sessions, groups, calMonth, setCalMonth, navigate }) {
+type CalendarViewProps = {
+  sessions: Session[]
+  groups: Group[]
+  calMonth: Date
+  setCalMonth: React.Dispatch<React.SetStateAction<Date>>
+  navigate: NavigateFunction
+}
+
+function CalendarView({ sessions, groups, calMonth, setCalMonth, navigate }: CalendarViewProps) {
   const groupMap = Object.fromEntries(groups.map((g) => {
     const cat = GROUP_CATEGORIES.find((c) => g.name.toLowerCase().startsWith(c.toLowerCase()))
     const shortName = cat ? g.name.slice(cat.length).trim() : g.name
@@ -126,12 +137,12 @@ function CalendarView({ sessions, groups, calMonth, setCalMonth, navigate }) {
 
 export default function SessionsPage() {
   const { groups, selectedGroupId, setSelectedGroupId, selectedSeasonId } = useSeasonGroup()
-  const [sessions, setSessions] = useState([])
+  const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [deletingId, setDeletingId] = useState(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [form, setForm] = useState({
     group_id: '',
     session_date: new Date().toISOString().split('T')[0],
@@ -174,7 +185,7 @@ export default function SessionsPage() {
       .finally(() => setLoading(false))
   }, [selectedGroupId, selectedSeasonId])
 
-  const handleCreate = async (e) => {
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setSaving(true)
     try {
@@ -192,7 +203,7 @@ export default function SessionsPage() {
     }
   }
 
-  const handleDelete = async (e, sessionId, sessionLabel) => {
+  const handleDelete = async (e: React.MouseEvent, sessionId: string, sessionLabel: string) => {
     e.stopPropagation()
     if (!window.confirm(`Eliminare la sessione "${sessionLabel}"?`)) return
     setDeletingId(sessionId)
@@ -206,7 +217,7 @@ export default function SessionsPage() {
     }
   }
 
-  const groupName = (gId) => groups.find((g) => g.id === gId)?.name ?? '–'
+  const groupName = (gId: string) => groups.find((g) => g.id === gId)?.name ?? '–'
 
   return (
     <div>

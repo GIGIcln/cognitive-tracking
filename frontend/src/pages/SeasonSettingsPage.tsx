@@ -5,7 +5,7 @@ export default function SeasonSettingsPage() {
 
   const selected = seasons.find((s) => s.id === selectedSeasonId)
 
-  const formatRange = (s) => {
+  const formatRange = (s: { start_date?: string | null; end_date?: string | null; name?: string | null } | undefined) => {
     if (!s?.start_date || !s?.end_date) return s?.name ?? '—'
     const y1 = new Date(s.start_date).getFullYear()
     const y2 = new Date(s.end_date).getFullYear()

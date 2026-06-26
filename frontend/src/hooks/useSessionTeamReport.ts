@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { getSession, getMeasurements, getSessionAverages } from '../api/sessions'
 import { getGroup, getGroupTargets } from '../api/groups'
+import type { Measurement, Target, Session } from '../types/api'
 
 export function useSessionTeamReport(sessionId: string) {
   const sessionQuery = useQuery({
@@ -46,11 +47,11 @@ export function useSessionTeamReport(sessionId: string) {
       : ''
 
   return {
-    session: sessionQuery.data ?? null,
-    groupName: groupQuery.data?.name ?? '',
-    measurements: measQuery.data ?? [],
-    averages: avgQuery.data ?? null,
-    targets: targetsQuery.data ?? [],
+    session: (sessionQuery.data ?? null) as Session | null,
+    groupName: (groupQuery.data?.name ?? '') as string,
+    measurements: (measQuery.data ?? []) as Measurement[],
+    averages: (avgQuery.data ?? null) as Record<string, number> | null,
+    targets: (targetsQuery.data ?? []) as Target[],
     loading,
     error,
   }

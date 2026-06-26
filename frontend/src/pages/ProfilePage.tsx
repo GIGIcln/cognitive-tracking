@@ -1,6 +1,6 @@
 import { useAuth } from '../context/AuthContext'
 
-const roleLabel = (role) =>
+const roleLabel = (role: string) =>
   ({ admin: 'Admin', responsabile_tecnico: 'Responsabile tecnico', allenatore: 'Allenatore' }[role] ?? role)
 
 export default function ProfilePage() {

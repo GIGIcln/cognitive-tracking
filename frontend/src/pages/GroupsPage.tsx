@@ -1,30 +1,40 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getGroups, createGroup, updateGroup, deleteGroup } from '../api/groups'
 import { LEVEL_COLORS, GROUP_CATEGORIES } from '../constants/domain'
 import { useAuth } from '../context/AuthContext'
 import { useSeasonGroup } from '../context/SeasonGroupContext'
+import type { Group } from '../types/api'
 
 const LEVELS = Object.keys(LEVEL_COLORS)
 
-const EMPTY_FORM = {
+type GroupForm = {
+  name: string
+  category: string
+  birth_year: string
+  level: string
+  sub_group: string
+  max_players: string
+}
+
+const EMPTY_FORM: GroupForm = {
   name: '',
   category: GROUP_CATEGORIES[0],
   birth_year: '',
   level: LEVELS[0],
   sub_group: '',
-  max_players: 18,
+  max_players: '18',
 }
 
 export default function GroupsPage() {
-  const [groups, setGroups] = useState([])
+  const [groups, setGroups] = useState<Group[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showModal, setShowModal] = useState(false)
-  const [editingGroup, setEditingGroup] = useState(null)
-  const [form, setForm] = useState(EMPTY_FORM)
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null)
+  const [form, setForm] = useState<GroupForm>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
-  const [deletingId, setDeletingId] = useState(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
   const { selectedSeasonId } = useSeasonGroup()
@@ -46,16 +56,16 @@ export default function GroupsPage() {
     setShowModal(true)
   }
 
-  const openEdit = (e, g) => {
+  const openEdit = (e: React.MouseEvent, g: Group) => {
     e.stopPropagation()
     setEditingGroup(g)
     setForm({
       name: g.name,
       category: g.category,
-      birth_year: g.birth_year ?? '',
+      birth_year: g.birth_year != null ? String(g.birth_year) : '',
       level: g.level,
       sub_group: g.sub_group ?? '',
-      max_players: g.max_players,
+      max_players: String(g.max_players),
     })
     setError('')
     setShowModal(true)
@@ -68,7 +78,7 @@ export default function GroupsPage() {
     setError('')
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setSaving(true)
     setError('')
@@ -94,7 +104,7 @@ export default function GroupsPage() {
     }
   }
 
-  const handleDelete = async (e, groupId, groupName) => {
+  const handleDelete = async (e: React.MouseEvent, groupId: string, groupName: string) => {
     e.stopPropagation()
     if (!window.confirm(`Eliminare il gruppo "${groupName}"?\nLe sessioni e le misurazioni storiche rimarranno nel database.`)) return
     setDeletingId(groupId)
@@ -108,7 +118,7 @@ export default function GroupsPage() {
     }
   }
 
-  const sortGroups = (list) =>
+  const sortGroups = (list: Group[]) =>
     [...list].sort((a, b) => {
       const ya = a.birth_year ?? Infinity
       const yb = b.birth_year ?? Infinity
@@ -116,10 +126,10 @@ export default function GroupsPage() {
       return (a.sub_group ?? '').localeCompare(b.sub_group ?? '', 'it')
     })
 
-  const byCategory = (cat) => sortGroups(groups.filter((g) => g.category === cat))
+  const byCategory = (cat: string) => sortGroups(groups.filter((g) => g.category === cat))
   const uncategorized = sortGroups(groups.filter((g) => !GROUP_CATEGORIES.includes(g.category)))
 
-  const GroupCard = ({ g }) => (
+  const GroupCard = ({ g }: { g: Group }) => (
     <div className="relative">
       <button
         onClick={() => navigate(`/groups/${g.id}`)}
@@ -127,7 +137,7 @@ export default function GroupsPage() {
       >
         <div className="flex items-center justify-between mb-1 pr-16">
           <span className="font-semibold text-gray-900">{g.name}</span>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${LEVEL_COLORS[g.level] ?? 'bg-gray-100 text-gray-600'}`}>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${LEVEL_COLORS[g.level as keyof typeof LEVEL_COLORS] ?? 'bg-gray-100 text-gray-600'}`}>
             {g.level}
           </span>
         </div>

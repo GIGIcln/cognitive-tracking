@@ -6,30 +6,43 @@ import OfflineBanner from '../components/OfflineBanner'
 import {
   LayoutDashboard, Users, User, ClipboardList, Calendar,
   Settings, Trophy, ChevronLeft, ChevronRight, MoreHorizontal, X,
+  type LucideIcon,
 } from 'lucide-react'
 
-const primaryNavItems = [
+interface NavItemDef {
+  to: string
+  label: string
+  icon: LucideIcon
+  end?: boolean
+}
+
+interface NavItemProps extends NavItemDef {
+  collapsed?: boolean
+  onClick?: () => void
+}
+
+const primaryNavItems: NavItemDef[] = [
   { to: '/',         label: 'Home',        icon: LayoutDashboard, end: true },
   { to: '/groups',   label: 'Rosa',        icon: Users },
   { to: '/sessions', label: 'Allenamenti', icon: ClipboardList },
   { to: '/partite',  label: 'Partite',     icon: Trophy },
 ]
 
-const allNavItems = [
+const allNavItems: NavItemDef[] = [
   ...primaryNavItems,
   { to: '/players', label: 'Giocatori', icon: User },
 ]
 
-const staffNavItem    = { to: '/seasons',      label: 'Stagioni',     icon: Calendar }
-const settingsNavItem = { to: '/impostazioni', label: 'Impostazioni', icon: Settings }
+const staffNavItem: NavItemDef    = { to: '/seasons',      label: 'Stagioni',     icon: Calendar }
+const settingsNavItem: NavItemDef = { to: '/impostazioni', label: 'Impostazioni', icon: Settings }
 
-const roleLabel = (role) => ({
+const roleLabel = (role: string) => ({
   admin:                'admin',
   responsabile_tecnico: 'resp. tecnico',
   allenatore:           'allenatore',
 }[role] ?? role)
 
-function NavItem({ to, label, icon: Icon, end, collapsed, onClick }) {
+function NavItem({ to, label, icon: Icon, end, collapsed, onClick }: NavItemProps) {
   return (
     <NavLink
       to={to}

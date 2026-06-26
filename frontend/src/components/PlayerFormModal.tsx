@@ -7,7 +7,7 @@ interface PlayerData {
   id: string
   first_name?: string
   last_name?: string
-  birth_year?: string | number
+  birth_year?: string | number | null
   position?: string | null
   nationality?: string | null
   foot?: string | null

@@ -5,15 +5,18 @@ import { getPlayers } from '../api/players'
 import MatchFormModal from '../components/MatchFormModal'
 import { useAuth } from '../context/AuthContext'
 import { POSITIONS } from '../constants/domain'
+import type { MatchDetail, Player } from '../types/api'
 
-const HOME_AWAY_LABEL = { home: 'Casa', away: 'Trasferta', neutral: 'Neutro' }
-const MATCH_TYPE_LABEL = { campionato: 'Campionato', coppa: 'Coppa', amichevole: 'Amichevole' }
+type LineupEntry = { played: boolean; minutes_played: string; position: string; notes: string }
 
-function fmtDate(d) {
+const HOME_AWAY_LABEL: Record<string, string> = { home: 'Casa', away: 'Trasferta', neutral: 'Neutro' }
+const MATCH_TYPE_LABEL: Record<string, string> = { campionato: 'Campionato', coppa: 'Coppa', amichevole: 'Amichevole' }
+
+function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
 }
 
-function ResultBadge({ scoreHome, scoreAway }) {
+function ResultBadge({ scoreHome, scoreAway }: { scoreHome: number | null | undefined; scoreAway: number | null | undefined }) {
   if (scoreHome == null || scoreAway == null) return <span className="text-sm text-gray-400">Non ancora giocata</span>
   const diff = scoreHome - scoreAway
   const cls = diff > 0 ? 'bg-green-100 text-green-800' : diff < 0 ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
@@ -31,29 +34,29 @@ export default function MatchDetailPage() {
   const navigate = useNavigate()
   const { isStaff, isAdmin } = useAuth()
 
-  const [match, setMatch] = useState(null)
+  const [match, setMatch] = useState<MatchDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('info')
   const [showEdit, setShowEdit] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   // lineup state
-  const [players, setPlayers] = useState([])
-  const [lineup, setLineup] = useState({})
+  const [players, setPlayers] = useState<Player[]>([])
+  const [lineup, setLineup] = useState<Record<string, LineupEntry>>({})
   const [savingLineup, setSavingLineup] = useState(false)
   const [lineupOk, setLineupOk] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
-    getMatch(id)
+    getMatch(id!)
       .then((res) => {
-        const m = res.data
+        const m = res.data as MatchDetail
         setMatch(m)
-        const initial = {}
-        for (const lu of m.lineups) {
+        const initial: Record<string, LineupEntry> = {}
+        for (const lu of m.lineups ?? []) {
           initial[lu.player_id] = {
             played: true,
-            minutes_played: lu.minutes_played ?? '',
+            minutes_played: lu.minutes_played != null ? String(lu.minutes_played) : '',
             position: lu.position ?? '',
             notes: lu.notes ?? '',
           }
@@ -61,14 +64,14 @@ export default function MatchDetailPage() {
         setLineup(initial)
         return getPlayers(m.group_id)
       })
-      .then((res) => setPlayers(res.data ?? []))
+      .then((res) => setPlayers((res.data?.items ?? res.data ?? []) as Player[]))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [id])
 
   useEffect(() => { load() }, [load])
 
-  const togglePlayed = (playerId) => {
+  const togglePlayed = (playerId: string) => {
     setLineup((prev) => {
       const cur = prev[playerId]
       if (cur?.played) {
@@ -81,7 +84,7 @@ export default function MatchDetailPage() {
     setLineupOk(false)
   }
 
-  const setLineupField = (playerId, field, value) => {
+  const setLineupField = (playerId: string, field: keyof LineupEntry, value: string) => {
     setLineup((prev) => ({
       ...prev,
       [playerId]: { ...prev[playerId], [field]: value },
@@ -100,7 +103,7 @@ export default function MatchDetailPage() {
           position: v.position || null,
           notes: v.notes || null,
         }))
-      await saveLineup(id, lineups)
+      await saveLineup(id!, lineups)
       setLineupOk(true)
       setTimeout(() => setLineupOk(false), 2500)
     } catch {
@@ -112,7 +115,7 @@ export default function MatchDetailPage() {
 
   const handleDelete = async () => {
     try {
-      await deleteMatch(id)
+      await deleteMatch(id!)
       navigate('/partite')
     } catch {
       /* noop */
