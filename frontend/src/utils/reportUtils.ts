@@ -1,7 +1,7 @@
 import type { MetricType } from '../constants/domain'
 
 export interface GroupTarget {
-  parameter: MetricType
+  parameter: string
   ottimo_min: number
   insufficient_max: number
 }
