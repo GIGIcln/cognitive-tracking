@@ -129,13 +129,17 @@ Vedi GS-01 nella sezione Gestionale Sportivo qui sotto.
 Migrazione TypeScript completa (PR #2, mergiata 2026-06-26): tutti i file `*.jsx`/`*.js` convertiti in `*.tsx`/`*.ts`. Tipi centralizzati in `types/api.ts`; pattern per `useState`, `useParams`, accesso dinamico su oggetti e Recharts documentati. `tsc --noEmit` → 0 errori in strict mode.  
 _File:_ `frontend/src/types/api.ts`, `frontend/src/constants/domain.ts`
 
-### OL-04 — Gestione stato globale con React Query (TanStack Query)
+### ~~OL-04 — Gestione stato globale con React Query (TanStack Query)~~ ✅ Completato
 
-Sostituire i custom hook con `useQuery` / `useMutation`. Benefici:
-- Cache automatica e deduplicazione delle request
-- `stale-while-revalidate` (UI aggiornata senza spinner)
-- Retry automatico con backoff esponenziale
-- Integrazione nativa con `isLoading`, `isError`, `isFetching`
+React Query v5 già installato e configurato (staleTime 5min, retry 1). I 4 hook report lo usavano già.
+Migrazione estesa a stagioni e gruppi:
+- `hooks/useSeasonData.ts`: `useSeasons()` + `useGroups(seasonId?)` condivisi con query key `['seasons']` / `['groups', seasonId]`
+- `SeasonGroupContext` usa i hook invece di fetch manuali — cache condivisa con le pagine
+- `GroupsPage`: `useGroups()` + `useMutation` (create/update/delete) con `invalidateQueries`
+- `SeasonsPage`: `useSeasons()` + `useMutation` (create) con `invalidateQueries`; `useQuery` per season stats
+
+Benefici: `GroupsPage` non fa più un fetch separato dai dati già in cache nel contesto; CRUD invalida la cache una volta sola per aggiornare sia la pagina che il context.  
+_File:_ `frontend/src/hooks/useSeasonData.ts`, `frontend/src/context/SeasonGroupContext.tsx`, `frontend/src/pages/GroupsPage.tsx`, `frontend/src/pages/SeasonsPage.tsx`
 
 ### OL-05 — E2E Testing con Playwright
 

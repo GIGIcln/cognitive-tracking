@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react'
-import { getSeasons, createSeason, getSeasonStats } from '../api/seasons'
-import type { Season, SeasonStats } from '../types/api'
+import React, { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { createSeason, getSeasonStats } from '../api/seasons'
+import { useSeasons } from '../hooks/useSeasonData'
+import type { SeasonStats } from '../types/api'
 
 function formatDate(d: string | null | undefined) {
   if (!d) return '—'
@@ -8,53 +10,40 @@ function formatDate(d: string | null | undefined) {
 }
 
 export default function SeasonsPage() {
-  const [seasons, setSeasons] = useState<Season[]>([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', start_date: '', end_date: '' })
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [stats, setStats] = useState<SeasonStats | null>(null)
+  const queryClient = useQueryClient()
 
+  const { data: seasons = [], isPending: loading, isError } = useSeasons()
   const current = seasons.find((s) => s.is_current) ?? null
   const archived = seasons.filter((s) => !s.is_current)
 
-  useEffect(() => {
-    getSeasons()
-      .then((res) => {
-        const data = res.data as Season[]
-        setSeasons(data)
-        const cur = data.find((s) => s.is_current)
-        if (cur) {
-          getSeasonStats(cur.id)
-            .then((r) => setStats(r.data))
-            .catch(() => {})
-        }
-      })
-      .catch(() => setError('Errore nel caricamento delle stagioni'))
-      .finally(() => setLoading(false))
-  }, [])
+  const { data: stats } = useQuery<SeasonStats>({
+    queryKey: ['season-stats', current?.id],
+    queryFn: () => getSeasonStats(current!.id).then((r) => r.data),
+    enabled: !!current,
+  })
 
-  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setError('')
-    setSaving(true)
-    try {
-      const res = await createSeason({
-        name: form.name.trim(),
-        start_date: form.start_date || null,
-        end_date: form.end_date || null,
-      })
-      setSeasons((prev) =>
-        [res.data, ...prev.map((s) => ({ ...s, is_current: false }))]
-      )
+  const createMutation = useMutation({
+    mutationFn: (payload: { name: string; start_date: string | null; end_date: string | null }) =>
+      createSeason(payload).then(r => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seasons'] })
       setShowForm(false)
       setForm({ name: '', start_date: '', end_date: '' })
-    } catch {
-      setError('Errore durante la creazione della stagione')
-    } finally {
-      setSaving(false)
-    }
+    },
+    onError: () => setError('Errore durante la creazione della stagione'),
+  })
+
+  const handleCreate = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setError('')
+    createMutation.mutate({
+      name: form.name.trim(),
+      start_date: form.start_date || null,
+      end_date: form.end_date || null,
+    })
   }
 
   if (loading) {
@@ -79,9 +68,9 @@ export default function SeasonsPage() {
         )}
       </div>
 
-      {error && (
+      {(error || isError) && (
         <div className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-          {error}
+          {error || 'Errore nel caricamento delle stagioni'}
         </div>
       )}
 
@@ -137,10 +126,10 @@ export default function SeasonsPage() {
             <div className="flex gap-2 pt-1">
               <button
                 type="submit"
-                disabled={saving}
+                disabled={createMutation.isPending}
                 className="px-4 py-2 bg-granata text-white rounded-lg text-sm font-medium hover:bg-granata/90 transition-colors disabled:opacity-50"
               >
-                {saving ? 'Salvataggio…' : 'Crea stagione'}
+                {createMutation.isPending ? 'Salvataggio…' : 'Crea stagione'}
               </button>
               <button
                 type="button"

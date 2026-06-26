@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getGroups, createGroup, updateGroup, deleteGroup } from '../api/groups'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { createGroup, updateGroup, deleteGroup } from '../api/groups'
+import { useGroups } from '../hooks/useSeasonData'
 import { LEVEL_COLORS, GROUP_CATEGORIES } from '../constants/domain'
 import { useAuth } from '../context/AuthContext'
 import { useSeasonGroup } from '../context/SeasonGroupContext'
@@ -27,27 +29,38 @@ const EMPTY_FORM: GroupForm = {
 }
 
 export default function GroupsPage() {
-  const [groups, setGroups] = useState<Group[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editingGroup, setEditingGroup] = useState<Group | null>(null)
   const [form, setForm] = useState<GroupForm>(EMPTY_FORM)
-  const [saving, setSaving] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
   const navigate = useNavigate()
   const { isAdmin } = useAuth()
   const { selectedSeasonId } = useSeasonGroup()
+  const queryClient = useQueryClient()
 
-  const load = () => {
-    setLoading(true)
-    getGroups(selectedSeasonId || undefined)
-      .then((res) => setGroups(res.data))
-      .catch(() => setError('Errore nel caricamento'))
-      .finally(() => setLoading(false))
-  }
+  const { data: groups = [], isPending: loading, isError } = useGroups(selectedSeasonId || undefined)
 
-  useEffect(() => { load() }, [selectedSeasonId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const invalidateGroups = () =>
+    queryClient.invalidateQueries({ queryKey: ['groups', selectedSeasonId ?? ''] })
+
+  const createMutation = useMutation({
+    mutationFn: (payload: Parameters<typeof createGroup>[0]) => createGroup(payload).then(r => r.data),
+    onSuccess: () => { invalidateGroups(); closeModal() },
+    onError: () => setError('Errore nella creazione del gruppo'),
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof updateGroup>[1] }) =>
+      updateGroup(id, payload).then(r => r.data),
+    onSuccess: () => { invalidateGroups(); closeModal() },
+    onError: () => setError('Errore nella modifica del gruppo'),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (groupId: string) => deleteGroup(groupId),
+    onSuccess: invalidateGroups,
+    onError: () => setError("Errore nell'eliminazione del gruppo"),
+  })
 
   const openCreate = () => {
     setEditingGroup(null)
@@ -78,9 +91,10 @@ export default function GroupsPage() {
     setError('')
   }
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const saving = createMutation.isPending || updateMutation.isPending
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setSaving(true)
     setError('')
     const payload = {
       ...form,
@@ -88,34 +102,18 @@ export default function GroupsPage() {
       sub_group: form.sub_group || null,
       max_players: parseInt(form.max_players),
     }
-    try {
-      if (editingGroup) {
-        const res = await updateGroup(editingGroup.id, payload)
-        setGroups((prev) => prev.map((g) => (g.id === editingGroup.id ? res.data : g)))
-      } else {
-        await createGroup(payload)
-        load()
-      }
-      closeModal()
-    } catch {
-      setError(editingGroup ? 'Errore nella modifica del gruppo' : 'Errore nella creazione del gruppo')
-    } finally {
-      setSaving(false)
+    if (editingGroup) {
+      updateMutation.mutate({ id: editingGroup.id, payload })
+    } else {
+      createMutation.mutate(payload)
     }
   }
 
-  const handleDelete = async (e: React.MouseEvent, groupId: string, groupName: string) => {
+  const handleDelete = (e: React.MouseEvent, groupId: string, groupName: string) => {
     e.stopPropagation()
     if (!window.confirm(`Eliminare il gruppo "${groupName}"?\nLe sessioni e le misurazioni storiche rimarranno nel database.`)) return
-    setDeletingId(groupId)
-    try {
-      await deleteGroup(groupId)
-      setGroups((prev) => prev.filter((g) => g.id !== groupId))
-    } catch {
-      setError('Errore nell\'eliminazione del gruppo')
-    } finally {
-      setDeletingId(null)
-    }
+    setError('')
+    deleteMutation.mutate(groupId)
   }
 
   const sortGroups = (list: Group[]) =>
@@ -157,11 +155,11 @@ export default function GroupsPage() {
           </button>
           <button
             onClick={(e) => handleDelete(e, g.id, g.name)}
-            disabled={deletingId === g.id}
+            disabled={deleteMutation.isPending && deleteMutation.variables === g.id}
             className="p-1.5 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-40"
             title="Elimina gruppo"
           >
-            {deletingId === g.id ? (
+            {deleteMutation.isPending && deleteMutation.variables === g.id ? (
               <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
             ) : (
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -189,7 +187,9 @@ export default function GroupsPage() {
         )}
       </div>
 
-      {error && <div className="text-red-600 text-sm mb-4">{error}</div>}
+      {(error || isError) && (
+        <div className="text-red-600 text-sm mb-4">{error || 'Errore nel caricamento'}</div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-8">
