@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getPlayers, deletePlayer, bulkAssignPlayers } from '../api/players'
+import { useQueryClient } from '@tanstack/react-query'
+import { deletePlayer, bulkAssignPlayers } from '../api/players'
+import { usePlayers } from '../hooks/useSeasonData'
 import PlayerFormModal from '../components/PlayerFormModal'
 import AvailabilityBadge from '../components/AvailabilityBadge'
 import { useAuth } from '../context/AuthContext'
@@ -9,10 +11,7 @@ import { Pencil, Trash2 } from 'lucide-react'
 import type { Player } from '../types/api'
 
 export default function PlayersPage() {
-  const [players, setPlayers] = useState<Player[]>([])
   const [selectedGroup, setSelectedGroup] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [editPlayer, setEditPlayer] = useState<Player | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; player: Player | null }>({ open: false, player: null })
@@ -24,29 +23,15 @@ export default function PlayersPage() {
   const { isAdmin } = useAuth()
   const { groups } = useSeasonGroup()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
-  const loadPlayers = (groupId?: string) => {
-    setLoading(true)
-    getPlayers(groupId || undefined)
-      .then((res) => {
-        const sorted = (res.data.items as Player[]).sort((a, b) =>
-          a.last_name.localeCompare(b.last_name, 'it') ||
-          a.first_name.localeCompare(b.first_name, 'it')
-        )
-        setPlayers(sorted)
-      })
-      .catch(() => setError('Errore nel caricamento'))
-      .finally(() => setLoading(false))
-  }
+  const { data: players = [], isPending: loading, isError } = usePlayers(selectedGroup)
 
-  useEffect(() => {
-    loadPlayers()
-  }, [])
+  const invalidatePlayers = () => queryClient.invalidateQueries({ queryKey: ['players'] })
 
   const handleGroupChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedGroup(e.target.value)
     setQuery('')
-    loadPlayers(e.target.value)
   }
 
   const filtered = players.filter((p) => {
@@ -61,9 +46,9 @@ export default function PlayersPage() {
       await bulkAssignPlayers([...selected], targetGroup)
       setSelected(new Set())
       setTargetGroup('')
-      loadPlayers(selectedGroup)
+      invalidatePlayers()
     } catch {
-      setError('Errore durante lo spostamento')
+      // error handled via isError
     } finally {
       setAssigning(false)
     }
@@ -74,9 +59,9 @@ export default function PlayersPage() {
     try {
       await deletePlayer(deleteConfirm.player!.id)
       setDeleteConfirm({ open: false, player: null })
-      loadPlayers(selectedGroup)
+      invalidatePlayers()
     } catch {
-      setError('Errore durante la rimozione')
+      // error handled via isError
     } finally {
       setDeleting(false)
     }
@@ -116,7 +101,7 @@ export default function PlayersPage() {
         />
       </div>
 
-      {error && <div className="text-red-600 text-sm mb-4">{error}</div>}
+      {isError && <div className="text-red-600 text-sm mb-4">Errore nel caricamento giocatori</div>}
 
       {loading ? (
         <div className="flex justify-center py-8">
@@ -223,7 +208,7 @@ export default function PlayersPage() {
       <PlayerFormModal
         isOpen={showCreate}
         onClose={() => setShowCreate(false)}
-        onSuccess={() => loadPlayers(selectedGroup)}
+        onSuccess={invalidatePlayers}
         preselectedGroupId={null}
         preselectedGroupName={null}
       />
@@ -231,7 +216,7 @@ export default function PlayersPage() {
       <PlayerFormModal
         isOpen={!!editPlayer}
         onClose={() => setEditPlayer(null)}
-        onSuccess={() => loadPlayers(selectedGroup)}
+        onSuccess={invalidatePlayers}
         mode="edit"
         player={editPlayer}
       />

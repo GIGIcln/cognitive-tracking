@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { getGroups } from '../api/groups'
-import { getCurrentSeason } from '../api/seasons'
-import { getPlayers, getAtRiskPlayers } from '../api/players'
+import { useQuery } from '@tanstack/react-query'
+import { getAtRiskPlayers } from '../api/players'
+import { getPlayers } from '../api/players'
 import { getSessions } from '../api/sessions'
+import { useGroups, useCurrentSeason } from '../hooks/useSeasonData'
 import { LEVEL_COLORS } from '../constants/domain'
 import AvailabilityBadge from '../components/AvailabilityBadge'
 import { useAuth } from '../context/AuthContext'
-import type { Group, Season, AtRiskPlayer, RecentSession, Player } from '../types/api'
+import type { Group, AtRiskPlayer, RecentSession, Player } from '../types/api'
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
   training: 'Allenamento',
@@ -32,41 +33,34 @@ export default function DashboardPage() {
   const { user, isAdmin, isStaff } = useAuth()
   const isCoach = user != null && !isStaff
   const isReadOnly = isStaff && !isAdmin
-
-  const [groups, setGroups] = useState<Group[]>([])
-  const [season, setSeason] = useState<Season | null>(null)
-  const [atRisk, setAtRisk] = useState<AtRiskPlayer[]>([])
   const [showAllRisk, setShowAllRisk] = useState(false)
-  const [totalPlayers, setTotalPlayers] = useState<number | null>(null)
-  const [totalSessions, setTotalSessions] = useState<number | null>(null)
-  const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
-  const [injuredPlayers, setInjuredPlayers] = useState<Player[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const navigate = useNavigate()
 
-  useEffect(() => {
-    Promise.all([
-      getGroups().catch(() => ({ data: [] })),
-      getCurrentSeason().catch(() => ({ data: null })),
-      getAtRiskPlayers().catch(() => ({ data: [] })),
-      getPlayers(undefined, 200).catch(() => ({ data: { items: [], total: null } })),
-      getSessions(null, 5).catch(() => ({ data: { items: [], total: null } })),
-    ]).then(([gr, se, ar, pl, ss]) => {
-      setGroups(gr.data)
-      setSeason(se.data)
-      setAtRisk(ar.data ?? [])
-      const allPlayers = (pl.data?.items ?? []) as Player[]
-      setTotalPlayers(pl.data?.total ?? null)
-      setInjuredPlayers(allPlayers.filter((p) => p.availability && p.availability !== 'disponibile'))
-      setTotalSessions(ss.data?.total ?? null)
-      setRecentSessions(ss.data?.items ?? [])
-    }).catch(() => setError('Errore nel caricamento'))
-      .finally(() => setLoading(false))
-  }, [])
+  const { data: groups = [], isPending: groupsLoading } = useGroups()
+  const { data: season, isPending: seasonLoading } = useCurrentSeason()
+
+  const { data: atRisk = [], isPending: atRiskLoading } = useQuery({
+    queryKey: ['at-risk-players'],
+    queryFn: () => getAtRiskPlayers().then((r) => (r.data ?? []) as AtRiskPlayer[]),
+  })
+
+  const { data: playersData, isPending: playersLoading } = useQuery({
+    queryKey: ['dashboard-players'],
+    queryFn: () => getPlayers(undefined, 200).then((r) => r.data as { items: Player[]; total: number }),
+  })
+  const allPlayers = playersData?.items ?? []
+  const totalPlayers = playersData?.total ?? null
+  const injuredPlayers = allPlayers.filter((p) => p.availability && p.availability !== 'disponibile')
+
+  const { data: sessionsData, isPending: sessionsLoading } = useQuery({
+    queryKey: ['recent-sessions'],
+    queryFn: () =>
+      getSessions(null, 5).then((r) => r.data as { items: RecentSession[]; total: number }),
+  })
+  const recentSessions = sessionsData?.items ?? []
+  const totalSessions = sessionsData?.total ?? null
 
   const groupMap = Object.fromEntries(groups.map((g) => [g.id, g])) as Record<string, Group | undefined>
-  // Per l'allenatore il backend restituisce solo il suo gruppo, quindi groups[0] è il suo gruppo
   const myGroup = isCoach ? (groups[0] ?? null) : null
 
   const seasonLabel = (() => {
@@ -109,8 +103,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {error && <div className="text-red-600 text-sm">{error}</div>}
-
       {/* Accesso rapido admin */}
       {isAdmin && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -133,18 +125,18 @@ export default function DashboardPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Stagione" value={seasonLabel} loading={loading} />
+        <StatCard label="Stagione" value={seasonLabel} loading={seasonLoading} />
         {isCoach ? (
-          <StatCard label="Livello" value={myGroup?.level ?? '—'} loading={loading} />
+          <StatCard label="Livello" value={myGroup?.level ?? '—'} loading={groupsLoading} />
         ) : (
-          <StatCard label="Gruppi attivi" value={groups.length} loading={loading} />
+          <StatCard label="Gruppi attivi" value={groups.length} loading={groupsLoading} />
         )}
-        <StatCard label="Giocatori" value={totalPlayers ?? '—'} loading={loading} />
-        <StatCard label="Sessioni totali" value={totalSessions ?? '—'} loading={loading} />
+        <StatCard label="Giocatori" value={totalPlayers ?? '—'} loading={playersLoading} />
+        <StatCard label="Sessioni totali" value={totalSessions ?? '—'} loading={sessionsLoading} />
       </div>
 
       {/* At-risk alert */}
-      {!loading && atRisk.length > 0 && (
+      {!atRiskLoading && atRisk.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-red-600 font-semibold text-sm">
@@ -185,7 +177,7 @@ export default function DashboardPage() {
       )}
 
       {/* Infortuni attivi */}
-      {!loading && injuredPlayers.length > 0 && (
+      {!playersLoading && injuredPlayers.length > 0 && (
         <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-orange-700 font-semibold text-sm">
@@ -226,7 +218,7 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {loading ? (
+        {sessionsLoading ? (
           <div className="flex justify-center py-8">
             <div className="animate-spin rounded-full h-7 w-7 border-4 border-granata border-t-transparent" />
           </div>

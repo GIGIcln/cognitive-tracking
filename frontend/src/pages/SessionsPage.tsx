@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, NavigateFunction } from 'react-router-dom'
-import { getSessions, createSession, deleteSession } from '../api/sessions'
+import { useQueryClient } from '@tanstack/react-query'
+import { createSession, deleteSession } from '../api/sessions'
 import { getCurrentSeason } from '../api/seasons'
+import { useSessions } from '../hooks/useSeasonData'
 import { SESSION_TYPES, GROUP_CATEGORIES } from '../constants/domain'
 import { formatDateLong } from '../utils/dateUtils'
 import { useAuth } from '../context/AuthContext'
@@ -137,11 +139,14 @@ function CalendarView({ sessions, groups, calMonth, setCalMonth, navigate }: Cal
 
 export default function SessionsPage() {
   const { groups, selectedGroupId, setSelectedGroupId, selectedSeasonId } = useSeasonGroup()
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const queryClient = useQueryClient()
+  const { data: sessions = [], isPending: loading, isError } = useSessions(
+    selectedGroupId || undefined,
+    selectedSeasonId || undefined,
+  )
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [modalError, setModalError] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [form, setForm] = useState({
     group_id: '',
@@ -177,14 +182,6 @@ export default function SessionsPage() {
       .catch(() => {})
   }, [showModal, selectedGroupId, groups])
 
-  useEffect(() => {
-    setLoading(true)
-    getSessions(selectedGroupId || undefined, undefined, selectedSeasonId || undefined)
-      .then((res) => setSessions(res.data.items ?? []))
-      .catch(() => setError('Errore nel caricamento'))
-      .finally(() => setLoading(false))
-  }, [selectedGroupId, selectedSeasonId])
-
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setSaving(true)
@@ -198,7 +195,7 @@ export default function SessionsPage() {
       setShowModal(false)
       navigate(`/sessions/${res.data.id}`)
     } catch {
-      setError('Errore nella creazione della sessione')
+      setModalError('Errore nella creazione della sessione')
       setSaving(false)
     }
   }
@@ -209,9 +206,12 @@ export default function SessionsPage() {
     setDeletingId(sessionId)
     try {
       await deleteSession(sessionId)
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+      queryClient.setQueryData<Session[]>(
+        ['sessions', selectedGroupId ?? '', selectedSeasonId ?? ''],
+        (prev) => (prev ?? []).filter((s) => s.id !== sessionId),
+      )
     } catch {
-      setError('Errore nell\'eliminazione della sessione')
+      queryClient.invalidateQueries({ queryKey: ['sessions'] })
     } finally {
       setDeletingId(null)
     }
@@ -260,7 +260,7 @@ export default function SessionsPage() {
         </div>
       </div>
 
-      {error && !showModal && <div className="text-red-600 text-sm mb-4">{error}</div>}
+      {isError && <div className="text-red-600 text-sm mb-4">Errore nel caricamento sessioni</div>}
 
       {loading ? (
         <div className="flex justify-center py-8">
@@ -331,6 +331,7 @@ export default function SessionsPage() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-lg font-semibold mb-4">Nuova sessione</h3>
             <form onSubmit={handleCreate} className="space-y-3">
+              {modalError && <div className="text-red-600 text-sm">{modalError}</div>}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Gruppo</label>
                 <select
@@ -393,7 +394,7 @@ export default function SessionsPage() {
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => { setShowModal(false); setModalError('') }}
                   className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm hover:bg-gray-50"
                 >
                   Annulla
