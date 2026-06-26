@@ -35,8 +35,8 @@ _File:_ `backend/app/user_store.py`, `backend/users.json`
 FastAPI è costruito su Starlette/asyncio ma il motore è sincrono (`create_engine`, `sessionmaker` senza `async`). Sotto carico ogni query blocca un thread del pool. Non è un problema ora (utenti pochi, query veloci), ma limita la scalabilità futura.  
 _File:_ `backend/app/database.py`
 
-**[TD-03] Nessun sistema di CI/CD**  
-Non esiste `.github/workflows/` o equivalente. I test vengono eseguiti solo manualmente. Un push rotto sul branch main non viene rilevato automaticamente.
+**~~[TD-03] Nessun sistema di CI/CD~~** ✅ Risolto con OB-01  
+`.github/workflows/ci.yml` attivo su ogni push/PR: job `backend` (ruff + pytest + postgres reale) e `frontend` (eslint + vitest + tsc + build). Job `e2e` Playwright con Chromium (OL-05).
 
 **~~[TD-04] Rankings calcolati in Python, non in SQL~~** ✅ Risolto  
 Riscritto con aggregazione SQL-side (`func.coalesce`, `cast`, `desc`): il DB calcola la media riga-per-riga sui campi non-NULL e ordina; Python riceve solo la lista già ordinata.  
@@ -47,8 +47,9 @@ _File:_ `backend/app/services/session_service.py`
 **~~[TD-05] Frontend senza TypeScript~~** ✅ Risolto con OL-03  
 Migrazione TypeScript completa (PR #2, 2026-06-26): tutti i file `*.jsx`/`*.js` convertiti in `*.tsx`/`*.ts`. Tipi centralizzati in `types/api.ts`. `tsc --noEmit` → 0 errori in strict mode.
 
-**[TD-06] Gestione stato globale assente (oltre all'auth)**  
-Non esiste uno store globale (Redux, Zustand, React Query). Ogni pagina fa fetch indipendente degli stessi dati (es. lista gruppi recuperata sia in `GroupsPage` che in `SessionsPage`). Nessuna cache, nessun `stale-while-revalidate`.
+**~~[TD-06] Gestione stato globale assente (oltre all'auth)~~** ✅ Risolto  
+React Query esteso da stagioni/gruppi (OL-04) a sessioni, giocatori e dashboard. `usePlayers()`, `useSessions()`, `useCurrentSeason()` in `hooks/useSeasonData.ts`. `PlayersPage` e `SessionsPage` eliminano fetch manuali; `DashboardPage` usa 4 `useQuery` paralleli con spinner per-sezione. `invalidateQueries` su tutti i CRUD.  
+_File:_ `frontend/src/hooks/useSeasonData.ts`, `frontend/src/pages/PlayersPage.tsx`, `frontend/src/pages/SessionsPage.tsx`, `frontend/src/pages/DashboardPage.tsx`
 
 **~~[TD-07] No containerizzazione~~** ✅ Risolto  
 `docker-compose.yml` con servizi `db` (postgres:15), `backend` e `frontend`. Hot-reload su entrambi; `alembic upgrade head` eseguito automaticamente all'avvio del backend.
@@ -129,17 +130,18 @@ Vedi GS-01 nella sezione Gestionale Sportivo qui sotto.
 Migrazione TypeScript completa (PR #2, mergiata 2026-06-26): tutti i file `*.jsx`/`*.js` convertiti in `*.tsx`/`*.ts`. Tipi centralizzati in `types/api.ts`; pattern per `useState`, `useParams`, accesso dinamico su oggetti e Recharts documentati. `tsc --noEmit` → 0 errori in strict mode.  
 _File:_ `frontend/src/types/api.ts`, `frontend/src/constants/domain.ts`
 
-### ~~OL-04 — Gestione stato globale con React Query (TanStack Query)~~ ✅ Completato
+### ~~OL-04 — Gestione stato globale con React Query (TanStack Query)~~ ✅ Completato (esteso in TD-06)
 
 React Query v5 già installato e configurato (staleTime 5min, retry 1). I 4 hook report lo usavano già.
-Migrazione estesa a stagioni e gruppi:
-- `hooks/useSeasonData.ts`: `useSeasons()` + `useGroups(seasonId?)` condivisi con query key `['seasons']` / `['groups', seasonId]`
+Migrazione estesa a stagioni e gruppi (OL-04), poi a sessioni, giocatori e dashboard (TD-06):
+- `hooks/useSeasonData.ts`: `useSeasons()`, `useGroups(seasonId?)`, `usePlayers(groupId?)`, `useSessions(groupId?, seasonId?)`, `useCurrentSeason()`
 - `SeasonGroupContext` usa i hook invece di fetch manuali — cache condivisa con le pagine
-- `GroupsPage`: `useGroups()` + `useMutation` (create/update/delete) con `invalidateQueries`
-- `SeasonsPage`: `useSeasons()` + `useMutation` (create) con `invalidateQueries`; `useQuery` per season stats
+- `GroupsPage`, `SeasonsPage`: `useMutation` (create/update/delete) con `invalidateQueries`
+- `PlayersPage`: `usePlayers()` + invalidazione su delete/bulkAssign/modal save
+- `SessionsPage`: `useSessions()` + `setQueryData` ottimistico su delete
+- `DashboardPage`: 4 `useQuery` paralleli indipendenti (per-card loading state)
 
-Benefici: `GroupsPage` non fa più un fetch separato dai dati già in cache nel contesto; CRUD invalida la cache una volta sola per aggiornare sia la pagina che il context.  
-_File:_ `frontend/src/hooks/useSeasonData.ts`, `frontend/src/context/SeasonGroupContext.tsx`, `frontend/src/pages/GroupsPage.tsx`, `frontend/src/pages/SeasonsPage.tsx`
+_File:_ `frontend/src/hooks/useSeasonData.ts`, `frontend/src/context/SeasonGroupContext.tsx`, `frontend/src/pages/`
 
 ### ~~OL-05 — E2E Testing con Playwright~~ ✅ Completato
 
@@ -213,7 +215,7 @@ _File:_ `frontend/src/constants/domain.ts`, `frontend/src/pages/SessionDetailPag
 | **RLS PostgreSQL** | Abilitata su tutte le tabelle public, policy deny-all esplicite | ✅ Presente (mig. 0011–0013) |
 | **Secrets** | `SECRET_KEY` validata (≥32 byte), `.env` non versionato | ✅ Corretto |
 | **OpenAPI** | Disabilitato in `APP_ENV=production` | ✅ Corretto |
-| **users.json** | File su disco, fuori dal repo | ⚠️ Soluzione temporanea — vedere GS-01 |
+| **users.json** | Sostituito da tabella `users` DB-based (GS-01) | ✅ Risolto |
 | **Audit log** | Login riusciti/falliti loggati con `request_id`; `GroupChangeLog` per spostamenti | Estendere a audit per-utente con GS-01 |
 
 ### Performance
@@ -226,7 +228,7 @@ _File:_ `frontend/src/constants/domain.ts`, `frontend/src/pages/SessionDetailPag
 | **Rankings** | `func.coalesce` + `desc` SQL-side in `get_rankings()` | ✅ SQL-side (OB-04) |
 | **GZip** | Attivo per response > 1KB | ✅ Presente |
 | **Frontend lazy loading** | Pagine pesanti (report, SessionDetail) caricate on-demand | ✅ Presente |
-| **PDF export** | `html2canvas` è lento su DOM complesso; sincrono, nessun progress indicator | Migrazione server-side WeasyPrint — vedere OL-06 |
+| **PDF export** | Generazione server-side WeasyPrint con Jinja2 (4 endpoint) | ✅ Completato con OL-06 |
 | **Offline** | Mutation code in coda IndexedDB | ✅ Operativo |
 
 ---
