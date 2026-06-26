@@ -59,8 +59,8 @@ test.describe('Creazione sessione (SessionsPage)', () => {
     // Modal header
     await expect(page.getByRole('heading', { name: 'Nuova sessione' })).toBeVisible({ timeout: 5_000 })
 
-    // Group dropdown includes our group
-    await expect(page.getByRole('option', { name: 'Esordienti A' })).toBeAttached({ timeout: 5_000 })
+    // Group dropdown in modal includes our group (page has 3 selects with this option — use first())
+    await expect(page.getByRole('option', { name: 'Esordienti A' }).first()).toBeAttached({ timeout: 5_000 })
 
     // Submit button present and enabled
     await expect(page.getByRole('button', { name: 'Crea sessione' })).toBeVisible()

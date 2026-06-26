@@ -33,6 +33,9 @@ async function mountSession(page: Parameters<typeof test>[1]) {
       if (path === '/api/sessions/session-1') return route.fulfill({ status: 200, json: SESSION })
       if (path.startsWith('/api/players')) return route.fulfill({ status: 200, json: PLAYERS_RESPONSE })
       if (path === '/api/groups/group-1/targets') return route.fulfill({ status: 200, json: [] })
+      // SeasonGroupContext (React Query) needs arrays, not {} to avoid seasons.find crash
+      if (path === '/api/seasons') return route.fulfill({ status: 200, json: [] })
+      if (path === '/api/groups') return route.fulfill({ status: 200, json: [] })
       return route.fulfill({ status: 200, json: {} })
     },
   )
