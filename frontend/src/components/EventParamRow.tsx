@@ -65,7 +65,7 @@ export default function EventParamRow({ field, playerId, compact = false, eventD
 
   if (compact) {
     return (
-      <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+      <div data-testid={`event-param-${param.label.toLowerCase()}`} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
         <div className="flex items-center gap-2 mb-2 min-w-0">
           <span className="text-xs font-semibold text-gray-800 shrink-0">
             {param.label}

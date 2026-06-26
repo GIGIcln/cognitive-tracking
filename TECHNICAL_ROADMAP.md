@@ -141,11 +141,18 @@ Migrazione estesa a stagioni e gruppi:
 Benefici: `GroupsPage` non fa più un fetch separato dai dati già in cache nel contesto; CRUD invalida la cache una volta sola per aggiornare sia la pagina che il context.  
 _File:_ `frontend/src/hooks/useSeasonData.ts`, `frontend/src/context/SeasonGroupContext.tsx`, `frontend/src/pages/GroupsPage.tsx`, `frontend/src/pages/SeasonsPage.tsx`
 
-### OL-05 — E2E Testing con Playwright
+### ~~OL-05 — E2E Testing con Playwright~~ ✅ Completato
 
-Aggiungere test E2E per i flussi critici:
-- Login → creazione sessione → inserimento observation events → export PDF
-- Verifica del gate di affidabilità (`insufficient` → blocco pubblicazione)
+Suite Playwright in `frontend/e2e/` con 4 spec file, 9 test totali:
+- `login.spec.ts` — form render, login valido, credenziali errate
+- `session-gate.spec.ts` — gate SR: dati insufficienti bloccano salvataggio, soglia sufficiente sblocca
+- `session-events.spec.ts` — DQI medium (score 7.8 + "Affid. media"), DQI bassa (denominator < min_n → "Affid. bassa")
+- `session-create.spec.ts` — pulsante "Nuova sessione" visibile per admin, modal con gruppo e submit button
+
+Tutti i test usano `page.route()` per intercettare le API (`/api/*`) senza backend reale.
+Job `e2e` aggiunto in `ci.yml`: install Playwright + chromium, `npx playwright test`, upload report on failure.
+
+_File:_ `frontend/e2e/`, `frontend/playwright.config.ts`, `.github/workflows/ci.yml`
 
 ### OL-06 — PDF generation server-side (WeasyPrint)
 
