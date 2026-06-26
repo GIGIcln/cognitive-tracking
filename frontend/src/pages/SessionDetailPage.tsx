@@ -8,22 +8,13 @@ import NotesBlock from '../components/NotesBlock'
 import EventParamRow from '../components/EventParamRow'
 import SRMultiRowInput from '../components/SRMultiRowInput'
 import AttendanceTab from '../components/AttendanceTab'
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog'
+import DesktopPlayerCard from '../components/DesktopPlayerCard'
+import { ReliabilityChip, ScoreCompletenessChip } from '../components/SessionChips'
 import { useSessionForm } from '../hooks/useSessionForm'
 import type { GroupTarget } from '../utils/reportUtils'
 
 const PARAMS = COGNITIVE_PARAMS
-
-// ── Score-mode helpers ────────────────────────────────────────────────────────
-
-function valueBadgeClass(value: string | number | null, targetsMap: Record<string, GroupTarget>, field: MetricField) {
-  const param = FIELD_TO_METRIC[field]
-  const t = targetsMap[param]
-  if (!t || value === '' || value == null) return 'border-gray-300 bg-white'
-  const v = parseFloat(String(value))
-  if (v <= t.insufficient_max) return 'border-red-300 bg-red-50 text-red-800'
-  if (v >= t.ottimo_min)       return 'border-green-300 bg-green-50 text-green-800'
-  return 'border-yellow-300 bg-yellow-50 text-yellow-800'
-}
 
 function getMobileBtnClass(n: number, selectedValue: string | number | null, targetsMap: Record<string, GroupTarget>, field: MetricField) {
   const isSelected = Number(selectedValue) === n
@@ -34,30 +25,6 @@ function getMobileBtnClass(n: number, selectedValue: string | number | null, tar
   if (n <= t.insufficient_max) return 'bg-granata text-white scale-105 ring-2 ring-red-400 ring-offset-1'
   if (n >= t.ottimo_min)       return 'bg-granata text-white scale-105 ring-2 ring-green-400 ring-offset-1'
   return 'bg-granata text-white scale-105 ring-2 ring-yellow-400 ring-offset-1'
-}
-
-function ReliabilityChip({ ok, total }: { ok: number; total: number }) {
-  let cls
-  if (ok >= total)                     cls = 'bg-green-100 text-green-700'
-  else if (ok >= Math.ceil(total / 2)) cls = 'bg-yellow-100 text-yellow-700'
-  else                                 cls = 'bg-red-100 text-red-700'
-  return (
-    <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${cls}`}>
-      {ok}/{total}
-    </span>
-  )
-}
-
-function ScoreCompletenessChip({ filled, total }: { filled: number; total: number }) {
-  let cls
-  if (filled === total && total > 0) cls = 'bg-green-100 text-green-700'
-  else if (filled === 0)             cls = 'bg-red-100 text-red-700'
-  else                               cls = 'bg-yellow-100 text-yellow-700'
-  return (
-    <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${cls}`}>
-      {filled}/{total}
-    </span>
-  )
 }
 
 export default function SessionDetailPage() {
@@ -97,28 +64,7 @@ export default function SessionDetailPage() {
   return (
     <>
       {blocker.state === 'blocked' && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-2">Modifiche non salvate</h3>
-            <p className="text-sm text-gray-600 mb-5">
-              Hai dati inseriti che non sono ancora stati salvati. Se esci ora li perderai.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => blocker.reset()}
-                className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50"
-              >
-                Resta
-              </button>
-              <button
-                onClick={() => blocker.proceed()}
-                className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-red-700"
-              >
-                Esci senza salvare
-              </button>
-            </div>
-          </div>
-        </div>
+        <UnsavedChangesDialog onReset={() => blocker.reset()} onProceed={() => blocker.proceed()} />
       )}
 
       {/* ── MOBILE VIEW ── */}
@@ -505,89 +451,27 @@ export default function SessionDetailPage() {
 
         {/* Players */}
         <div className="space-y-4">
-          {players.map((p) => {
-            const m = measurements[p.id]
-            return (
-              <div
-                key={p.id}
-                className={`bg-white rounded-xl border p-4 transition-opacity ${m.is_absent ? 'border-gray-100 opacity-50' : 'border-gray-200'}`}
-              >
-                {/* Player header */}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-semibold text-gray-900">{p.last_name} {p.first_name}</span>
-                  <div className="flex items-center gap-2 select-none">
-                    {entryMode === 'event' && !m.is_absent && hasAnyEventData(p.id) && (
-                      <ReliabilityChip ok={getReliabilityOkCount(p.id)} total={PARAMS.length} />
-                    )}
-                    {entryMode === 'score' && !m.is_absent && (
-                      <ScoreCompletenessChip filled={getScoreFilledCount(p.id)} total={PARAMS.length} />
-                    )}
-                    <span className="text-sm text-gray-500">Assente</span>
-                    <ToggleSwitch checked={m.is_absent} onChange={() => toggleAbsent(p.id)} size="sm" />
-                  </div>
-                </div>
-
-                {!m.is_absent && entryMode === 'score' && (
-                  <div className="grid grid-cols-5 gap-2">
-                    {PARAMS.map(({ label, field }) => (
-                      <div key={field} className="text-center">
-                        <div className="text-xs text-gray-500 mb-1 font-medium">{label}</div>
-                        <input
-                          type="number"
-                          min="1" max="10" step="1"
-                          value={m[field] !== '' && m[field] != null ? Math.round(Number(m[field])) : ''}
-                          onChange={(e) => {
-                            const raw = e.target.value
-                            if (raw === '') { handleChange(p.id, field, null); return }
-                            const num = parseInt(raw, 10)
-                            if (!isNaN(num) && num >= 1 && num <= 10) handleChange(p.id, field, num)
-                          }}
-                          onKeyDown={(e) => { if (e.key === '.' || e.key === ',') e.preventDefault() }}
-                          disabled={m.is_absent}
-                          className={`w-full text-center border rounded-lg text-sm font-semibold min-h-12 focus:outline-none focus:ring-2 focus:ring-granata disabled:cursor-not-allowed transition-colors ${
-                            m.is_absent ? 'bg-gray-50 border-gray-200 text-gray-300' : valueBadgeClass(m[field], targetsMap, field)
-                          }`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {!m.is_absent && entryMode === 'event' && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    {PARAMS.map(({ field }) =>
-                      field === 'scanning_rate' ? (
-                        <div key="sr" className="lg:col-span-2">
-                          <SRMultiRowInput
-                            playerId={p.id}
-                            rows={srRows[p.id] ?? []}
-                            onAdd={() => addSRRow(p.id)}
-                            onUpdate={(i, k, v) => updateSRRow(p.id, i, k, v)}
-                            onDelete={(i) => deleteSRRow(p.id, i)}
-                            targetsMap={targetsMap}
-                          />
-                        </div>
-                      ) : (
-                        <EventParamRow key={field} field={field} playerId={p.id} compact eventData={eventData} targetsMap={targetsMap} onEventChange={handleEventChange} onEventSet={handleEventSet} />
-                      )
-                    )}
-                  </div>
-                )}
-
-                {!m.is_absent && (
-                  <div className="mt-3">
-                    <textarea
-                      value={m.notes ?? ''}
-                      onChange={(e) => handleChange(p.id, 'notes', e.target.value)}
-                      placeholder="Note giocatore…"
-                      rows={1}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-granata resize-none"
-                    />
-                  </div>
-                )}
-              </div>
-            )
-          })}
+          {players.map((p) => (
+            <DesktopPlayerCard
+              key={p.id}
+              player={p}
+              measurement={measurements[p.id]}
+              entryMode={entryMode}
+              targetsMap={targetsMap}
+              eventData={eventData}
+              srRows={srRows[p.id] ?? []}
+              reliabilityOk={getReliabilityOkCount(p.id)}
+              hasEventData={hasAnyEventData(p.id)}
+              scoreFilled={getScoreFilledCount(p.id)}
+              onToggleAbsent={() => toggleAbsent(p.id)}
+              onChange={(field, value) => handleChange(p.id, field, value)}
+              onEventChange={handleEventChange}
+              onEventSet={handleEventSet}
+              onAddSR={() => addSRRow(p.id)}
+              onUpdateSR={(i, k, v) => updateSRRow(p.id, i, k, v)}
+              onDeleteSR={(i) => deleteSRRow(p.id, i)}
+            />
+          ))}
 
           {!players.length && (
             <div className="text-center text-gray-400 py-8 text-sm">Nessun giocatore nel gruppo</div>

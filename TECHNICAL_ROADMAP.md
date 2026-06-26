@@ -64,9 +64,8 @@ _File:_ `frontend/src/constants/domain.ts`
 `deriveSRReliability(n)` aggiunta in `domain.ts`; `useSessionForm.ts` usa `COUNT(righe valide)` come n per SR in tutti e tre i callback di reliability, escludendo SR da `deriveReliability()` (che usava denominator). Soglie 3/6/12 allineate al backend (`min_n=6`, `half=3`, `medium=min_n*2=12`).  
 _File:_ `frontend/src/constants/domain.ts`, `frontend/src/hooks/useSessionForm.ts`
 
-**[TD-13] `SessionDetailPage` monolite (930+ righe)**  
-La pagina gestisce contemporaneamente: caricamento di sessione, giocatori, target e misurazioni; due modalità di input (score vs event); calcolo affidabilità in-page con 3 helper locali; dirty tracking + `useBlocker` + `beforeunload`; rendering mobile (≈590 linee) e desktop (≈270 linee). `EventParamRow` (113 righe) e `NotesBlock` (60 righe) sono funzioni inline anziché componenti. Non è un problema urgente, ma rende la pagina difficile da testare e modificare in sicurezza.  
-_File:_ `frontend/src/pages/SessionDetailPage.jsx`
+**~~[TD-13] `SessionDetailPage` monolite (930+ righe)~~** ✅ Risolto con OL-07  
+Ridotta a 516 righe. Vedi OL-07 per il dettaglio dei componenti estratti.
 
 **~~[TD-14] Offline queue senza tetto di retry e cleanup~~** ✅ Risolto  
 Il cap di retry era già implementato in `OfflineContext.jsx` (magic number `3`). Fix applicata: estratto `MAX_RETRIES = 5` come costante, aggiunto `MAX_AGE_MS = 7 giorni` per scartare item stantii al prossimo sync. Item 4xx già rimossi immediatamente; `syncError` segnala al banner quando item vengono scartati. 2 nuovi test: expiry + item valido non filtrato.
@@ -149,16 +148,17 @@ Aggiungere test E2E per i flussi critici:
 `exportUtils.js` usa `html2canvas` che è sincrono, blocca il main thread e scala male su report con molti giocatori (hide/show DOM, loop su sections, nessun progress indicator). Migrazione a generazione server-side con WeasyPrint: il backend riceve la request, renderizza HTML → PDF in Python, restituisce il file come `application/pdf`. Benefici: thread UI libero, output deterministico, possibilità di schedulare la generazione in background. Da coordinare con OL-02 (auth su DB) per gestire accesso sicuro al report.  
 _File:_ `frontend/src/utils/exportUtils.js`
 
-### OL-07 — Refactoring `SessionDetailPage` in componenti e custom hook
+### ~~OL-07 — Refactoring `SessionDetailPage` in componenti e custom hook~~ ✅ Completato
 
-Estrarre dalla pagina monolite (930+ righe):
-1. `EventParamRow` → componente autonomo in `components/`
-2. `NotesBlock` → componente autonomo in `components/`
-3. `useSessionForm()` → custom hook che gestisce stato e side effect (caricamento dati, dirty tracking, salvataggio), lasciando alla pagina solo la composizione UI
-4. Split del rendering mobile/desktop in sub-component o slot-pattern
+Pagina ridotta da 930+ righe a 516 righe attraverso iterazioni successive:
+- `EventParamRow`, `NotesBlock`, `SRMultiRowInput`, `AttendanceTab` → componenti autonomi in `components/`
+- `useSessionForm()` → custom hook con tutto lo stato e i side effect (OL-09)
+- `DesktopPlayerCard` → card desktop per giocatore con `valueBadgeClass` helper (OL-07)
+- `UnsavedChangesDialog` → dialog blocker navigazione (OL-07)
+- `SessionChips` → `ReliabilityChip` + `ScoreCompletenessChip` condivisi (OL-07)
+- `tsc --noEmit` → 0 errori dopo ogni step
 
-Pre-requisito naturale per il passaggio a TypeScript (OL-03) perché riduce la superficie di ciascun file da tipizzare.  
-_File:_ `frontend/src/pages/SessionDetailPage.jsx`
+_File:_ `frontend/src/pages/SessionDetailPage.tsx`, `frontend/src/components/`
 
 ### ~~OL-09 — Workflow SR multi-riga e allineamento reliability~~ ✅ Completato
 
