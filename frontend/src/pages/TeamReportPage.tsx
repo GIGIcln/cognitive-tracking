@@ -23,7 +23,7 @@ import { useTeamReport } from '../hooks/useTeamReport'
 const PARAMS = COGNITIVE_PARAMS
 const TEAM_FIELD_KEYS = ['avg_sr', 'avg_dqi', 'avg_ai', 'avg_trs', 'avg_vci']
 
-import type { Target, GroupHistoryItem, Measurement } from '../types/api'
+import type { Target, GroupHistoryItem } from '../types/api'
 
 function cellClass(val: number | null | undefined, target: Target | null | undefined) {
   if (val == null || !target) return 'text-gray-400'

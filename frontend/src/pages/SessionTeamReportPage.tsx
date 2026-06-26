@@ -17,7 +17,7 @@ import { COGNITIVE_PARAMS } from '../constants/domain'
 import { formatDateShort } from '../utils/dateUtils'
 import { generateComment } from '../utils/reportUtils'
 import { useSessionTeamReport } from '../hooks/useSessionTeamReport'
-import type { Target, Measurement } from '../types/api'
+import type { Target } from '../types/api'
 
 const PARAMS = COGNITIVE_PARAMS
 const TEAM_FIELD_KEYS = ['avg_sr', 'avg_dqi', 'avg_ai', 'avg_trs', 'avg_vci']
