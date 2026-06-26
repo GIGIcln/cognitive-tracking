@@ -400,3 +400,142 @@ def render_team_report_pdf(group_id: uuid.UUID, db: Session) -> bytes | None:
     from weasyprint import HTML  # lazy import — system libs required at runtime
 
     return HTML(string=html, base_url=str(TEMPLATE_DIR)).write_pdf()
+
+
+def build_session_team_report(session_id: uuid.UUID, db: Session) -> dict | None:
+    ss = SessionService(db)
+    gs = GroupService(db)
+
+    session_obj = ss.get(session_id)
+    if not session_obj:
+        return None
+
+    group, _ = gs.get(session_obj.group_id)
+    group_name = group.name if group else "—"
+
+    targets_raw = gs.get_targets(session_obj.group_id) or []
+    targets_map = _build_targets_map(targets_raw)
+
+    measurements_raw = ss.get_measurements(session_id) or []
+    player_rows: list[dict] = []
+    for m in measurements_raw:
+        if m.is_absent:
+            continue
+        row: dict = {
+            "first_name": m.player.first_name if m.player else "—",
+            "last_name": m.player.last_name if m.player else "—",
+            "scanning_rate": float(m.scanning_rate) if m.scanning_rate is not None else None,
+            "decision_quality": float(m.decision_quality) if m.decision_quality is not None else None,
+            "anticipation": float(m.anticipation) if m.anticipation is not None else None,
+            "transition_reset": float(m.transition_reset) if m.transition_reset is not None else None,
+            "verbal_comm": float(m.verbal_comm) if m.verbal_comm is not None else None,
+        }
+        vals = [v for v in row.values() if isinstance(v, float)]
+        row["avg"] = round(sum(vals) / len(vals), 2) if vals else None
+        player_rows.append(row)
+
+    player_rows.sort(key=lambda r: (r["avg"] or 0), reverse=True)
+    player_rows_with_classes = _add_row_classes(player_rows, targets_map)
+
+    averages = ss.get_averages(session_id)
+    metric_boxes = [
+        {
+            "abbrev": abbrev,
+            "value": float(averages[_AVG_KEYS[field]]) if averages and averages.get(_AVG_KEYS[field]) is not None else None,
+            "cls": _score_class(
+                float(averages[_AVG_KEYS[field]]) if averages and averages.get(_AVG_KEYS[field]) is not None else None,
+                field, targets_map,
+            ),
+        }
+        for field, abbrev, _ in _PARAMS
+    ]
+
+    team_avg = {
+        field: float(averages[_AVG_KEYS[field]]) if averages and averages.get(_AVG_KEYS[field]) is not None else None
+        for field, _, _ in _PARAMS
+    }
+
+    return {
+        "session": session_obj,
+        "group_name": group_name,
+        "player_rows": player_rows_with_classes,
+        "metric_boxes": metric_boxes,
+        "bar_chart_svg": _bar_chart_svg(team_avg, targets_map),
+        "player_count": averages.get("player_count") if averages else None,
+        "generated_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "format_date": _format_date,
+    }
+
+
+def build_session_player_report(session_id: uuid.UUID, player_id: uuid.UUID, db: Session) -> dict | None:
+    ss = SessionService(db)
+    gs = GroupService(db)
+    ps = PlayerService(db)
+
+    session_obj = ss.get(session_id)
+    if not session_obj:
+        return None
+
+    player = ps.get(player_id)
+    if not player:
+        return None
+
+    group, _ = gs.get(session_obj.group_id)
+    group_name = group.name if group else "—"
+
+    targets_raw = gs.get_targets(session_obj.group_id) or []
+    targets_map = _build_targets_map(targets_raw)
+
+    measurements_raw = ss.get_measurements(session_id) or []
+    measurement = next((m for m in measurements_raw if m.player_id == player_id), None)
+    averages = ss.get_averages(session_id)
+    rankings = ss.get_rankings(session_id)
+    ranking = next((r for r in rankings if r["player_id"] == player_id), None)
+
+    player_scores: list[dict] = []
+    if measurement and not measurement.is_absent:
+        for field, abbrev, label in _PARAMS:
+            val = getattr(measurement, field, None)
+            val_f = float(val) if val is not None else None
+            avg_val = float(averages[_AVG_KEYS[field]]) if averages and averages.get(_AVG_KEYS[field]) is not None else None
+            player_scores.append({
+                "abbrev": abbrev,
+                "label": label,
+                "value": val_f,
+                "cls": _score_class(val_f, field, targets_map),
+                "avg_value": avg_val,
+                "avg_cls": _score_class(avg_val, field, targets_map),
+            })
+
+    return {
+        "session": session_obj,
+        "player": player,
+        "group_name": group_name,
+        "player_scores": player_scores,
+        "measurement_absent": measurement.is_absent if measurement else None,
+        "ranking": ranking,
+        "generated_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "format_date": _format_date,
+    }
+
+
+def render_session_team_report_pdf(session_id: uuid.UUID, db: Session) -> bytes | None:
+    data = build_session_team_report(session_id, db)
+    if data is None:
+        return None
+    template = _jinja_env.get_template("session_team_report.html")
+    html = template.render(**data)
+    from weasyprint import HTML  # lazy import — system libs required at runtime
+
+    return HTML(string=html, base_url=str(TEMPLATE_DIR)).write_pdf()
+
+
+def render_session_player_report_pdf(session_id: uuid.UUID, player_id: uuid.UUID, db: Session) -> bytes | None:
+    data = build_session_player_report(session_id, player_id, db)
+    if data is None:
+        return None
+    template = _jinja_env.get_template("session_player_report.html")
+    html = template.render(**data)
+    from weasyprint import HTML  # lazy import — system libs required at runtime
+
+    return HTML(string=html, base_url=str(TEMPLATE_DIR)).write_pdf()

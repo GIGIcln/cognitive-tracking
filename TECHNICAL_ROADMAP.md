@@ -154,10 +154,20 @@ Job `e2e` aggiunto in `ci.yml`: install Playwright + chromium, `npx playwright t
 
 _File:_ `frontend/e2e/`, `frontend/playwright.config.ts`, `.github/workflows/ci.yml`
 
-### OL-06 — PDF generation server-side (WeasyPrint)
+### ~~OL-06 — PDF generation server-side (WeasyPrint)~~ ✅ Completato
 
-`exportUtils.js` usa `html2canvas` che è sincrono, blocca il main thread e scala male su report con molti giocatori (hide/show DOM, loop su sections, nessun progress indicator). Migrazione a generazione server-side con WeasyPrint: il backend riceve la request, renderizza HTML → PDF in Python, restituisce il file come `application/pdf`. Benefici: thread UI libero, output deterministico, possibilità di schedulare la generazione in background. Da coordinare con OL-02 (auth su DB) per gestire accesso sicuro al report.  
-_File:_ `frontend/src/utils/exportUtils.js`
+Migrazione completa da html2canvas/jsPDF a generazione server-side. `exportUtils.ts` espone `exportReportPDF(apiPath, filename)` che chiama il backend e scarica il blob direttamente.
+
+Backend (`app/routers/reports.py`, `app/services/report_service.py`):
+- `GET /reports/player/{id}/pdf` — report storico giocatore (sparkline SVG inline)
+- `GET /reports/team/{id}/pdf` — report storico squadra (bar chart SVG inline)
+- `GET /reports/session/{id}/team/pdf` — report squadra sessione singola
+- `GET /reports/session/{id}/player/{player_id}/pdf` — report giocatore sessione singola
+
+Template Jinja2 in `app/templates/` (4 file HTML): color-coding good/mid/bad, tabelle classifica, SVG inline. Rendering WeasyPrint (lazy import).
+
+Frontend fix: `SessionTeamReportPage` e `SessionPlayerReportPage` usavano `'report-content'` (legacy html2canvas) → corretti con i path API corretti.  
+_File:_ `backend/app/routers/reports.py`, `backend/app/services/report_service.py`, `backend/app/templates/`
 
 ### ~~OL-07 — Refactoring `SessionDetailPage` in componenti e custom hook~~ ✅ Completato
 

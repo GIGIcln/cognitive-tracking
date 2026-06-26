@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.rbac import require_auth
-from app.services.report_service import render_player_report_pdf, render_team_report_pdf
+from app.services.report_service import (
+    render_player_report_pdf,
+    render_session_player_report_pdf,
+    render_session_team_report_pdf,
+    render_team_report_pdf,
+)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -42,4 +47,37 @@ def team_report_pdf(
         content=pdf,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="report_team_{group_id}.pdf"'},
+    )
+
+
+@router.get("/session/{session_id}/team/pdf")
+def session_team_report_pdf(
+    session_id: uuid.UUID,
+    _: object = Depends(require_auth),
+    db: Session = Depends(get_db),
+) -> Response:
+    pdf = render_session_team_report_pdf(session_id, db)
+    if pdf is None:
+        raise HTTPException(status_code=404, detail="Sessione non trovata o nessun dato disponibile")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="report_sessione_{session_id}.pdf"'},
+    )
+
+
+@router.get("/session/{session_id}/player/{player_id}/pdf")
+def session_player_report_pdf(
+    session_id: uuid.UUID,
+    player_id: uuid.UUID,
+    _: object = Depends(require_auth),
+    db: Session = Depends(get_db),
+) -> Response:
+    pdf = render_session_player_report_pdf(session_id, player_id, db)
+    if pdf is None:
+        raise HTTPException(status_code=404, detail="Sessione o giocatore non trovati")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="report_sessione_player_{player_id}.pdf"'},
     )

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  color: #1f2937;
+  background: white;
+  padding: 18px 22px;
+}
+
+.header {
+  border-bottom: 3px solid #7c1f1f;
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+.header-left h1 { font-size: 18px; font-weight: 700; color: #7c1f1f; }
+.header-left .sub { color: #6b7280; font-size: 10px; margin-top: 3px; }
+.header-right { font-size: 9px; color: #9ca3af; text-align: right; }
+.brand { font-weight: 700; color: #7c1f1f; }
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.metric-box {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 7px 6px;
+  text-align: center;
+}
+.metric-box.good { background: #f0fdf4; border-color: #86efac; }
+.metric-box.mid  { background: #fefce8; border-color: #fde047; }
+.metric-box.bad  { background: #fef2f2; border-color: #fca5a5; }
+.metric-box.neutral, .metric-box.null { background: #f9fafb; border-color: #e5e7eb; }
+.metric-box .abbrev { font-size: 9px; font-weight: 700; color: #6b7280; letter-spacing: 0.4px; }
+.metric-box .score { font-size: 20px; font-weight: 800; margin: 1px 0; line-height: 1.1; }
+.metric-box.good .score { color: #16a34a; }
+.metric-box.mid  .score { color: #ca8a04; }
+.metric-box.bad  .score { color: #dc2626; }
+.metric-box.neutral .score, .metric-box.null .score { color: #9ca3af; }
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+  margin: 14px 0 7px;
+  border-left: 3px solid #7c1f1f;
+  padding-left: 7px;
+}
+
+table { width: 100%; border-collapse: collapse; font-size: 10px; }
+th {
+  background: #f3f4f6;
+  padding: 5px 7px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #d1d5db;
+}
+th.center, td.center { text-align: center; }
+td { padding: 3.5px 7px; border-bottom: 1px solid #f3f4f6; }
+tr:last-child td { border-bottom: none; }
+
+.td-good { background: #f0fdf4; color: #166534; font-weight: 600; }
+.td-mid  { background: #fefce8; color: #854d0e; font-weight: 600; }
+.td-bad  { background: #fef2f2; color: #991b1b; font-weight: 600; }
+.td-neutral, .td-null { color: #d1d5db; }
+
+.footer {
+  margin-top: 18px;
+  padding-top: 6px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 9px;
+  color: #9ca3af;
+  text-align: right;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>{{ group_name }}</h1>
+    <div class="sub">
+      {{ format_date(session.session_date) }} · {{ session.session_type }}
+      {% if session.duration_min %} · {{ session.duration_min }} min{% endif %}
+      {% if player_count %} · {{ player_count }} giocatori{% endif %}
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="brand">ASC.D Torino Club</span><br>
+    Report Sessione<br>
+    Generato il {{ generated_at }}
+  </div>
+</div>
+
+<!-- Session averages -->
+{% if metric_boxes %}
+<div class="metrics-grid">
+  {% for box in metric_boxes %}
+  <div class="metric-box {{ box.cls }}">
+    <div class="abbrev">{{ box.abbrev }}</div>
+    <div class="score">
+      {% if box.value is not none %}{{ "%.1f"|format(box.value) }}{% else %}—{% endif %}
+    </div>
+    <div class="abbrev" style="font-weight:400;color:#9ca3af">media sessione</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Bar chart -->
+{{ bar_chart_svg | safe }}
+
+<!-- Player ranking table -->
+<div class="section-title">Classifica giocatori</div>
+{% if player_rows %}
+<table>
+  <thead>
+    <tr>
+      <th class="center">#</th>
+      <th>Giocatore</th>
+      <th class="center">SR</th>
+      <th class="center">DQI</th>
+      <th class="center">AI</th>
+      <th class="center">TRS</th>
+      <th class="center">VCI</th>
+      <th class="center">Media</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in player_rows %}
+    <tr>
+      <td class="center">{{ loop.index }}</td>
+      <td>{{ row.last_name }} {{ row.first_name }}</td>
+      {% for field in ["scanning_rate","decision_quality","anticipation","transition_reset","verbal_comm"] %}
+      <td class="center td-{{ row.classes[field] }}">
+        {% if row[field] is not none %}{{ "%.1f"|format(row[field]) }}{% else %}—{% endif %}
+      </td>
+      {% endfor %}
+      <td class="center">
+        {% if row.avg is not none %}{{ "%.1f"|format(row.avg) }}{% else %}—{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="color:#9ca3af;font-size:10px;margin:8px 0">Nessun dato per questa sessione.</p>
+{% endif %}
+
+<div class="footer">ASC.D Torino Club · {{ generated_at }}</div>
+</body>
+</html>

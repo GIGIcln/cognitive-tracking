@@ -172,7 +172,7 @@ export default function SessionPlayerReportPage() {
               onClick={async () => {
                 setPdfLoading(true)
                 await exportReportPDF(
-                  'report-content',
+                  `/reports/session/${sessionId}/player/${playerId}/pdf`,
                   `report_sessione_${playerLastName}_${playerFirstName}_${sessionDate}.pdf`
                 )
                 setPdfLoading(false)

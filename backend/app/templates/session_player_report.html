@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  color: #1f2937;
+  background: white;
+  padding: 18px 22px;
+}
+
+.header {
+  border-bottom: 3px solid #7c1f1f;
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+.header-left h1 { font-size: 18px; font-weight: 700; color: #7c1f1f; }
+.header-left .sub { color: #6b7280; font-size: 10px; margin-top: 3px; }
+.header-right { font-size: 9px; color: #9ca3af; text-align: right; }
+.brand { font-weight: 700; color: #7c1f1f; }
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.metric-box {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 7px 6px;
+  text-align: center;
+}
+.metric-box.good { background: #f0fdf4; border-color: #86efac; }
+.metric-box.mid  { background: #fefce8; border-color: #fde047; }
+.metric-box.bad  { background: #fef2f2; border-color: #fca5a5; }
+.metric-box.neutral, .metric-box.null { background: #f9fafb; border-color: #e5e7eb; }
+.metric-box .abbrev { font-size: 9px; font-weight: 700; color: #6b7280; letter-spacing: 0.4px; }
+.metric-box .score { font-size: 20px; font-weight: 800; margin: 1px 0; line-height: 1.1; }
+.metric-box.good .score { color: #16a34a; }
+.metric-box.mid  .score { color: #ca8a04; }
+.metric-box.bad  .score { color: #dc2626; }
+.metric-box.neutral .score, .metric-box.null .score { color: #9ca3af; }
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+  margin: 14px 0 7px;
+  border-left: 3px solid #7c1f1f;
+  padding-left: 7px;
+}
+
+table { width: 100%; border-collapse: collapse; font-size: 10px; }
+th {
+  background: #f3f4f6;
+  padding: 5px 7px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #d1d5db;
+}
+th.center, td.center { text-align: center; }
+td { padding: 3.5px 7px; border-bottom: 1px solid #f3f4f6; }
+tr:last-child td { border-bottom: none; }
+
+.td-good { background: #f0fdf4; color: #166534; font-weight: 600; }
+.td-mid  { background: #fefce8; color: #854d0e; font-weight: 600; }
+.td-bad  { background: #fef2f2; color: #991b1b; font-weight: 600; }
+.td-neutral, .td-null { color: #d1d5db; }
+
+.rank-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 11px;
+}
+.rank-top  { background: #dcfce7; color: #166534; }
+.rank-mid  { background: #dbeafe; color: #1d4ed8; }
+.rank-low  { background: #fef3c7; color: #92400e; }
+.rank-bot  { background: #fee2e2; color: #991b1b; }
+
+.footer {
+  margin-top: 18px;
+  padding-top: 6px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 9px;
+  color: #9ca3af;
+  text-align: right;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>{{ player.first_name }} {{ player.last_name }}</h1>
+    <div class="sub">
+      {% if player.position %}{{ player.position }} · {% endif %}
+      {{ group_name }} ·
+      {{ format_date(session.session_date) }} · {{ session.session_type }}
+      {% if ranking %} · {{ ranking.rank }}°/{{ ranking.total }}{% endif %}
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="brand">ASC.D Torino Club</span><br>
+    Report Sessione Giocatore<br>
+    Generato il {{ generated_at }}
+  </div>
+</div>
+
+{% if measurement_absent %}
+<p style="color:#9ca3af;font-size:10px;margin:8px 0">Il giocatore era assente in questa sessione.</p>
+{% elif player_scores %}
+
+<!-- Player scores grid -->
+<div class="metrics-grid">
+  {% for s in player_scores %}
+  <div class="metric-box {{ s.cls }}">
+    <div class="abbrev">{{ s.abbrev }}</div>
+    <div class="score">
+      {% if s.value is not none %}{{ "%.1f"|format(s.value) }}{% else %}—{% endif %}
+    </div>
+    <div class="abbrev" style="font-weight:400;color:#9ca3af">questa sessione</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if ranking %}
+{% set pct = ranking.percentile %}
+{% if pct >= 75 %}{% set rcls = "rank-top" %}
+{% elif pct >= 50 %}{% set rcls = "rank-mid" %}
+{% elif pct >= 25 %}{% set rcls = "rank-low" %}
+{% else %}{% set rcls = "rank-bot" %}{% endif %}
+<p style="margin-bottom:14px;font-size:10px;color:#6b7280">
+  Ranking sessione:&nbsp;
+  <span class="rank-badge {{ rcls }}">{{ ranking.rank }}° / {{ ranking.total }}</span>
+  &nbsp;— {{ pct }}° percentile
+</p>
+{% endif %}
+
+<!-- Comparison table -->
+<div class="section-title">Confronto con media squadra</div>
+<table>
+  <thead>
+    <tr>
+      <th>Parametro</th>
+      <th class="center">Giocatore</th>
+      <th class="center">Media squadra</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in player_scores %}
+    <tr>
+      <td>{{ s.abbrev }} <span style="color:#9ca3af;font-weight:400">· {{ s.label }}</span></td>
+      <td class="center td-{{ s.cls }}">
+        {% if s.value is not none %}{{ "%.1f"|format(s.value) }}{% else %}—{% endif %}
+      </td>
+      <td class="center td-{{ s.avg_cls }}">
+        {% if s.avg_value is not none %}{{ "%.1f"|format(s.avg_value) }}{% else %}—{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% else %}
+<p style="color:#9ca3af;font-size:10px;margin:8px 0">Nessun dato cognitivo registrato per questa sessione.</p>
+{% endif %}
+
+<div class="footer">ASC.D Torino Club · {{ generated_at }}</div>
+</body>
+</html>

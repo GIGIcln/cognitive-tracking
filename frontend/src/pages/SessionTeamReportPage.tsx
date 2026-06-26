@@ -162,7 +162,7 @@ export default function SessionTeamReportPage() {
               onClick={async () => {
                 setPdfLoading(true)
                 await exportReportPDF(
-                  'report-content',
+                  `/reports/session/${sessionId}/team/pdf`,
                   `report_sessione_${groupName.replace(/\s/g, '_')}_${sessionDate}.pdf`
                 )
                 setPdfLoading(false)
