@@ -5,7 +5,7 @@ import { getSessions } from '../api/sessions'
 import { deletePlayer } from '../api/players'
 import PlayerFormModal from '../components/PlayerFormModal'
 import { Pencil, Trash2 } from 'lucide-react'
-import { LEVEL_COLORS, COGNITIVE_PARAMS } from '../constants/domain'
+import { LEVEL_COLORS, COGNITIVE_PARAMS, METRIC_COLORS_BY_TYPE } from '../constants/domain'
 import { useAuth } from '../context/AuthContext'
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -176,7 +176,7 @@ const COMPARISON_COLORS = [
   '#ec4899', '#6366f1',
 ]
 
-const HISTORY_COLORS = { SR: '#3b82f6', DQI: '#10b981', AI: '#f59e0b', TRS: '#8b5cf6', VCI: '#ef4444' }
+const HISTORY_COLORS = METRIC_COLORS_BY_TYPE
 
 function GroupHistoryChart({ history, loading }: { history: GroupHistoryItem[]; loading: boolean }) {
   if (loading) {
@@ -222,13 +222,7 @@ function GroupHistoryChart({ history, loading }: { history: GroupHistoryItem[]; 
     </div>
   )
 }
-const METRICS = [
-  { key: 'avg_sr',  label: 'SR'  },
-  { key: 'avg_dqi', label: 'DQI' },
-  { key: 'avg_ai',  label: 'AI'  },
-  { key: 'avg_trs', label: 'TRS' },
-  { key: 'avg_vci', label: 'VCI' },
-]
+const METRICS = COGNITIVE_PARAMS.map((p) => ({ key: p.avgKey, label: p.label }))
 
 function ComparisonView({ stats, loading, selected, onToggle }: {
   stats: PlayerStats[]

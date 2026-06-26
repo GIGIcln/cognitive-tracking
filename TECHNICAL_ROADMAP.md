@@ -44,8 +44,8 @@ _File:_ `backend/app/services/session_service.py`
 
 ### 🟡 Media Priorità
 
-**[TD-05] Frontend senza TypeScript**  
-Tutto il frontend è in `.jsx`/`.js`. La logica di `reportUtils.js`, `domain.js` e le strutture dei dati API non sono tipizzate. Errori di forma (typo nei `field` names dei `COGNITIVE_PARAMS`) non vengono rilevati a compile-time.
+**~~[TD-05] Frontend senza TypeScript~~** ✅ Risolto con OL-03  
+Migrazione TypeScript completa (PR #2, 2026-06-26): tutti i file `*.jsx`/`*.js` convertiti in `*.tsx`/`*.ts`. Tipi centralizzati in `types/api.ts`. `tsc --noEmit` → 0 errori in strict mode.
 
 **[TD-06] Gestione stato globale assente (oltre all'auth)**  
 Non esiste uno store globale (Redux, Zustand, React Query). Ogni pagina fa fetch indipendente degli stessi dati (es. lista gruppi recuperata sia in `GroupsPage` che in `SessionsPage`). Nessuna cache, nessun `stale-while-revalidate`.
@@ -56,9 +56,9 @@ Non esiste uno store globale (Redux, Zustand, React Query). Ogni pagina fa fetch
 **~~[TD-08] Rate limiting non applicato ai router~~** ✅ Risolto  
 `@limiter.limit("5/minute")` applicato su `/auth/login`; `60/minute` su list endpoint players e sessions; `120/minute` su endpoints di scrittura. Brute-force protetto.
 
-**[TD-11] Definizioni delle metriche sparse in 5+ sorgenti**  
-Le 5 metriche cognitive (SR, DQI, AI, TRS, VCI) sono definite in modo ridondante in: `frontend/src/constants/domain.js` (`COGNITIVE_PARAMS` + `METRIC_EVENT_CONFIG`), `PlayerDetailPage.jsx`, `GroupDetailPage.jsx`, `exportUtils.js` (due definizioni inline distinte), e `backend/app/services/observation_service.py` (`_METRIC_MIN_N`, `_METRIC_TO_FIELD`). Un cambio di etichetta o soglia richiede aggiornamenti in ≥5 file senza garanzie di coerenza.  
-_File:_ `frontend/src/constants/domain.js`, `frontend/src/pages/{Player,Group}DetailPage.jsx`, `frontend/src/utils/exportUtils.js`, `backend/app/services/observation_service.py`
+**~~[TD-11] Definizioni delle metriche sparse in 5+ sorgenti~~** ✅ Risolto  
+`domain.ts` è ora la fonte unica: aggiunte `METRIC_COLORS`, `METRIC_COLORS_BY_TYPE`, `METRIC_LABEL_MAP` derivate da `COGNITIVE_PARAMS`. Rimossi: `METRIC_COLORS` inline da `PlayerDetailPage`, `HISTORY_COLORS` e `METRICS` inline da `GroupDetailPage`, `TEAM_FIELD_KEYS` hardcoded da `SessionTeamReportPage` e `TeamReportPage`, `PLAYER_FIELD_KEYS` hardcoded da `PlayerReportPage`, entrambe le `paramLabels` inline da `exportUtils`. `tsc --noEmit` → 0 errori.  
+_File:_ `frontend/src/constants/domain.ts`
 
 **~~[TD-12] Reliability preview SR disallineata tra frontend e backend~~** ✅ Risolto con OL-09  
 `deriveSRReliability(n)` aggiunta in `domain.ts`; `useSessionForm.ts` usa `COUNT(righe valide)` come n per SR in tutti e tre i callback di reliability, escludendo SR da `deriveReliability()` (che usava denominator). Soglie 3/6/12 allineate al backend (`min_n=6`, `half=3`, `medium=min_n*2=12`).  
@@ -125,14 +125,10 @@ Sblocca: più connessioni concorrenti con meno thread, migliore utilizzo delle r
 
 Vedi GS-01 nella sezione Gestionale Sportivo qui sotto.
 
-### OL-03 — Frontend TypeScript
+### ~~OL-03 — Frontend TypeScript~~ ✅ Completato
 
-Migrare `*.jsx`/`*.js` a `*.tsx`/`*.ts`. Priorità:
-1. `constants/domain.js` → tipi per `CognitiveParam`, `MetricEventConfig`
-2. `utils/reportUtils.js` → tipi per `Measurement`, `Target`, `History`
-3. `api/*.js` → tipi request/response allineati agli schema Pydantic
-
-Riduce i bug di runtime causati da typo nei field name delle strutture dati.
+Migrazione TypeScript completa (PR #2, mergiata 2026-06-26): tutti i file `*.jsx`/`*.js` convertiti in `*.tsx`/`*.ts`. Tipi centralizzati in `types/api.ts`; pattern per `useState`, `useParams`, accesso dinamico su oggetti e Recharts documentati. `tsc --noEmit` → 0 errori in strict mode.  
+_File:_ `frontend/src/types/api.ts`, `frontend/src/constants/domain.ts`
 
 ### OL-04 — Gestione stato globale con React Query (TanStack Query)
 
@@ -243,37 +239,27 @@ Dipende da: GS-01. Implementato insieme a GS-01.
 
 ---
 
-### GS-03 — Anagrafica Giocatore Estesa
+### ~~GS-03 — Anagrafica Giocatore Estesa~~ ✅ Completato
 
-Dipende da: nessuno (aggiunta campi al modello `Player` esistente).
-
-Nuovi campi su `Player`: data di nascita, nazionalità, ruolo tattico, piede preferito, numero di maglia, tessera federale, note mediche (opzionale). La scheda giocatore nel frontend diventa una pagina con **tab**: `[Anagrafica]  [Cognitivo]  [Presenze]  [Partite]  [Infortuni]`.
+Campi aggiunti su `Player`: data di nascita, nazionalità, ruolo tattico, piede preferito, numero di maglia, tessera federale, note mediche. Scheda giocatore nel frontend con tab `[Anagrafica]  [Cognitivo]  [Presenze]  [Partite]  [Infortuni]`.
 
 ---
 
-### GS-04 — Modulo Presenze
+### ~~GS-04 — Modulo Presenze~~ ✅ Completato
 
-Dipende da: nessuno (nuova tabella).
-
-Nuova tabella `attendance`: (session_id, player_id, status: `present|absent|justified|injured`, note). Integrata dentro la `SessionDetailPage` (allenamento) come prima tab prima dell'inserimento cognitivo.
-
-Report presenze: statistiche per giocatore (% partecipazione stagionale), accessibili dalla sezione Allenamenti.
+Tabella `attendance` (session_id, player_id, status: `present|absent|justified|injured`, note) integrata in `SessionDetailPage`. Report presenze con % partecipazione stagionale per giocatore nella sezione Allenamenti.
 
 ---
 
-### GS-05 — Modulo Partite
+### ~~GS-05 — Modulo Partite~~ ✅ Completato
 
-Dipende da: GS-03 (anagrafica per formazioni).
-
-Nuova tabella `match`: (group_id, season_id, date, opponent, home_away, score_home, score_away, notes). Tabella `match_lineup`: (match_id, player_id, minutes_played, position). Sezione **Partite** nella nav con calendario gare, inserimento risultati, formazione schierata. Report partite interno alla sezione.
+Tabelle `match` e `match_lineup` (minutaggi, posizioni). Sezione Partite nella nav: calendario gare, risultati, formazioni, report interno.
 
 ---
 
-### GS-06 — Impostazioni Gruppo (Allenatore)
+### ~~GS-06 — Impostazioni Gruppo (Allenatore)~~ ✅ Completato
 
-Dipende da: GS-01 (per accesso ruolo-specifico alle impostazioni).
-
-Sezione `/impostazioni` per allenatore: giorni di allenamento della settimana, orario, luogo. Dati salvati su tabella `group_settings` (group_id, training_days[], training_time, location). Usati come default nella creazione di nuove sessioni.
+Sezione `/impostazioni` per allenatore con giorni di allenamento, orario, luogo (`group_settings`). Gate modalità punteggio integrato in `SessionDetailPage`.
 
 ---
 

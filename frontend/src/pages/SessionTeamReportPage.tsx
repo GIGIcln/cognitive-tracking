@@ -20,7 +20,7 @@ import { useSessionTeamReport } from '../hooks/useSessionTeamReport'
 import type { Target } from '../types/api'
 
 const PARAMS = COGNITIVE_PARAMS
-const TEAM_FIELD_KEYS = ['avg_sr', 'avg_dqi', 'avg_ai', 'avg_trs', 'avg_vci']
+const TEAM_FIELD_KEYS = COGNITIVE_PARAMS.map((p) => p.avgKey)
 
 function cellClass(val: number | null | undefined, target: Target | null | undefined) {
   if (val == null || !target) return 'text-gray-400'

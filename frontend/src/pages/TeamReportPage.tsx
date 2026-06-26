@@ -21,7 +21,7 @@ import { LINE_COLORS, generateComment } from '../utils/reportUtils'
 import { useTeamReport } from '../hooks/useTeamReport'
 
 const PARAMS = COGNITIVE_PARAMS
-const TEAM_FIELD_KEYS = ['avg_sr', 'avg_dqi', 'avg_ai', 'avg_trs', 'avg_vci']
+const TEAM_FIELD_KEYS = COGNITIVE_PARAMS.map((p) => p.avgKey)
 
 import type { Target, GroupHistoryItem } from '../types/api'
 

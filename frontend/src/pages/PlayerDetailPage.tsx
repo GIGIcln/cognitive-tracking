@@ -6,17 +6,10 @@ import {
 } from 'recharts'
 import { getPlayer, getPlayerHistory, getPlayerAssignments, getPlayerStreak } from '../api/players'
 import { listInjuries, createInjury, updateInjury, deleteInjury } from '../api/injuries'
-import { COGNITIVE_PARAMS } from '../constants/domain'
+import { COGNITIVE_PARAMS, METRIC_COLORS } from '../constants/domain'
 import AvailabilityBadge from '../components/AvailabilityBadge'
 import type { Player, PlayerAssignment, PlayerHistoryItem, InjuryLog } from '../types/api'
 
-const METRIC_COLORS: Record<string, string> = {
-  scanning_rate:    '#8b5cf6',
-  decision_quality: '#3b82f6',
-  anticipation:     '#10b981',
-  transition_reset: '#f59e0b',
-  verbal_comm:      '#ef4444',
-}
 const METRICS = COGNITIVE_PARAMS.map((p) => ({ key: p.field, label: p.label, color: METRIC_COLORS[p.field] }))
 
 function fmt(d: string) {

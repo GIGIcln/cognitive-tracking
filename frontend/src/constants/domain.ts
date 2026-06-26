@@ -110,6 +110,22 @@ export const FIELD_TO_METRIC = Object.fromEntries(
   COGNITIVE_PARAMS.map(({ field, label }) => [field, label])
 ) as Record<MetricField, MetricType>
 
+export const METRIC_COLORS: Record<MetricField, string> = {
+  scanning_rate:    '#8b5cf6',
+  decision_quality: '#3b82f6',
+  anticipation:     '#10b981',
+  transition_reset: '#f59e0b',
+  verbal_comm:      '#ef4444',
+}
+
+export const METRIC_COLORS_BY_TYPE: Record<MetricType, string> = Object.fromEntries(
+  COGNITIVE_PARAMS.map(({ field, label }) => [label, METRIC_COLORS[field]])
+) as Record<MetricType, string>
+
+export const METRIC_LABEL_MAP: Record<MetricType, string> = Object.fromEntries(
+  COGNITIVE_PARAMS.map(({ label, italianLabel }) => [label, italianLabel])
+) as Record<MetricType, string>
+
 export const RELIABILITY_META: Record<ReliabilityLevel, ReliabilityMeta> = {
   insufficient: { label: 'Dati insufficienti', color: 'text-red-500',    bg: 'bg-red-50'    },
   low:          { label: 'Affid. bassa',        color: 'text-orange-500', bg: 'bg-orange-50' },

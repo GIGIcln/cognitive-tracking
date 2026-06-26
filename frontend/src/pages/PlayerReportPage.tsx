@@ -27,7 +27,7 @@ import { LINE_COLORS, generateComment, linearRegression } from '../utils/reportU
 import { usePlayerReport } from '../hooks/usePlayerReport'
 
 const PARAMS = COGNITIVE_PARAMS
-const PLAYER_FIELD_KEYS = ['scanning_rate', 'decision_quality', 'anticipation', 'transition_reset', 'verbal_comm']
+const PLAYER_FIELD_KEYS = COGNITIVE_PARAMS.map((p) => p.field)
 
 function RankBadge({ ranking }: { ranking: { rank: number; total: number; percentile: number } | null | undefined }) {
   if (!ranking || ranking.total < 2) return null

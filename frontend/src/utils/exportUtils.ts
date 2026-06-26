@@ -1,5 +1,5 @@
 import api from '../api/axios'
-import { COGNITIVE_PARAMS } from '../constants/domain'
+import { COGNITIVE_PARAMS, METRIC_LABEL_MAP } from '../constants/domain'
 import type { GroupTarget } from './reportUtils'
 import type { PlayerHistoryItem } from '../types/api'
 
@@ -121,11 +121,6 @@ export function exportSessionTeamCSV(
   averages: SessionAverages | null | undefined,
   targets: GroupTarget[],
 ): void {
-  const paramLabels: Record<string, string> = {
-    SR: 'Scanning Rate', DQI: 'Decision Quality',
-    AI: 'Anticipazione', TRS: 'Trans. Reset', VCI: 'Comunicazione',
-  }
-
   const sessionDate = session?.session_date ? new Date(session.session_date).toLocaleDateString('it-IT') : ''
 
   const rankHeaders = ['Pos.', 'Giocatore', 'SR', 'DQI', 'AI', 'TRS', 'VCI', 'Media']
@@ -152,7 +147,7 @@ export function exportSessionTeamCSV(
     : null
 
   const targetHeaders = ['Parametro', 'Max Insufficiente', 'Min Ottimo']
-  const targetRows = targets.map((t) => [paramLabels[t.parameter] ?? t.parameter, t.insufficient_max, t.ottimo_min])
+  const targetRows = targets.map((t) => [METRIC_LABEL_MAP[t.parameter as keyof typeof METRIC_LABEL_MAP] ?? t.parameter, t.insufficient_max, t.ottimo_min])
 
   const sections: (string | number | null | undefined)[][] = [
     [`REPORT SESSIONE — ${groupName}`],
@@ -251,12 +246,8 @@ export function exportTeamCSV(
   ])
 
   const targetHeaders = ['Parametro', 'Max Insufficiente', 'Min Ottimo']
-  const paramLabels: Record<string, string> = {
-    SR: 'Scanning Rate', DQI: 'Decision Quality',
-    AI: 'Anticipazione', TRS: 'Trans. Reset', VCI: 'Comunicazione',
-  }
   const targetRows = targets.map((t) => [
-    paramLabels[t.parameter] ?? t.parameter,
+    METRIC_LABEL_MAP[t.parameter as keyof typeof METRIC_LABEL_MAP] ?? t.parameter,
     t.insufficient_max,
     t.ottimo_min,
   ])
