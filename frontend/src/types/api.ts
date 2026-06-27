@@ -168,6 +168,16 @@ export interface MatchLineup {
   notes: string | null
 }
 
+export interface Scorer {
+  player_id: string
+  first_name: string
+  last_name: string
+  goals: number
+  assists: number
+  matches_played: number
+  minutes_played: number
+}
+
 export interface PlayerMatchItem {
   match_id: string
   match_date: string

@@ -16,6 +16,7 @@ from app.schemas.match import (
     MatchLineupResponse,
     MatchResponse,
     MatchUpdate,
+    ScorerResponse,
 )
 from app.services.match_service import MatchService
 
@@ -63,6 +64,23 @@ async def create_match(
     assert_write_access(current_user, body.group_id)
     match = await MatchService(db).create(body)
     return MatchResponse.model_validate(match)
+
+
+@router.get("/scorers", response_model=list[ScorerResponse])
+async def get_scorers(
+    group_id: uuid.UUID | None = Query(default=None),
+    season_id: uuid.UUID | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    if group_id:
+        assert_group_access(current_user, group_id)
+    scope = current_user.read_scope()
+    return await MatchService(db).get_scorers(
+        group_id=group_id,
+        season_id=season_id,
+        allowed_group_ids=scope,
+    )
 
 
 @router.get("/{match_id}", response_model=MatchDetailResponse)

@@ -109,6 +109,16 @@ class MatchUpdate(BaseModel):
         return v
 
 
+class ScorerResponse(BaseModel):
+    player_id: uuid.UUID
+    first_name: str
+    last_name: str
+    goals: int
+    assists: int
+    matches_played: int
+    minutes_played: int
+
+
 class MatchConvocationBatch(BaseModel):
     player_ids: list[uuid.UUID]
 

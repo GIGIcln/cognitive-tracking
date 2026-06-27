@@ -21,6 +21,9 @@ export const deleteMatch = (id: string) =>
 export const getPlayerMatches = (playerId: string) =>
   axios.get(`/players/${playerId}/matches`)
 
+export const getScorers = (params: Record<string, string> = {}) =>
+  axios.get('/matches/scorers', { params })
+
 export const getConvocations = (matchId: string) =>
   axios.get(`/matches/${matchId}/convocations`)
 

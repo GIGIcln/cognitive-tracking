@@ -6,8 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from sqlalchemy import func
+
 from app.models.match import Match, MatchConvocation, MatchLineup
-from app.schemas.match import MatchCreate, MatchLineupItem, MatchUpdate, PlayerMatchItemResponse
+from app.models.player import Player
+from app.schemas.match import MatchCreate, MatchLineupItem, MatchUpdate, PlayerMatchItemResponse, ScorerResponse
 
 
 class MatchService:
@@ -78,6 +81,50 @@ class MatchService:
             self.db.add(MatchLineup(match_id=match_id, **item.model_dump()))
         await self.db.commit()
         return await self.get(match_id)
+
+    async def get_scorers(
+        self,
+        group_id: uuid.UUID | None = None,
+        season_id: uuid.UUID | None = None,
+        allowed_group_ids: set[uuid.UUID] | None = None,
+    ) -> list[ScorerResponse]:
+        q = (
+            select(
+                Player.id.label("player_id"),
+                Player.first_name,
+                Player.last_name,
+                func.coalesce(func.sum(MatchLineup.goals), 0).label("goals"),
+                func.coalesce(func.sum(MatchLineup.assists), 0).label("assists"),
+                func.count(MatchLineup.match_id).label("matches_played"),
+                func.coalesce(func.sum(MatchLineup.minutes_played), 0).label("minutes_played"),
+            )
+            .join(MatchLineup, MatchLineup.player_id == Player.id)
+            .join(Match, Match.id == MatchLineup.match_id)
+        )
+        if group_id:
+            q = q.where(Match.group_id == group_id)
+        if season_id:
+            q = q.where(Match.season_id == season_id)
+        if allowed_group_ids is not None:
+            q = q.where(Match.group_id.in_(allowed_group_ids))
+        q = (
+            q.group_by(Player.id, Player.first_name, Player.last_name)
+            .having(func.coalesce(func.sum(MatchLineup.goals), 0) > 0)
+            .order_by(func.coalesce(func.sum(MatchLineup.goals), 0).desc())
+        )
+        result = await self.db.execute(q)
+        return [
+            ScorerResponse(
+                player_id=row.player_id,
+                first_name=row.first_name,
+                last_name=row.last_name,
+                goals=row.goals,
+                assists=row.assists,
+                matches_played=row.matches_played,
+                minutes_played=row.minutes_played,
+            )
+            for row in result.all()
+        ]
 
     async def get_convocations(self, match_id: uuid.UUID) -> list[uuid.UUID]:
         result = await self.db.execute(
