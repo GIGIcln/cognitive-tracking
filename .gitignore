@@ -45,6 +45,7 @@ alembic/versions/*.pyc
 .env
 .env.*
 !.env.example
+!.env.production.example
 users.json
 
 # ── AI Tools (local config, worktrees) ───────────────────────
