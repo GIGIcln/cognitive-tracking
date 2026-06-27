@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getMatch, saveLineup, deleteMatch } from '../api/matches'
+import { getMatch, saveLineup, deleteMatch, getConvocations, saveConvocations } from '../api/matches'
 import { getPlayers } from '../api/players'
 import MatchFormModal from '../components/MatchFormModal'
 import { useAuth } from '../context/AuthContext'
@@ -56,6 +56,11 @@ export default function MatchDetailPage() {
   const [savingLineup, setSavingLineup] = useState(false)
   const [lineupOk, setLineupOk] = useState(false)
 
+  // convocations state
+  const [convocated, setConvocated] = useState<Set<string>>(new Set())
+  const [savingConv, setSavingConv] = useState(false)
+  const [convOk, setConvOk] = useState(false)
+
   const load = useCallback(() => {
     setLoading(true)
     getMatch(id!)
@@ -77,9 +82,15 @@ export default function MatchDetailPage() {
           }
         }
         setLineup(initial)
-        return getPlayers(m.group_id)
+        return Promise.all([
+          getPlayers(m.group_id),
+          getConvocations(id!),
+        ])
       })
-      .then((res) => setPlayers((res.data?.items ?? res.data ?? []) as Player[]))
+      .then(([playersRes, convRes]) => {
+        setPlayers((playersRes.data?.items ?? playersRes.data ?? []) as Player[])
+        setConvocated(new Set((convRes.data as string[]) ?? []))
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [id])
@@ -105,6 +116,29 @@ export default function MatchDetailPage() {
       [playerId]: { ...prev[playerId], [field]: value },
     }))
     setLineupOk(false)
+  }
+
+  const toggleConvocated = (playerId: string) => {
+    setConvocated((prev) => {
+      const next = new Set(prev)
+      if (next.has(playerId)) next.delete(playerId)
+      else next.add(playerId)
+      return next
+    })
+    setConvOk(false)
+  }
+
+  const handleSaveConvocations = async () => {
+    setSavingConv(true)
+    try {
+      await saveConvocations(id!, Array.from(convocated))
+      setConvOk(true)
+      setTimeout(() => setConvOk(false), 2500)
+    } catch {
+      /* noop */
+    } finally {
+      setSavingConv(false)
+    }
   }
 
   const handleSaveLineup = async () => {
@@ -176,6 +210,7 @@ export default function MatchDetailPage() {
       <div className="flex border-b border-gray-200 mb-5">
         {[
           { key: 'info', label: 'Risultato' },
+          { key: 'convocations', label: `Convocati${convocated.size ? ` (${convocated.size})` : ''}` },
           { key: 'lineup', label: `Formazione${playedCount ? ` (${playedCount})` : ''}` },
         ].map(({ key, label }) => (
           <button
@@ -229,6 +264,62 @@ export default function MatchDetailPage() {
                 </div>
               )}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Convocations tab */}
+      {activeTab === 'convocations' && (
+        <div className="space-y-3">
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {players
+              .slice()
+              .sort((a, b) => {
+                const aConv = convocated.has(a.id) ? 0 : 1
+                const bConv = convocated.has(b.id) ? 0 : 1
+                return aConv - bConv || `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`)
+              })
+              .map((p) => {
+                const isConv = convocated.has(p.id)
+                return (
+                  <div key={p.id} className={`flex items-center justify-between px-4 py-3 transition-colors ${isConv ? '' : 'opacity-50'}`}>
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium text-gray-900">{p.last_name} {p.first_name}</span>
+                      {p.position && <span className="text-xs text-gray-400 ml-2">{p.position}</span>}
+                      {p.availability && p.availability !== 'disponibile' && (
+                        <span className="ml-2 text-xs text-red-500">({p.availability})</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => !isStaff && toggleConvocated(p.id)}
+                      disabled={isStaff}
+                      className={`shrink-0 text-xs px-3 py-1 rounded-full font-semibold border transition-colors ${
+                        isConv
+                          ? 'bg-granata text-white border-granata'
+                          : 'bg-white text-gray-500 border-gray-300 hover:border-granata/40'
+                      }`}
+                    >
+                      {isConv ? 'Convocato' : 'Non convocato'}
+                    </button>
+                  </div>
+                )
+              })}
+          </div>
+
+          {!players.length && (
+            <div className="text-center text-gray-400 text-sm py-8">Nessun giocatore nel gruppo</div>
+          )}
+
+          {!isStaff && (
+            <button
+              onClick={handleSaveConvocations}
+              disabled={savingConv || !players.length}
+              className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors ${
+                convOk ? 'bg-green-600 text-white' : 'bg-granata text-white disabled:opacity-50'
+              }`}
+            >
+              {savingConv ? 'Salvataggio…' : convOk ? 'Convocati salvati ✓' : 'Salva convocati'}
+            </button>
           )}
         </div>
       )}

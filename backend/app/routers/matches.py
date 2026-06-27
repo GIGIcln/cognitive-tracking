@@ -9,6 +9,7 @@ from app.database import get_db
 from app.rbac import assert_group_access, assert_write_access, require_admin, require_auth
 from app.schemas.auth import UserContext
 from app.schemas.match import (
+    MatchConvocationBatch,
     MatchCreate,
     MatchDetailResponse,
     MatchLineupBatch,
@@ -107,6 +108,35 @@ async def upsert_lineup(
     assert_write_access(current_user, existing.group_id)
     match = await svc.upsert_lineup(match_id, body.lineups)
     return _to_detail(match)
+
+
+@router.get("/{match_id}/convocations", response_model=list[uuid.UUID])
+async def get_convocations(
+    match_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    svc = MatchService(db)
+    existing = await svc.get(match_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Partita non trovata")
+    assert_group_access(current_user, existing.group_id)
+    return await svc.get_convocations(match_id)
+
+
+@router.put("/{match_id}/convocations", response_model=list[uuid.UUID])
+async def upsert_convocations(
+    match_id: uuid.UUID,
+    body: MatchConvocationBatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    svc = MatchService(db)
+    existing = await svc.get(match_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Partita non trovata")
+    assert_write_access(current_user, existing.group_id)
+    return await svc.upsert_convocations(match_id, body.player_ids)
 
 
 @router.delete("/{match_id}", status_code=status.HTTP_204_NO_CONTENT)

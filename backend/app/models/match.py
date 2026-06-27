@@ -46,6 +46,9 @@ class Match(Base):
     lineups: Mapped[list[MatchLineup]] = relationship(
         "MatchLineup", back_populates="match", cascade="all, delete-orphan"
     )
+    convocations: Mapped[list[MatchConvocation]] = relationship(
+        "MatchConvocation", back_populates="match", cascade="all, delete-orphan"
+    )
 
 
 class MatchLineup(Base):
@@ -68,4 +71,19 @@ class MatchLineup(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     match: Mapped[Match] = relationship("Match", back_populates="lineups")
+    player: Mapped[Player] = relationship("Player")
+
+
+class MatchConvocation(Base):
+    __tablename__ = "match_convocations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    match_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("matches.id", ondelete="CASCADE"), nullable=False
+    )
+    player_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("players.id", ondelete="CASCADE"), nullable=False
+    )
+
+    match: Mapped[Match] = relationship("Match", back_populates="convocations")
     player: Mapped[Player] = relationship("Player")

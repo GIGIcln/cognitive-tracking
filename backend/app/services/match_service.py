@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.models.match import Match, MatchLineup
+from app.models.match import Match, MatchConvocation, MatchLineup
 from app.schemas.match import MatchCreate, MatchLineupItem, MatchUpdate, PlayerMatchItemResponse
 
 
@@ -78,6 +78,23 @@ class MatchService:
             self.db.add(MatchLineup(match_id=match_id, **item.model_dump()))
         await self.db.commit()
         return await self.get(match_id)
+
+    async def get_convocations(self, match_id: uuid.UUID) -> list[uuid.UUID]:
+        result = await self.db.execute(
+            select(MatchConvocation.player_id).where(MatchConvocation.match_id == match_id)
+        )
+        return list(result.scalars().all())
+
+    async def upsert_convocations(
+        self, match_id: uuid.UUID, player_ids: list[uuid.UUID]
+    ) -> list[uuid.UUID]:
+        await self.db.execute(
+            MatchConvocation.__table__.delete().where(MatchConvocation.match_id == match_id)
+        )
+        for pid in player_ids:
+            self.db.add(MatchConvocation(match_id=match_id, player_id=pid))
+        await self.db.commit()
+        return player_ids
 
     async def get_player_matches(
         self, player_id: uuid.UUID

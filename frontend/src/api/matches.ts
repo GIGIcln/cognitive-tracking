@@ -20,3 +20,9 @@ export const deleteMatch = (id: string) =>
 
 export const getPlayerMatches = (playerId: string) =>
   axios.get(`/players/${playerId}/matches`)
+
+export const getConvocations = (matchId: string) =>
+  axios.get(`/matches/${matchId}/convocations`)
+
+export const saveConvocations = (matchId: string, playerIds: string[]) =>
+  axios.put(`/matches/${matchId}/convocations`, { player_ids: playerIds })

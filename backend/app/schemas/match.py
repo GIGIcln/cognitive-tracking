@@ -109,6 +109,10 @@ class MatchUpdate(BaseModel):
         return v
 
 
+class MatchConvocationBatch(BaseModel):
+    player_ids: list[uuid.UUID]
+
+
 class MatchResponse(BaseModel):
     id: uuid.UUID
     group_id: uuid.UUID
