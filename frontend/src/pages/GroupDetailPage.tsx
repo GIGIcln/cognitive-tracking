@@ -532,7 +532,6 @@ export default function GroupDetailPage() {
       })
       .catch(() => {})
       .finally(() => setGroupMatchesLoading(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, id])
 
   const handleSaveTargets = async () => {
