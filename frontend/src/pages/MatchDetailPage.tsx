@@ -7,7 +7,17 @@ import { useAuth } from '../context/AuthContext'
 import { POSITIONS } from '../constants/domain'
 import type { MatchDetail, Player } from '../types/api'
 
-type LineupEntry = { played: boolean; minutes_played: string; position: string; notes: string }
+type LineupEntry = {
+  played: boolean
+  minutes_played: string
+  position: string
+  goals: string
+  assists: string
+  yellow_cards: string
+  red_cards: string
+  rating: string
+  notes: string
+}
 
 const HOME_AWAY_LABEL: Record<string, string> = { home: 'Casa', away: 'Trasferta', neutral: 'Neutro' }
 const MATCH_TYPE_LABEL: Record<string, string> = { campionato: 'Campionato', coppa: 'Coppa', amichevole: 'Amichevole' }
@@ -58,6 +68,11 @@ export default function MatchDetailPage() {
             played: true,
             minutes_played: lu.minutes_played != null ? String(lu.minutes_played) : '',
             position: lu.position ?? '',
+            goals: lu.goals != null ? String(lu.goals) : '',
+            assists: lu.assists != null ? String(lu.assists) : '',
+            yellow_cards: lu.yellow_cards != null ? String(lu.yellow_cards) : '',
+            red_cards: lu.red_cards != null ? String(lu.red_cards) : '',
+            rating: lu.rating != null ? String(lu.rating) : '',
             notes: lu.notes ?? '',
           }
         }
@@ -79,7 +94,7 @@ export default function MatchDetailPage() {
         delete next[playerId]
         return next
       }
-      return { ...prev, [playerId]: { played: true, minutes_played: '', position: '', notes: '' } }
+      return { ...prev, [playerId]: { played: true, minutes_played: '', position: '', goals: '', assists: '', yellow_cards: '', red_cards: '', rating: '', notes: '' } }
     })
     setLineupOk(false)
   }
@@ -101,6 +116,11 @@ export default function MatchDetailPage() {
           player_id,
           minutes_played: v.minutes_played !== '' ? parseInt(v.minutes_played) : null,
           position: v.position || null,
+          goals: v.goals !== '' ? parseInt(v.goals) : null,
+          assists: v.assists !== '' ? parseInt(v.assists) : null,
+          yellow_cards: v.yellow_cards !== '' ? parseInt(v.yellow_cards) : null,
+          red_cards: v.red_cards !== '' ? parseInt(v.red_cards) : null,
+          rating: v.rating !== '' ? parseFloat(v.rating) : null,
           notes: v.notes || null,
         }))
       await saveLineup(id!, lineups)
@@ -241,24 +261,56 @@ export default function MatchDetailPage() {
                   </div>
 
                   {isIn && (
-                    <div className="grid grid-cols-2 gap-2 mt-1">
-                      <input
-                        type="number" min="0" max="120"
-                        placeholder="Minuti"
-                        value={entry.minutes_played}
-                        onChange={(e) => !isStaff && setLineupField(p.id, 'minutes_played', e.target.value)}
-                        disabled={isStaff}
-                        className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-granata"
-                      />
-                      <select
-                        value={entry.position}
-                        onChange={(e) => !isStaff && setLineupField(p.id, 'position', e.target.value)}
-                        disabled={isStaff}
-                        className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-granata"
-                      >
-                        <option value="">Posizione</option>
-                        {POSITIONS.map((pos) => <option key={pos.value} value={pos.value}>{pos.label}</option>)}
-                      </select>
+                    <div className="space-y-2 mt-1">
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number" min="0" max="120"
+                          placeholder="Minuti"
+                          value={entry.minutes_played}
+                          onChange={(e) => !isStaff && setLineupField(p.id, 'minutes_played', e.target.value)}
+                          disabled={isStaff}
+                          className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-granata"
+                        />
+                        <select
+                          value={entry.position}
+                          onChange={(e) => !isStaff && setLineupField(p.id, 'position', e.target.value)}
+                          disabled={isStaff}
+                          className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-granata"
+                        >
+                          <option value="">Posizione</option>
+                          {POSITIONS.map((pos) => <option key={pos.value} value={pos.value}>{pos.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { field: 'goals' as const, label: 'Gol', emoji: '⚽' },
+                          { field: 'assists' as const, label: 'Assist', emoji: '🅰' },
+                          { field: 'yellow_cards' as const, label: 'GG', emoji: '🟨' },
+                          { field: 'red_cards' as const, label: 'GR', emoji: '🟥' },
+                        ].map(({ field, label, emoji }) => (
+                          <div key={field} className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs select-none">{emoji}</span>
+                            <input
+                              type="number" min="0" max="20"
+                              placeholder={label}
+                              value={entry[field]}
+                              onChange={(e) => !isStaff && setLineupField(p.id, field, e.target.value)}
+                              disabled={isStaff}
+                              className="w-full border border-gray-200 rounded-lg pl-6 pr-1 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-granata"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <input
+                          type="number" min="1" max="10" step="0.5"
+                          placeholder="Voto (es. 7.5)"
+                          value={entry.rating}
+                          onChange={(e) => !isStaff && setLineupField(p.id, 'rating', e.target.value)}
+                          disabled={isStaff}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-granata"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

@@ -17,3 +17,6 @@ export const saveLineup = (id: string, lineups: unknown[]) =>
 
 export const deleteMatch = (id: string) =>
   axios.delete(`/matches/${id}`)
+
+export const getPlayerMatches = (playerId: string) =>
+  axios.get(`/players/${playerId}/matches`)

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.models.match import Match, MatchLineup
-from app.schemas.match import MatchCreate, MatchLineupItem, MatchUpdate
+from app.schemas.match import MatchCreate, MatchLineupItem, MatchUpdate, PlayerMatchItemResponse
 
 
 class MatchService:
@@ -78,3 +78,33 @@ class MatchService:
             self.db.add(MatchLineup(match_id=match_id, **item.model_dump()))
         await self.db.commit()
         return await self.get(match_id)
+
+    async def get_player_matches(
+        self, player_id: uuid.UUID
+    ) -> list[PlayerMatchItemResponse]:
+        result = await self.db.execute(
+            select(Match, MatchLineup)
+            .join(MatchLineup, MatchLineup.match_id == Match.id)
+            .where(MatchLineup.player_id == player_id)
+            .order_by(Match.match_date.desc())
+        )
+        rows = result.all()
+        return [
+            PlayerMatchItemResponse(
+                match_id=match.id,
+                match_date=match.match_date,
+                opponent=match.opponent,
+                home_away=match.home_away,
+                match_type=match.match_type,
+                score_home=match.score_home,
+                score_away=match.score_away,
+                minutes_played=lu.minutes_played,
+                position=lu.position,
+                goals=lu.goals,
+                assists=lu.assists,
+                yellow_cards=lu.yellow_cards,
+                red_cards=lu.red_cards,
+                rating=float(lu.rating) if lu.rating is not None else None,
+            )
+            for match, lu in rows
+        ]

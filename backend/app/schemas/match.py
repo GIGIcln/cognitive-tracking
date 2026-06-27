@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-
 from pydantic import BaseModel, field_validator
 
 VALID_HOME_AWAY = frozenset({"home", "away", "neutral"})
@@ -13,6 +12,11 @@ class MatchLineupItem(BaseModel):
     player_id: uuid.UUID
     minutes_played: int | None = None
     position: str | None = None
+    goals: int | None = None
+    assists: int | None = None
+    yellow_cards: int | None = None
+    red_cards: int | None = None
+    rating: float | None = None
     notes: str | None = None
 
 
@@ -26,7 +30,31 @@ class MatchLineupResponse(BaseModel):
     player_last_name: str
     minutes_played: int | None
     position: str | None
+    goals: int | None
+    assists: int | None
+    yellow_cards: int | None
+    red_cards: int | None
+    rating: float | None
     notes: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class PlayerMatchItemResponse(BaseModel):
+    match_id: uuid.UUID
+    match_date: date
+    opponent: str
+    home_away: str
+    match_type: str
+    score_home: int | None
+    score_away: int | None
+    minutes_played: int | None
+    position: str | None
+    goals: int | None
+    assists: int | None
+    yellow_cards: int | None
+    red_cards: int | None
+    rating: float | None
 
     model_config = {"from_attributes": True}
 

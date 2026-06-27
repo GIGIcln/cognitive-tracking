@@ -160,7 +160,29 @@ export interface MatchLineup {
   player_last_name: string
   minutes_played: number | null
   position: string | null
+  goals: number | null
+  assists: number | null
+  yellow_cards: number | null
+  red_cards: number | null
+  rating: number | null
   notes: string | null
+}
+
+export interface PlayerMatchItem {
+  match_id: string
+  match_date: string
+  opponent: string
+  home_away: string
+  match_type: string
+  score_home: number | null
+  score_away: number | null
+  minutes_played: number | null
+  position: string | null
+  goals: number | null
+  assists: number | null
+  yellow_cards: number | null
+  red_cards: number | null
+  rating: number | null
 }
 
 export interface MatchDetail extends Match {

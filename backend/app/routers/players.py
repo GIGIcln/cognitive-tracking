@@ -12,8 +12,10 @@ from app.models.player import Player
 from app.rbac import assert_group_access, require_admin, require_auth
 from app.schemas.auth import UserContext
 from app.schemas.pagination import Page
+from app.schemas.match import PlayerMatchItemResponse
 from app.schemas.player import AssignRequest, BulkAssignRequest, PlayerAssignmentResponse, PlayerCreate, PlayerHistoryItemResponse, PlayerResponse, PlayerUpdate
 from app.services.injury_service import InjuryService
+from app.services.match_service import MatchService
 from app.services.player_service import PlayerService
 
 router = APIRouter(prefix="/players", tags=["players"])
@@ -124,6 +126,19 @@ async def get_player_history(
     if scope is not None and await svc.get_with_group(player_id, allowed_group_ids=scope) is None:
         raise HTTPException(status_code=404, detail="Giocatore non trovato")
     return await svc.get_history(player_id, skip=skip, limit=limit, allowed_group_ids=scope)
+
+
+@router.get("/{player_id}/matches", response_model=list[PlayerMatchItemResponse])
+async def get_player_matches(
+    player_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    scope = current_user.read_scope()
+    svc = PlayerService(db)
+    if scope is not None and await svc.get_with_group(player_id, allowed_group_ids=scope) is None:
+        raise HTTPException(status_code=404, detail="Giocatore non trovato")
+    return await MatchService(db).get_player_matches(player_id)
 
 
 @router.post("", response_model=PlayerResponse, status_code=status.HTTP_201_CREATED)

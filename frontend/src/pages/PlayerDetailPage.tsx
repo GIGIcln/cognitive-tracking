@@ -6,9 +6,10 @@ import {
 } from 'recharts'
 import { getPlayer, getPlayerHistory, getPlayerAssignments, getPlayerStreak } from '../api/players'
 import { listInjuries, createInjury, updateInjury, deleteInjury } from '../api/injuries'
+import { getPlayerMatches } from '../api/matches'
 import { COGNITIVE_PARAMS, METRIC_COLORS } from '../constants/domain'
 import AvailabilityBadge from '../components/AvailabilityBadge'
-import type { Player, PlayerAssignment, PlayerHistoryItem, InjuryLog } from '../types/api'
+import type { Player, PlayerAssignment, PlayerHistoryItem, InjuryLog, PlayerMatchItem } from '../types/api'
 
 const METRICS = COGNITIVE_PARAMS.map((p) => ({ key: p.field, label: p.label, color: METRIC_COLORS[p.field] }))
 
@@ -368,6 +369,124 @@ function InjuryTab({ playerId }: { playerId: string }) {
   )
 }
 
+const HOME_AWAY_LABEL: Record<string, string> = { home: 'Casa', away: 'Trasferta', neutral: 'Neutro' }
+const MATCH_TYPE_LABEL: Record<string, string> = { campionato: 'Camp.', coppa: 'Coppa', amichevole: 'Amich.' }
+
+function matchResult(m: PlayerMatchItem): { label: string; cls: string } | null {
+  if (m.score_home == null || m.score_away == null) return null
+  const diff = m.score_home - m.score_away
+  if (diff > 0) return { label: 'V', cls: 'bg-green-100 text-green-700' }
+  if (diff < 0) return { label: 'S', cls: 'bg-red-100 text-red-700' }
+  return { label: 'P', cls: 'bg-yellow-100 text-yellow-700' }
+}
+
+function MatchesTab({ playerId }: { playerId: string }) {
+  const [matches, setMatches] = useState<PlayerMatchItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getPlayerMatches(playerId)
+      .then((res) => setMatches(res.data as PlayerMatchItem[]))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [playerId])
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="animate-spin rounded-full h-6 w-6 border-4 border-granata border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (!matches.length) {
+    return <div className="text-center text-gray-400 py-12 text-sm">Nessuna partita registrata</div>
+  }
+
+  const totMinutes = matches.reduce((s, m) => s + (m.minutes_played ?? 0), 0)
+  const totGoals = matches.reduce((s, m) => s + (m.goals ?? 0), 0)
+  const totAssists = matches.reduce((s, m) => s + (m.assists ?? 0), 0)
+  const ratings = matches.filter((m) => m.rating != null).map((m) => m.rating as number)
+  const avgRating = ratings.length ? (ratings.reduce((s, r) => s + r, 0) / ratings.length).toFixed(1) : null
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { label: 'Partite', value: matches.length },
+          { label: 'Minuti', value: totMinutes },
+          { label: 'Gol', value: totGoals },
+          { label: 'Assist', value: totAssists },
+        ].map(({ label, value }) => (
+          <div key={label} className="bg-white rounded-xl border border-gray-200 px-3 py-2 text-center">
+            <div className="text-lg font-bold text-gray-900">{value}</div>
+            <div className="text-xs text-gray-500">{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {avgRating && (
+        <div className="bg-white rounded-xl border border-gray-200 px-4 py-2 flex items-center justify-between">
+          <span className="text-sm text-gray-500">Voto medio</span>
+          <span className="text-sm font-bold text-granata">{avgRating}</span>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+        {matches.map((m) => {
+          const result = matchResult(m)
+          return (
+            <div key={m.match_id} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  {result && (
+                    <span className={`shrink-0 text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full ${result.cls}`}>
+                      {result.label}
+                    </span>
+                  )}
+                  <span className="text-sm font-medium text-gray-900 truncate">{m.opponent}</span>
+                  <span className="text-xs text-gray-400 shrink-0">{MATCH_TYPE_LABEL[m.match_type] ?? m.match_type}</span>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-xs text-gray-500">
+                    {new Date(m.match_date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                  </div>
+                  {m.score_home != null && m.score_away != null && (
+                    <div className="text-xs font-semibold text-gray-700">{m.score_home}–{m.score_away}</div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                {m.minutes_played != null && (
+                  <span className="text-xs text-gray-500">⏱ {m.minutes_played}'</span>
+                )}
+                {(m.goals ?? 0) > 0 && (
+                  <span className="text-xs text-gray-700">⚽ {m.goals}</span>
+                )}
+                {(m.assists ?? 0) > 0 && (
+                  <span className="text-xs text-gray-700">🅰 {m.assists}</span>
+                )}
+                {(m.yellow_cards ?? 0) > 0 && (
+                  <span className="text-xs">🟨 ×{m.yellow_cards}</span>
+                )}
+                {(m.red_cards ?? 0) > 0 && (
+                  <span className="text-xs">🟥 ×{m.red_cards}</span>
+                )}
+                {m.rating != null && (
+                  <span className="text-xs font-semibold text-granata ml-auto">{m.rating.toFixed(1)}</span>
+                )}
+                {m.position && (
+                  <span className="text-xs text-gray-400">{HOME_AWAY_LABEL[m.home_away] ?? m.home_away} · {m.position}</span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function PlayerDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -454,6 +573,7 @@ export default function PlayerDetailPage() {
           { key: 'anagrafica', label: 'Anagrafica' },
           { key: 'gruppi',     label: 'Storico gruppi' },
           { key: 'trend',      label: 'Trend metriche' },
+          { key: 'partite',    label: 'Partite' },
           { key: 'infortuni',  label: 'Infortuni' },
         ].map(({ key, label }) => (
           <button
@@ -522,6 +642,11 @@ export default function PlayerDetailPage() {
       {/* Trend metriche */}
       {activeTab === 'trend' && (
         <MetricsTrend history={history} loading={historyLoading} />
+      )}
+
+      {/* Partite */}
+      {activeTab === 'partite' && (
+        <MatchesTab playerId={id!} />
       )}
 
       {/* Infortuni */}

@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import UUID, Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import UUID, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -60,6 +60,11 @@ class MatchLineup(Base):
     )
     minutes_played: Mapped[int | None] = mapped_column(Integer, nullable=True)
     position: Mapped[str | None] = mapped_column(String, nullable=True)
+    goals: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    assists: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    yellow_cards: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    red_cards: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating: Mapped[float | None] = mapped_column(Numeric(3, 1), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     match: Mapped[Match] = relationship("Match", back_populates="lineups")
