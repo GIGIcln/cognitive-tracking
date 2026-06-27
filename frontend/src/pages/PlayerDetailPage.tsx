@@ -4,13 +4,13 @@ import React from 'react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { getPlayer, getPlayerHistory, getPlayerAssignments, getPlayerStreak } from '../api/players'
+import { getPlayer, getPlayerHistory, getPlayerAssignments, getPlayerStreak, getPlayerSummary } from '../api/players'
 import { listInjuries, createInjury, updateInjury, deleteInjury } from '../api/injuries'
 import { getPlayerMatches } from '../api/matches'
 import { getPlayerAttendance } from '../api/attendance'
 import { COGNITIVE_PARAMS, METRIC_COLORS } from '../constants/domain'
 import AvailabilityBadge from '../components/AvailabilityBadge'
-import type { Player, PlayerAssignment, PlayerHistoryItem, InjuryLog, PlayerMatchItem, PlayerAttendanceItem } from '../types/api'
+import type { Player, PlayerAssignment, PlayerHistoryItem, InjuryLog, PlayerMatchItem, PlayerAttendanceItem, PlayerSummary } from '../types/api'
 
 const METRICS = COGNITIVE_PARAMS.map((p) => ({ key: p.field, label: p.label, color: METRIC_COLORS[p.field] }))
 
@@ -578,15 +578,18 @@ export default function PlayerDetailPage() {
   const [history, setHistory] = useState<PlayerHistoryItem[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [streak, setStreak] = useState<number | null>(null)
+  const [summary, setSummary] = useState<PlayerSummary | null>(null)
 
   useEffect(() => {
     Promise.all([
       getPlayer(id!),
       getPlayerStreak(id!),
+      getPlayerSummary(id!),
     ])
-      .then(([playerRes, streakRes]) => {
+      .then(([playerRes, streakRes, summaryRes]) => {
         setPlayer(playerRes.data as Player)
         setStreak(streakRes.data.streak as number)
+        setSummary(summaryRes.data as PlayerSummary)
       })
       .catch(() => setError('Giocatore non trovato'))
       .finally(() => setLoading(false))
@@ -645,6 +648,46 @@ export default function PlayerDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Sommario stagionale */}
+      {summary && (
+        <div className="bg-white rounded-xl border border-gray-200 px-5 py-3 mb-5 flex flex-wrap items-center gap-x-5 gap-y-2">
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-gray-500">Partite</span>
+            <span className="font-semibold text-gray-900">{summary.matches_played}</span>
+            {summary.matches_played > 0 && (
+              <span className="text-gray-500 text-xs">
+                ⚽ {summary.goals} · 🅰 {summary.assists}
+                {summary.avg_rating != null && ` · ⭐ ${summary.avg_rating.toFixed(1)}`}
+              </span>
+            )}
+          </div>
+          {summary.sessions_total > 0 && (
+            <>
+              <div className="h-4 w-px bg-gray-200 hidden sm:block" />
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-500">Presenze</span>
+                <span className="font-semibold text-gray-900">
+                  {summary.attendance_pct != null ? `${summary.attendance_pct}%` : '—'}
+                </span>
+                <span className="text-gray-400 text-xs">({summary.sessions_present}/{summary.sessions_total})</span>
+              </div>
+            </>
+          )}
+          {summary.active_injury_type && (
+            <>
+              <div className="h-4 w-px bg-gray-200 hidden sm:block" />
+              <div className="flex items-center gap-2 text-sm text-red-600">
+                <span>Infortunio:</span>
+                <span className="font-medium">{summary.active_injury_type}</span>
+                {summary.active_injury_since && (
+                  <span className="text-xs text-red-400">dal {fmtFull(summary.active_injury_since)}</span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-6">

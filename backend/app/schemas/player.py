@@ -74,6 +74,18 @@ class PlayerResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PlayerSummaryResponse(BaseModel):
+    matches_played: int
+    goals: int
+    assists: int
+    avg_rating: float | None
+    sessions_total: int
+    sessions_present: int
+    attendance_pct: float | None
+    active_injury_type: str | None
+    active_injury_since: date | None
+
+
 class AssignRequest(BaseModel):
     group_id: uuid.UUID
 

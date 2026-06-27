@@ -13,7 +13,10 @@ from app.models.group import Group
 from app.models.measurement import Measurement
 from app.models.player import Player
 from app.models.training_session import TrainingSession
-from app.schemas.player import PlayerCreate, PlayerUpdate
+from app.models.attendance import Attendance
+from app.models.injury_log import InjuryLog
+from app.models.match import Match, MatchLineup
+from app.schemas.player import PlayerCreate, PlayerSummaryResponse, PlayerUpdate
 
 _PARAM_FIELDS = ('scanning_rate', 'decision_quality', 'anticipation', 'transition_reset', 'verbal_comm')
 
@@ -334,6 +337,60 @@ class PlayerService:
             }
             for a, name in rows
         ]
+
+    async def get_summary(
+        self,
+        player_id: uuid.UUID,
+        season_id: uuid.UUID | None = None,
+    ) -> PlayerSummaryResponse:
+        # Match stats
+        q_matches = (
+            select(
+                func.count(MatchLineup.match_id).label("matches_played"),
+                func.coalesce(func.sum(MatchLineup.goals), 0).label("goals"),
+                func.coalesce(func.sum(MatchLineup.assists), 0).label("assists"),
+                func.avg(MatchLineup.rating).label("avg_rating"),
+            )
+            .join(Match, Match.id == MatchLineup.match_id)
+            .where(MatchLineup.player_id == player_id)
+        )
+        if season_id:
+            q_matches = q_matches.where(Match.season_id == season_id)
+        match_row = (await self.db.execute(q_matches)).one()
+
+        # Attendance stats
+        q_att = select(
+            func.count(Attendance.id).label("total"),
+            func.count(Attendance.id).filter(Attendance.status == "present").label("present"),
+        ).join(TrainingSession, TrainingSession.id == Attendance.session_id).where(
+            Attendance.player_id == player_id
+        )
+        if season_id:
+            q_att = q_att.where(TrainingSession.season_id == season_id)
+        att_row = (await self.db.execute(q_att)).one()
+
+        # Active injury (most recent without actual_return)
+        inj_result = await self.db.execute(
+            select(InjuryLog)
+            .where(InjuryLog.player_id == player_id, InjuryLog.actual_return.is_(None))
+            .order_by(InjuryLog.start_date.desc())
+            .limit(1)
+        )
+        injury = inj_result.scalars().first()
+
+        total = att_row.total or 0
+        present = att_row.present or 0
+        return PlayerSummaryResponse(
+            matches_played=match_row.matches_played or 0,
+            goals=int(match_row.goals or 0),
+            assists=int(match_row.assists or 0),
+            avg_rating=float(match_row.avg_rating) if match_row.avg_rating is not None else None,
+            sessions_total=total,
+            sessions_present=present,
+            attendance_pct=round(present / total * 100, 1) if total > 0 else None,
+            active_injury_type=injury.injury_type if injury else None,
+            active_injury_since=injury.start_date if injury else None,
+        )
 
     async def get_streak(self, player_id: uuid.UUID) -> dict:
         result = await self.db.execute(

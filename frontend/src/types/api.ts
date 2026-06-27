@@ -208,6 +208,18 @@ export interface PlayerAttendanceItem {
   note: string | null
 }
 
+export interface PlayerSummary {
+  matches_played: number
+  goals: number
+  assists: number
+  avg_rating: number | null
+  sessions_total: number
+  sessions_present: number
+  attendance_pct: number | null
+  active_injury_type: string | null
+  active_injury_since: string | null
+}
+
 export interface InjuryLog {
   id: string
   player_id: string

@@ -14,7 +14,7 @@ from app.schemas.auth import UserContext
 from app.schemas.pagination import Page
 from app.schemas.attendance import PlayerAttendanceItemResponse
 from app.schemas.match import PlayerMatchItemResponse
-from app.schemas.player import AssignRequest, BulkAssignRequest, PlayerAssignmentResponse, PlayerCreate, PlayerHistoryItemResponse, PlayerResponse, PlayerUpdate
+from app.schemas.player import AssignRequest, BulkAssignRequest, PlayerAssignmentResponse, PlayerCreate, PlayerHistoryItemResponse, PlayerResponse, PlayerSummaryResponse, PlayerUpdate
 from app.services.attendance_service import AttendanceService
 from app.services.injury_service import InjuryService
 from app.services.match_service import MatchService
@@ -100,6 +100,20 @@ async def get_player_assignments(
     if result is None:
         raise HTTPException(status_code=404, detail="Giocatore non trovato")
     return result
+
+
+@router.get("/{player_id}/summary", response_model=PlayerSummaryResponse)
+async def get_player_summary(
+    player_id: uuid.UUID,
+    season_id: uuid.UUID | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(require_auth),
+):
+    scope = current_user.read_scope()
+    svc = PlayerService(db)
+    if scope is not None and await svc.get_with_group(player_id, allowed_group_ids=scope) is None:
+        raise HTTPException(status_code=404, detail="Giocatore non trovato")
+    return await svc.get_summary(player_id, season_id=season_id)
 
 
 @router.get("/{player_id}/streak")
