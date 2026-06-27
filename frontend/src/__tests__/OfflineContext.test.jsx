@@ -14,8 +14,14 @@ vi.mock('../hooks/useOnlineStatus', () => ({
   useOnlineStatus: vi.fn(() => ({ isOnline: true })),
 }))
 
+// Ping mockato di default come raggiungibile — i test che simulano server_down lo sovrascrivono
+vi.mock('../utils/serverPing', () => ({
+  checkServerReachable: vi.fn().mockResolvedValue(true),
+}))
+
 import * as offlineQueue from '../utils/offlineQueue'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
+import * as serverPing from '../utils/serverPing'
 
 const wrapper = ({ children }) => <OfflineContextProvider>{children}</OfflineContextProvider>
 
@@ -26,7 +32,9 @@ describe('OfflineContext', () => {
     offlineQueue.getAllItems.mockResolvedValue([])
     offlineQueue.addToQueue.mockResolvedValue(undefined)
     offlineQueue.removeItem.mockResolvedValue(undefined)
+    offlineQueue.incrementRetry.mockResolvedValue(undefined)
     useOnlineStatus.mockReturnValue({ isOnline: true })
+    serverPing.checkServerReachable.mockResolvedValue(true)
   })
 
   // ── Stato iniziale ──────────────────────────────────────────────────────
@@ -36,6 +44,11 @@ describe('OfflineContext', () => {
     await waitFor(() => expect(result.current.pendingCount).toBe(0))
     expect(result.current.syncError).toBeNull()
     expect(result.current.isSyncing).toBe(false)
+  })
+
+  it('serverStatus iniziale è online quando isOnline=true e ping ok', async () => {
+    const { result } = renderHook(() => useOffline(), { wrapper })
+    await waitFor(() => expect(result.current.serverStatus).toBe('online'))
   })
 
   // ── addToQueue ──────────────────────────────────────────────────────────
@@ -224,11 +237,61 @@ describe('OfflineContext', () => {
 
     const callsBefore = offlineQueue.getAllItems.mock.calls.length
 
-    // Torna online
+    // Torna online (ping già mockato come ok)
     useOnlineStatus.mockReturnValue({ isOnline: true })
     rerender()
 
     // syncNow chiama getAllItems
+    await waitFor(() =>
+      expect(offlineQueue.getAllItems.mock.calls.length).toBeGreaterThan(callsBefore)
+    )
+  })
+
+  // ── Server down ──────────────────────────────────────────────────────────
+
+  it('server_down: serverStatus è server_down quando online ma ping fallisce', async () => {
+    serverPing.checkServerReachable.mockResolvedValue(false)
+
+    const { result } = renderHook(() => useOffline(), { wrapper })
+
+    await waitFor(() => expect(result.current.serverStatus).toBe('server_down'))
+    expect(result.current.isOnline).toBe(true)
+  })
+
+  it('server_down: syncNow non esegue e non chiama getAllItems', async () => {
+    serverPing.checkServerReachable.mockResolvedValue(false)
+
+    const { result } = renderHook(() => useOffline(), { wrapper })
+    await waitFor(() => expect(result.current.serverStatus).toBe('server_down'))
+
+    const callsBefore = offlineQueue.getAllItems.mock.calls.length
+
+    await act(async () => { await result.current.syncNow() })
+
+    expect(offlineQueue.getAllItems.mock.calls.length).toBe(callsBefore)
+  })
+
+  it('server_down: quando il server torna raggiungibile, syncNow è invocata automaticamente', async () => {
+    // Avvia con server non raggiungibile
+    serverPing.checkServerReachable.mockResolvedValue(false)
+    useOnlineStatus.mockReturnValue({ isOnline: true })
+
+    const { result, rerender } = renderHook(() => useOffline(), { wrapper })
+    await waitFor(() => expect(result.current.serverStatus).toBe('server_down'))
+
+    const callsBefore = offlineQueue.getAllItems.mock.calls.length
+
+    // Simula ciclo offline → online con server ora raggiungibile.
+    // Questo forza il re-run immediato del ping effect (non attende i 30s di interval).
+    serverPing.checkServerReachable.mockResolvedValue(true)
+    useOnlineStatus.mockReturnValue({ isOnline: false })
+    rerender()
+    await act(async () => {})
+
+    useOnlineStatus.mockReturnValue({ isOnline: true })
+    rerender()
+
+    // Il ping scatta immediatamente → isServerReachable false→true → syncNow → getAllItems
     await waitFor(() =>
       expect(offlineQueue.getAllItems.mock.calls.length).toBeGreaterThan(callsBefore)
     )

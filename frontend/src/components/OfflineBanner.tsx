@@ -2,23 +2,36 @@ import { useState, useEffect } from 'react';
 import { useOffline } from '../context/OfflineContext';
 
 export default function OfflineBanner() {
-  const { isOnline, pendingCount, isSyncing, syncError, syncNow } = useOffline();
+  const { serverStatus, pendingCount, isSyncing, syncError, syncNow } = useOffline();
   const [showOnlinePill, setShowOnlinePill] = useState(false);
 
   useEffect(() => {
-    if (isOnline && pendingCount === 0 && !isSyncing) {
+    if (serverStatus === 'online' && pendingCount === 0 && !isSyncing) {
       setShowOnlinePill(true);
       const t = setTimeout(() => setShowOnlinePill(false), 3000);
       return () => clearTimeout(t);
     }
-  }, [isOnline, pendingCount, isSyncing]);
+  }, [serverStatus, pendingCount, isSyncing]);
 
-  if (!isOnline) {
+  if (serverStatus === 'offline') {
     return (
       <div className="mx-4 mb-3 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
         <span className="h-2 w-2 flex-shrink-0 rounded-full bg-amber-400" />
         <span>
           Modalità offline
+          {pendingCount > 0 &&
+            ` — ${pendingCount} operazion${pendingCount === 1 ? 'e' : 'i'} in coda`}
+        </span>
+      </div>
+    );
+  }
+
+  if (serverStatus === 'server_down') {
+    return (
+      <div className="mx-4 mb-3 flex items-center gap-2 rounded-lg border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-sm text-orange-300">
+        <span className="h-2 w-2 flex-shrink-0 rounded-full bg-orange-400" />
+        <span>
+          Server non raggiungibile
           {pendingCount > 0 &&
             ` — ${pendingCount} operazion${pendingCount === 1 ? 'e' : 'i'} in coda`}
         </span>

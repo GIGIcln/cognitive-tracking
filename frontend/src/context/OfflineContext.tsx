@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { checkServerReachable } from '../utils/serverPing';
 import {
   addToQueue,
   getAllItems,
@@ -10,6 +11,9 @@ import {
 
 const MAX_RETRIES = 5
 const MAX_AGE_MS  = 7 * 24 * 60 * 60 * 1000  // 7 giorni
+const HEALTH_PING_INTERVAL = 30_000            // 30s
+
+export type ServerStatus = 'online' | 'server_down' | 'offline'
 
 interface AddToQueueParams {
   url: string
@@ -20,6 +24,7 @@ interface AddToQueueParams {
 
 interface OfflineContextValue {
   isOnline: boolean
+  serverStatus: ServerStatus
   pendingCount: number
   addToQueue: (item: AddToQueueParams) => Promise<void>
   syncNow: () => Promise<void>
@@ -31,10 +36,18 @@ const OfflineContext = createContext<OfflineContextValue | null>(null);
 
 export function OfflineContextProvider({ children }: { children: ReactNode }) {
   const { isOnline } = useOnlineStatus();
+  const [isServerReachable, setIsServerReachable] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const prevOnlineRef = useRef(isOnline);
+  const prevServerReachableRef = useRef(true);
+
+  const serverStatus: ServerStatus = !isOnline
+    ? 'offline'
+    : isServerReachable
+      ? 'online'
+      : 'server_down'
 
   const refreshCount = useCallback(async () => {
     try {
@@ -60,8 +73,22 @@ export function OfflineContextProvider({ children }: { children: ReactNode }) {
     [refreshCount]
   );
 
+  // Ping periodico quando online per rilevare "server spento" vs "no internet"
+  const pingServer = useCallback(async () => {
+    const reachable = await checkServerReachable()
+    setIsServerReachable(reachable)
+  }, [])
+
+  useEffect(() => {
+    if (!isOnline) return
+    pingServer()
+    const interval = setInterval(pingServer, HEALTH_PING_INTERVAL)
+    return () => clearInterval(interval)
+  }, [isOnline, pingServer])
+
   const syncNow = useCallback(async () => {
     if (isSyncing) return;
+    if (!isServerReachable) return;
     setIsSyncing(true);
     setSyncError(null);
 
@@ -122,9 +149,9 @@ export function OfflineContextProvider({ children }: { children: ReactNode }) {
       await refreshCount();
       setIsSyncing(false);
     }
-  }, [isSyncing, refreshCount]);
+  }, [isSyncing, isServerReachable, refreshCount]);
 
-  // Sync automatica quando si torna online
+  // Sync automatica quando si torna online (da nessuna connessione)
   useEffect(() => {
     if (isOnline && !prevOnlineRef.current) {
       syncNow();
@@ -132,17 +159,26 @@ export function OfflineContextProvider({ children }: { children: ReactNode }) {
     prevOnlineRef.current = isOnline;
   }, [isOnline, syncNow]);
 
+  // Sync automatica quando il server torna raggiungibile (da server_down)
   useEffect(() => {
-    if (!isOnline || pendingCount === 0) return;
+    if (isServerReachable && !prevServerReachableRef.current) {
+      syncNow();
+    }
+    prevServerReachableRef.current = isServerReachable;
+  }, [isServerReachable, syncNow]);
+
+  // Sync periodica ogni minuto se ci sono item in coda e il server è raggiungibile
+  useEffect(() => {
+    if (!isOnline || !isServerReachable || pendingCount === 0) return;
     const interval = setInterval(() => {
       syncNow();
     }, 60000);
     return () => clearInterval(interval);
-  }, [isOnline, pendingCount, syncNow]);
+  }, [isOnline, isServerReachable, pendingCount, syncNow]);
 
   return (
     <OfflineContext.Provider
-      value={{ isOnline, pendingCount, addToQueue: addItem, syncNow, syncError, isSyncing }}
+      value={{ isOnline, serverStatus, pendingCount, addToQueue: addItem, syncNow, syncError, isSyncing }}
     >
       {children}
     </OfflineContext.Provider>
