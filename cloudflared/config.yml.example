@@ -1,0 +1,14 @@
+# Template configurazione Cloudflare Tunnel.
+# Copia questo file in C:\Users\<utente>\.cloudflared\config.yml
+# e sostituisci i placeholder con i valori reali ottenuti con:
+#   cloudflared tunnel create gestionale
+
+tunnel: <TUNNEL-UUID>
+credentials-file: C:\Users\<UTENTE>\.cloudflared\<TUNNEL-UUID>.json
+
+ingress:
+  # Traffico per il tuo dominio → Nginx su localhost:80
+  - hostname: <IL-TUO-DOMINIO>
+    service: http://localhost:80
+  # Qualsiasi altra richiesta al tunnel → 404
+  - service: http_status:404

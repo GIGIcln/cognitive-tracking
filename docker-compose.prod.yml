@@ -35,7 +35,7 @@ services:
       context: .
       dockerfile: Dockerfile.frontend.prod
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"  # solo localhost → cloudflared si connette qui
     depends_on:
       - backend
     restart: unless-stopped
