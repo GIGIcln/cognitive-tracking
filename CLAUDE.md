@@ -89,6 +89,7 @@ I moduli seguenti sono pianificati nell'ordine indicato. Ogni modulo segue il so
 | **GS-10** Dashboard role-specific | ✅ completato | Banner pending (admin), panoramica gruppi (resp.tecnico), disponibilità rosa (allenatore) |
 | **GS-11** Convocazioni pre-gara | ✅ completato | match_convocations, tab Convocati in MatchDetailPage |
 | **GS-12** Tab Presenze in PlayerDetailPage | ✅ completato | GET /players/{id}/attendance, tab Presenze con sommario % |
+| **GS-13** Record stagionale e classifica marcatori | ✅ completato | GET /matches/scorers (SQL aggr.); header V/P/S in MatchesPage; tab Partite in GroupDetailPage |
 
 ## Observation events (metriche cognitive)
 - Modello **per-evento** (`observation_events`, append-only); salvataggio batch idempotente (delete-per-pair + insert), non upsert.
