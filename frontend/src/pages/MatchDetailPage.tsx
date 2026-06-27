@@ -284,7 +284,12 @@ export default function MatchDetailPage() {
                 return (
                   <div key={p.id} className={`flex items-center justify-between px-4 py-3 transition-colors ${isConv ? '' : 'opacity-50'}`}>
                     <div className="min-w-0">
-                      <span className="text-sm font-medium text-gray-900">{p.last_name} {p.first_name}</span>
+                      <button
+                        onClick={() => navigate(`/players/${p.id}`)}
+                        className="text-sm font-medium text-gray-900 hover:text-granata transition-colors"
+                      >
+                        {p.last_name} {p.first_name}
+                      </button>
                       {p.position && <span className="text-xs text-gray-400 ml-2">{p.position}</span>}
                       {p.availability && p.availability !== 'disponibile' && (
                         <span className="ml-2 text-xs text-red-500">({p.availability})</span>
@@ -335,7 +340,12 @@ export default function MatchDetailPage() {
                 <div key={p.id} className={`px-4 py-3 transition-colors ${isIn ? '' : 'opacity-50'}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div>
-                      <span className="text-sm font-medium text-gray-900">{p.last_name} {p.first_name}</span>
+                      <button
+                        onClick={() => navigate(`/players/${p.id}`)}
+                        className="text-sm font-medium text-gray-900 hover:text-granata transition-colors"
+                      >
+                        {p.last_name} {p.first_name}
+                      </button>
                       {p.position && <span className="text-xs text-gray-400 ml-2">{p.position}</span>}
                     </div>
                     <button

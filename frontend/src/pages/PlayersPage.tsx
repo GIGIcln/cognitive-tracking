@@ -17,6 +17,7 @@ export default function PlayersPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; player: Player | null }>({ open: false, player: null })
   const [deleting, setDeleting] = useState(false)
   const [query, setQuery] = useState('')
+  const [availFilter, setAvailFilter] = useState('')
   const [selected, setSelected] = useState(new Set<string>())
   const [targetGroup, setTargetGroup] = useState('')
   const [assigning, setAssigning] = useState(false)
@@ -36,7 +37,10 @@ export default function PlayersPage() {
 
   const filtered = players.filter((p) => {
     const q = query.toLowerCase()
-    return p.first_name.toLowerCase().includes(q) || p.last_name.toLowerCase().includes(q)
+    if (!p.first_name.toLowerCase().includes(q) && !p.last_name.toLowerCase().includes(q)) return false
+    if (availFilter === 'disponibile' && p.availability !== 'disponibile') return false
+    if (availFilter === 'non_disponibile' && p.availability === 'disponibile') return false
+    return true
   })
 
   const handleBulkAssign = async () => {
@@ -99,6 +103,15 @@ export default function PlayersPage() {
           onChange={(e) => setQuery(e.target.value)}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full max-w-xs focus:outline-none focus:ring-2 focus:ring-granata"
         />
+        <select
+          value={availFilter}
+          onChange={(e) => setAvailFilter(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-granata"
+        >
+          <option value="">Tutti</option>
+          <option value="disponibile">Disponibili</option>
+          <option value="non_disponibile">Non disponibili</option>
+        </select>
       </div>
 
       {isError && <div className="text-red-600 text-sm mb-4">Errore nel caricamento giocatori</div>}
