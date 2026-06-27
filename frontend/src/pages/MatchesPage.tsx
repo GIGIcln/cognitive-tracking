@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { listMatches, getScorers } from '../api/matches'
 import MatchFormModal from '../components/MatchFormModal'
 import { useAuth } from '../context/AuthContext'
+import { useSeasonGroup } from '../context/SeasonGroupContext'
 import type { Match, Scorer } from '../types/api'
 
 const HOME_AWAY_LABEL: Record<string, string> = { home: 'Casa', away: 'Trasferta', neutral: 'Neutro' }
@@ -23,6 +24,7 @@ function fmtDate(d: string) {
 export default function MatchesPage() {
   const navigate = useNavigate()
   const { isStaff } = useAuth()
+  const { selectedGroupId, selectedSeasonId } = useSeasonGroup()
   const [matches, setMatches] = useState<Match[]>([])
   const [scorers, setScorers] = useState<Scorer[]>([])
   const [loading, setLoading] = useState(true)
@@ -31,7 +33,10 @@ export default function MatchesPage() {
 
   const load = () => {
     setLoading(true)
-    Promise.all([listMatches(), getScorers()])
+    const params: Record<string, string> = {}
+    if (selectedGroupId) params.group_id = selectedGroupId
+    if (selectedSeasonId) params.season_id = selectedSeasonId
+    Promise.all([listMatches(params), getScorers(params)])
       .then(([matchRes, scorersRes]) => {
         setMatches(matchRes.data)
         setScorers(scorersRes.data as Scorer[])
@@ -40,7 +45,7 @@ export default function MatchesPage() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [selectedGroupId, selectedSeasonId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const played = matches.filter((m) => m.score_home != null && m.score_away != null)
   const scheduled = matches.filter((m) => m.score_home == null || m.score_away == null)
@@ -155,7 +160,12 @@ export default function MatchesPage() {
                   <div key={s.player_id} className="flex items-center justify-between px-4 py-2.5">
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-gray-400 w-4 text-right">{i + 1}</span>
-                      <span className="text-sm font-medium text-gray-900">{s.last_name} {s.first_name}</span>
+                      <button
+                        onClick={() => navigate(`/players/${s.player_id}`)}
+                        className="text-sm font-medium text-gray-900 hover:text-granata transition-colors"
+                      >
+                        {s.last_name} {s.first_name}
+                      </button>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-gray-600 shrink-0">
                       <span>⚽ <strong>{s.goals}</strong></span>

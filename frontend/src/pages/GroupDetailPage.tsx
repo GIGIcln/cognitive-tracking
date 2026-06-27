@@ -829,7 +829,12 @@ export default function GroupDetailPage() {
                       <div key={s.player_id} className="flex items-center justify-between px-4 py-2.5">
                         <div className="flex items-center gap-3">
                           <span className="text-xs text-gray-400 w-4 text-right">{i + 1}</span>
-                          <span className="text-sm font-medium text-gray-900">{s.last_name} {s.first_name}</span>
+                          <button
+                            onClick={() => navigate(`/players/${s.player_id}`)}
+                            className="text-sm font-medium text-gray-900 hover:text-granata transition-colors"
+                          >
+                            {s.last_name} {s.first_name}
+                          </button>
                         </div>
                         <div className="flex items-center gap-3 text-xs text-gray-600 shrink-0">
                           <span>⚽ <strong>{s.goals}</strong></span>
