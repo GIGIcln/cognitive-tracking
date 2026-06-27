@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getAtRiskPlayers } from '../api/players'
-import { getPlayers } from '../api/players'
+import { getAtRiskPlayers, getPlayers } from '../api/players'
 import { getSessions } from '../api/sessions'
+import { listUsers } from '../api/users'
 import { useGroups, useCurrentSeason } from '../hooks/useSeasonData'
 import { LEVEL_COLORS } from '../constants/domain'
 import AvailabilityBadge from '../components/AvailabilityBadge'
 import { useAuth } from '../context/AuthContext'
-import type { Group, AtRiskPlayer, RecentSession, Player } from '../types/api'
+import type { Group, AtRiskPlayer, RecentSession, Player, User } from '../types/api'
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
   training: 'Allenamento',
@@ -60,8 +60,17 @@ export default function DashboardPage() {
   const recentSessions = sessionsData?.items ?? []
   const totalSessions = sessionsData?.total ?? null
 
+  const { data: pendingUsers = [] } = useQuery({
+    queryKey: ['pending-users'],
+    queryFn: () => listUsers().then((r) => (r.data as User[]).filter((u) => u.status === 'pending')),
+    enabled: isAdmin,
+  })
+
   const groupMap = Object.fromEntries(groups.map((g) => [g.id, g])) as Record<string, Group | undefined>
   const myGroup = isCoach ? (groups[0] ?? null) : null
+  const myGroupPlayers = isCoach && myGroup
+    ? allPlayers.filter((p) => p.current_group_name === myGroup.name)
+    : []
 
   const seasonLabel = (() => {
     if (!season) return '—'
@@ -120,6 +129,56 @@ export default function DashboardPage() {
               <div className="text-xs text-gray-400 mt-1">{desc}</div>
             </Link>
           ))}
+        </div>
+      )}
+
+      {/* Admin: utenti in attesa */}
+      {isAdmin && pendingUsers.length > 0 && (
+        <Link
+          to="/impostazioni/utenti"
+          className="flex items-center justify-between bg-amber-50 border border-amber-300 rounded-xl px-5 py-4 hover:bg-amber-100 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-amber-600 text-lg">⏳</span>
+            <div>
+              <div className="text-sm font-semibold text-amber-800">
+                {pendingUsers.length} {pendingUsers.length === 1 ? 'allenatore in attesa' : 'allenatori in attesa'} di attivazione
+              </div>
+              <div className="text-xs text-amber-600 mt-0.5">
+                {pendingUsers.map((u) => u.email).join(', ')}
+              </div>
+            </div>
+          </div>
+          <span className="text-xs text-amber-700 font-medium shrink-0">Gestisci →</span>
+        </Link>
+      )}
+
+      {/* Responsabile tecnico: panoramica squadre */}
+      {isReadOnly && groups.length > 0 && (
+        <div>
+          <h2 className="text-base font-semibold text-gray-800 mb-3">Squadre</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {groups.map((g) => (
+              <Link
+                key={g.id}
+                to={`/groups/${g.id}`}
+                className="bg-white rounded-xl border border-gray-200 px-4 py-3 hover:border-granata hover:shadow-sm transition-all"
+              >
+                <div className="text-sm font-semibold text-gray-900 truncate">{g.name}</div>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${LEVEL_COLORS[g.level as keyof typeof LEVEL_COLORS] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {g.level}
+                  </span>
+                  {g.category && (
+                    <span className="text-xs text-gray-400">{g.category}</span>
+                  )}
+                  {g.birth_year && (
+                    <span className="text-xs text-gray-400">{g.birth_year}</span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
 
@@ -202,6 +261,35 @@ export default function DashboardPage() {
                     <span className="text-xs text-gray-400">{p.current_group_name}</span>
                   )}
                 </div>
+                <AvailabilityBadge availability={p.availability} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Allenatore: disponibilità rosa */}
+      {isCoach && !playersLoading && myGroupPlayers.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-gray-800">Disponibilità rosa</h2>
+            <Link to="/players" className="text-xs text-granata hover:text-granata-dark font-medium">
+              Rosa completa →
+            </Link>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {myGroupPlayers.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => navigate(`/players/${p.id}`)}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-gray-50 transition-colors"
+              >
+                <span className="text-sm text-gray-900">
+                  {p.last_name} {p.first_name}
+                  {p.jersey_number != null && (
+                    <span className="text-xs text-gray-400 ml-2">#{p.jersey_number}</span>
+                  )}
+                </span>
                 <AvailabilityBadge availability={p.availability} />
               </button>
             ))}
