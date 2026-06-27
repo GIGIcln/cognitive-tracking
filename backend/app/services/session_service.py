@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Float, case, cast, desc, func
+from sqlalchemy import Float, case, cast, desc, func, select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.models.group import Group
 from app.models.measurement import Measurement
@@ -15,10 +16,10 @@ from app.schemas.session import MeasurementsBatchInput, SessionCreate, SessionUp
 
 
 class SessionService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    def list(
+    async def list(
         self,
         group_id: uuid.UUID | None,
         skip: int,
@@ -31,55 +32,59 @@ class SessionService:
         allowed_group_ids=set  → restringe ai gruppi dell'allenatore.
         Se group_id è specificato ha la precedenza (già validato al livello router).
         """
-        q = self.db.query(TrainingSession).filter(TrainingSession.is_active.is_(True))
+        q = select(TrainingSession).where(TrainingSession.is_active.is_(True))
         if group_id:
-            q = q.filter(TrainingSession.group_id == group_id)
+            q = q.where(TrainingSession.group_id == group_id)
         elif allowed_group_ids is not None:
-            q = q.filter(TrainingSession.group_id.in_(allowed_group_ids))
+            q = q.where(TrainingSession.group_id.in_(allowed_group_ids))
         if season_id:
-            q = q.filter(TrainingSession.season_id == season_id)
-        return q.order_by(TrainingSession.session_date.desc()).offset(skip).limit(limit).all()
+            q = q.where(TrainingSession.season_id == season_id)
+        q = q.order_by(TrainingSession.session_date.desc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        return result.scalars().all()
 
-    def count(
+    async def count(
         self,
         group_id: uuid.UUID | None = None,
         allowed_group_ids: set[uuid.UUID] | None = None,
         season_id: uuid.UUID | None = None,
     ) -> int:
-        q = self.db.query(func.count(TrainingSession.id)).filter(TrainingSession.is_active.is_(True))
+        q = select(func.count(TrainingSession.id)).where(TrainingSession.is_active.is_(True))
         if group_id:
-            q = q.filter(TrainingSession.group_id == group_id)
+            q = q.where(TrainingSession.group_id == group_id)
         elif allowed_group_ids is not None:
-            q = q.filter(TrainingSession.group_id.in_(allowed_group_ids))
+            q = q.where(TrainingSession.group_id.in_(allowed_group_ids))
         if season_id:
-            q = q.filter(TrainingSession.season_id == season_id)
-        return q.scalar() or 0
+            q = q.where(TrainingSession.season_id == season_id)
+        result = await self.db.execute(q)
+        return result.scalar() or 0
 
-    def update(self, session_id: uuid.UUID, body: SessionUpdate) -> TrainingSession | None:
-        session = self.db.get(TrainingSession, session_id)
+    async def update(self, session_id: uuid.UUID, body: SessionUpdate) -> TrainingSession | None:
+        session = await self.db.get(TrainingSession, session_id)
         if session is None or not session.is_active:
             return None
         for field, value in body.model_dump(exclude_unset=True).items():
             setattr(session, field, value)
-        self.db.commit()
-        self.db.refresh(session)
+        await self.db.commit()
+        await self.db.refresh(session)
         return session
 
-    def deactivate(self, session_id: uuid.UUID) -> bool:
-        session = self.db.get(TrainingSession, session_id)
+    async def deactivate(self, session_id: uuid.UUID) -> bool:
+        session = await self.db.get(TrainingSession, session_id)
         if session is None or not session.is_active:
             return False
         session.is_active = False
-        self.db.commit()
+        await self.db.commit()
         return True
 
-    def create(self, body: SessionCreate) -> TrainingSession | None:
+    async def create(self, body: SessionCreate) -> TrainingSession | None:
         """Returns None if no current season or group is found. Raises ValueError if date is outside season range."""
-        season = self.db.query(Season).filter(Season.is_current.is_(True)).first()
+        result = await self.db.execute(select(Season).where(Season.is_current.is_(True)))
+        season = result.scalars().first()
         if not season:
             return None
 
-        group = self.db.get(Group, body.group_id)
+        group = await self.db.get(Group, body.group_id)
         if not group:
             return None
 
@@ -97,25 +102,25 @@ class SessionService:
             notes=body.notes,
         )
         self.db.add(session)
-        self.db.commit()
-        self.db.refresh(session)
+        await self.db.commit()
+        await self.db.refresh(session)
         return session
 
-    def get(self, session_id: uuid.UUID) -> TrainingSession | None:
+    async def get(self, session_id: uuid.UUID) -> TrainingSession | None:
         """Eager-loads measurements and their players."""
-        return (
-            self.db.query(TrainingSession)
+        result = await self.db.execute(
+            select(TrainingSession)
             .options(joinedload(TrainingSession.measurements).joinedload(Measurement.player))
-            .filter(TrainingSession.id == session_id)
-            .first()
+            .where(TrainingSession.id == session_id)
         )
+        return result.scalars().first()
 
-    def get_averages(self, session_id: uuid.UUID) -> dict | None:
-        if not self.db.get(TrainingSession, session_id):
+    async def get_averages(self, session_id: uuid.UUID) -> dict | None:
+        if not await self.db.get(TrainingSession, session_id):
             return None
 
-        row = (
-            self.db.query(
+        result = await self.db.execute(
+            select(
                 func.avg(Measurement.scanning_rate).label("avg_sr"),
                 func.avg(Measurement.decision_quality).label("avg_dqi"),
                 func.avg(Measurement.anticipation).label("avg_ai"),
@@ -123,12 +128,12 @@ class SessionService:
                 func.avg(Measurement.verbal_comm).label("avg_vci"),
                 func.count(Measurement.id).label("player_count"),
             )
-            .filter(
+            .where(
                 Measurement.session_id == session_id,
                 Measurement.is_absent.is_(False),
             )
-            .first()
         )
+        row = result.first()
         return {
             "avg_sr": float(row.avg_sr) if row.avg_sr is not None else None,
             "avg_dqi": float(row.avg_dqi) if row.avg_dqi is not None else None,
@@ -138,7 +143,7 @@ class SessionService:
             "player_count": row.player_count or 0,
         }
 
-    def get_rankings(
+    async def get_rankings(
         self,
         session_id: uuid.UUID,
         skip: int = 0,
@@ -158,22 +163,22 @@ class SessionService:
 
         avg_expr = cast(sum_expr, Float) / func.nullif(count_expr, 0)
 
-        rows = (
-            self.db.query(
+        result = await self.db.execute(
+            select(
                 Measurement.player_id,
                 Player.first_name,
                 Player.last_name,
                 avg_expr.label("avg_score"),
             )
             .join(Player, Measurement.player_id == Player.id)
-            .filter(
+            .where(
                 Measurement.session_id == session_id,
                 Measurement.is_absent.is_(False),
                 count_expr > 0,
             )
             .order_by(desc(avg_expr))
-            .all()
         )
+        rows = result.all()
 
         if not rows:
             return []
@@ -208,22 +213,22 @@ class SessionService:
 
         return ranked[skip : skip + limit]
 
-    def get_measurements(self, session_id: uuid.UUID) -> list[Measurement] | None:
+    async def get_measurements(self, session_id: uuid.UUID) -> list[Measurement] | None:
         """Returns None if session not found, empty list if no measurements."""
-        session = self.get(session_id)
+        session = await self.get(session_id)
         if session is None:
             return None
         return session.measurements
 
-    def upsert_measurements(
+    async def upsert_measurements(
         self, session: TrainingSession, body: MeasurementsBatchInput
     ) -> list[Measurement]:
         """Raises ValueError if any player_id is not found."""
         player_ids = {m.player_id for m in body.measurements}
-        found_ids = {
-            row.id
-            for row in self.db.query(Player.id).filter(Player.id.in_(player_ids)).all()
-        }
+        found_result = await self.db.execute(
+            select(Player.id).where(Player.id.in_(player_ids))
+        )
+        found_ids = {row.id for row in found_result.all()}
         missing = player_ids - found_ids
         if missing:
             raise ValueError(f"Giocatori non trovati: {sorted(str(i) for i in missing)}")
@@ -257,7 +262,7 @@ class SessionService:
                 "notes": ins.excluded.notes,
             },
         )
-        self.db.execute(stmt)
-        self.db.commit()
+        await self.db.execute(stmt)
+        await self.db.commit()
 
-        return self.get_measurements(session.id)
+        return await self.get_measurements(session.id)

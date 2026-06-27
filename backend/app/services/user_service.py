@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
@@ -10,19 +11,23 @@ from app.services.auth_service import hash_password
 
 
 class UserService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    def get_by_id(self, user_id: uuid.UUID) -> User | None:
-        return self.db.get(User, user_id)
+    async def get_by_id(self, user_id: uuid.UUID) -> User | None:
+        return await self.db.get(User, user_id)
 
-    def get_by_email(self, email: str) -> User | None:
-        return self.db.query(User).filter(User.email == email.lower()).first()
+    async def get_by_email(self, email: str) -> User | None:
+        result = await self.db.execute(
+            select(User).where(User.email == email.lower())
+        )
+        return result.scalars().first()
 
-    def list(self) -> list[User]:
-        return self.db.query(User).order_by(User.email).all()
+    async def list(self) -> list[User]:
+        result = await self.db.execute(select(User).order_by(User.email))
+        return result.scalars().all()
 
-    def create(self, body: UserCreate) -> User:
+    async def create(self, body: UserCreate) -> User:
         user = User(
             email=body.email.lower(),
             hashed_password=hash_password(body.password),
@@ -33,12 +38,12 @@ class UserService:
             assigned_group_ids=[str(gid) for gid in body.assigned_group_ids],
         )
         self.db.add(user)
-        self.db.commit()
-        self.db.refresh(user)
+        await self.db.commit()
+        await self.db.refresh(user)
         return user
 
-    def update(self, user_id: uuid.UUID, body: UserUpdate) -> User | None:
-        user = self.db.get(User, user_id)
+    async def update(self, user_id: uuid.UUID, body: UserUpdate) -> User | None:
+        user = await self.db.get(User, user_id)
         if user is None:
             return None
         if body.email is not None:
@@ -57,14 +62,14 @@ class UserService:
             user.is_active = body.status == "active"
         elif body.is_active is not None:
             user.is_active = body.is_active
-        self.db.commit()
-        self.db.refresh(user)
+        await self.db.commit()
+        await self.db.refresh(user)
         return user
 
-    def delete(self, user_id: uuid.UUID) -> bool:
-        user = self.db.get(User, user_id)
+    async def delete(self, user_id: uuid.UUID) -> bool:
+        user = await self.db.get(User, user_id)
         if user is None:
             return False
-        self.db.delete(user)
-        self.db.commit()
+        await self.db.delete(user)
+        await self.db.commit()
         return True

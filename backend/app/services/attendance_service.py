@@ -2,28 +2,30 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attendance import Attendance
 from app.schemas.attendance import AttendanceItem
 
 
 class AttendanceService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    def get_by_session(self, session_id: uuid.UUID) -> list[Attendance]:
-        return (
-            self.db.query(Attendance)
-            .filter(Attendance.session_id == session_id)
-            .all()
+    async def get_by_session(self, session_id: uuid.UUID) -> list[Attendance]:
+        result = await self.db.execute(
+            select(Attendance).where(Attendance.session_id == session_id)
         )
+        return result.scalars().all()
 
-    def upsert_batch(
+    async def upsert_batch(
         self, session_id: uuid.UUID, records: list[AttendanceItem]
     ) -> list[Attendance]:
         """Upsert idempotente: delete-per-session + insert."""
-        self.db.query(Attendance).filter(Attendance.session_id == session_id).delete()
+        await self.db.execute(
+            Attendance.__table__.delete().where(Attendance.session_id == session_id)
+        )
         rows = [
             Attendance(
                 session_id=session_id,
@@ -34,5 +36,5 @@ class AttendanceService:
             for r in records
         ]
         self.db.add_all(rows)
-        self.db.commit()
-        return self.get_by_session(session_id)
+        await self.db.commit()
+        return await self.get_by_session(session_id)

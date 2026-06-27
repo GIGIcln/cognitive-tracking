@@ -3,9 +3,9 @@
 import uuid
 
 
-def test_create_group_admin_returns_201(seeded):
+async def test_create_group_admin_returns_201(seeded):
     c, h = seeded["client"], seeded["headers"]
-    res = c.post("/api/groups", headers=h, json={
+    res = await c.post("/api/groups", headers=h, json={
         "name": "Under 17",
         "category": "Agonistica",
         "birth_year": 2008,
@@ -18,36 +18,36 @@ def test_create_group_admin_returns_201(seeded):
     assert "id" in data
 
 
-def test_create_group_appears_in_list(seeded):
+async def test_create_group_appears_in_list(seeded):
     c, h = seeded["client"], seeded["headers"]
-    c.post("/api/groups", headers=h, json={
+    await c.post("/api/groups", headers=h, json={
         "name": "Under 13",
         "category": "Promozionale",
         "birth_year": 2012,
         "level": "B",
     })
-    groups = c.get("/api/groups", headers=h).json()
+    groups = (await c.get("/api/groups", headers=h)).json()
     assert any(g["name"] == "Under 13" for g in groups)
 
 
-def test_delete_group_admin_returns_204(seeded):
+async def test_delete_group_admin_returns_204(seeded):
     c, h, gid = seeded["client"], seeded["headers"], seeded["group_id"]
-    res = c.delete(f"/api/groups/{gid}", headers=h)
+    res = await c.delete(f"/api/groups/{gid}", headers=h)
     assert res.status_code == 204
 
 
-def test_delete_group_removes_it_from_list(seeded):
+async def test_delete_group_removes_it_from_list(seeded):
     c, h, gid = seeded["client"], seeded["headers"], seeded["group_id"]
-    before = c.get("/api/groups", headers=h).json()
+    before = (await c.get("/api/groups", headers=h)).json()
     assert any(g["id"] == gid for g in before)
 
-    c.delete(f"/api/groups/{gid}", headers=h)
+    await c.delete(f"/api/groups/{gid}", headers=h)
 
-    after = c.get("/api/groups", headers=h).json()
+    after = (await c.get("/api/groups", headers=h)).json()
     assert not any(g["id"] == gid for g in after)
 
 
-def test_delete_nonexistent_group_returns_404(seeded):
+async def test_delete_nonexistent_group_returns_404(seeded):
     c, h = seeded["client"], seeded["headers"]
-    res = c.delete(f"/api/groups/{uuid.uuid4()}", headers=h)
+    res = await c.delete(f"/api/groups/{uuid.uuid4()}", headers=h)
     assert res.status_code == 404

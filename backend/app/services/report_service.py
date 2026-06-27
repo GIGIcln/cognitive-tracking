@@ -5,7 +5,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.group_target import GroupTarget
 from app.services.group_service import GroupService
@@ -226,27 +226,27 @@ def _format_date(d: date | datetime | None) -> str:
     return str(d)
 
 
-def build_player_report(player_id: uuid.UUID, db: Session) -> dict | None:
+async def build_player_report(player_id: uuid.UUID, db: AsyncSession) -> dict | None:
     ps = PlayerService(db)
     ss = SessionService(db)
     gs = GroupService(db)
 
-    player = ps.get(player_id)
+    player = await ps.get(player_id)
     if not player:
         return None
 
-    history = ps.get_history(player_id, limit=30)
+    history = await ps.get_history(player_id, limit=30)
     if not history:
         return None
 
     last = history[-1]
     group_id = last["group_id"]
-    targets_raw = gs.get_targets(group_id) or []
+    targets_raw = await gs.get_targets(group_id) or []
     targets_map = _build_targets_map(targets_raw)
 
     last_session_id = last["session_id"]
-    last_avg = ss.get_averages(last_session_id)
-    rankings = ss.get_rankings(last_session_id)
+    last_avg = await ss.get_averages(last_session_id)
+    rankings = await ss.get_rankings(last_session_id)
     ranking = next((r for r in rankings if r["player_id"] == player_id), None)
 
     recent = history[-12:]
@@ -290,25 +290,25 @@ def build_player_report(player_id: uuid.UUID, db: Session) -> dict | None:
     }
 
 
-def build_team_report(group_id: uuid.UUID, db: Session) -> dict | None:
+async def build_team_report(group_id: uuid.UUID, db: AsyncSession) -> dict | None:
     gs = GroupService(db)
     ss = SessionService(db)
 
-    group, _ = gs.get(group_id)
+    group, _ = await gs.get(group_id)
     if not group:
         return None
 
-    history = gs.get_history(group_id, limit=30)
+    history = await gs.get_history(group_id, limit=30)
     if not history:
         return None
 
-    targets_raw = gs.get_targets(group_id) or []
+    targets_raw = await gs.get_targets(group_id) or []
     targets_map = _build_targets_map(targets_raw)
 
     last = history[-1]
     last_session_id = last["session_id"]
 
-    measurements_raw = ss.get_measurements(last_session_id) or []
+    measurements_raw = await ss.get_measurements(last_session_id) or []
     player_rows: list[dict] = []
     for m in measurements_raw:
         if m.is_absent:
@@ -380,8 +380,8 @@ def build_team_report(group_id: uuid.UUID, db: Session) -> dict | None:
     }
 
 
-def render_player_report_pdf(player_id: uuid.UUID, db: Session) -> bytes | None:
-    data = build_player_report(player_id, db)
+async def render_player_report_pdf(player_id: uuid.UUID, db: AsyncSession) -> bytes | None:
+    data = await build_player_report(player_id, db)
     if data is None:
         return None
     template = _jinja_env.get_template("player_report.html")
@@ -391,8 +391,8 @@ def render_player_report_pdf(player_id: uuid.UUID, db: Session) -> bytes | None:
     return HTML(string=html, base_url=str(TEMPLATE_DIR)).write_pdf()
 
 
-def render_team_report_pdf(group_id: uuid.UUID, db: Session) -> bytes | None:
-    data = build_team_report(group_id, db)
+async def render_team_report_pdf(group_id: uuid.UUID, db: AsyncSession) -> bytes | None:
+    data = await build_team_report(group_id, db)
     if data is None:
         return None
     template = _jinja_env.get_template("team_report.html")
@@ -402,21 +402,21 @@ def render_team_report_pdf(group_id: uuid.UUID, db: Session) -> bytes | None:
     return HTML(string=html, base_url=str(TEMPLATE_DIR)).write_pdf()
 
 
-def build_session_team_report(session_id: uuid.UUID, db: Session) -> dict | None:
+async def build_session_team_report(session_id: uuid.UUID, db: AsyncSession) -> dict | None:
     ss = SessionService(db)
     gs = GroupService(db)
 
-    session_obj = ss.get(session_id)
+    session_obj = await ss.get(session_id)
     if not session_obj:
         return None
 
-    group, _ = gs.get(session_obj.group_id)
+    group, _ = await gs.get(session_obj.group_id)
     group_name = group.name if group else "—"
 
-    targets_raw = gs.get_targets(session_obj.group_id) or []
+    targets_raw = await gs.get_targets(session_obj.group_id) or []
     targets_map = _build_targets_map(targets_raw)
 
-    measurements_raw = ss.get_measurements(session_id) or []
+    measurements_raw = await ss.get_measurements(session_id) or []
     player_rows: list[dict] = []
     for m in measurements_raw:
         if m.is_absent:
@@ -437,7 +437,7 @@ def build_session_team_report(session_id: uuid.UUID, db: Session) -> dict | None
     player_rows.sort(key=lambda r: (r["avg"] or 0), reverse=True)
     player_rows_with_classes = _add_row_classes(player_rows, targets_map)
 
-    averages = ss.get_averages(session_id)
+    averages = await ss.get_averages(session_id)
     metric_boxes = [
         {
             "abbrev": abbrev,
@@ -467,29 +467,29 @@ def build_session_team_report(session_id: uuid.UUID, db: Session) -> dict | None
     }
 
 
-def build_session_player_report(session_id: uuid.UUID, player_id: uuid.UUID, db: Session) -> dict | None:
+async def build_session_player_report(session_id: uuid.UUID, player_id: uuid.UUID, db: AsyncSession) -> dict | None:
     ss = SessionService(db)
     gs = GroupService(db)
     ps = PlayerService(db)
 
-    session_obj = ss.get(session_id)
+    session_obj = await ss.get(session_id)
     if not session_obj:
         return None
 
-    player = ps.get(player_id)
+    player = await ps.get(player_id)
     if not player:
         return None
 
-    group, _ = gs.get(session_obj.group_id)
+    group, _ = await gs.get(session_obj.group_id)
     group_name = group.name if group else "—"
 
-    targets_raw = gs.get_targets(session_obj.group_id) or []
+    targets_raw = await gs.get_targets(session_obj.group_id) or []
     targets_map = _build_targets_map(targets_raw)
 
-    measurements_raw = ss.get_measurements(session_id) or []
+    measurements_raw = await ss.get_measurements(session_id) or []
     measurement = next((m for m in measurements_raw if m.player_id == player_id), None)
-    averages = ss.get_averages(session_id)
-    rankings = ss.get_rankings(session_id)
+    averages = await ss.get_averages(session_id)
+    rankings = await ss.get_rankings(session_id)
     ranking = next((r for r in rankings if r["player_id"] == player_id), None)
 
     player_scores: list[dict] = []
@@ -519,8 +519,8 @@ def build_session_player_report(session_id: uuid.UUID, player_id: uuid.UUID, db:
     }
 
 
-def render_session_team_report_pdf(session_id: uuid.UUID, db: Session) -> bytes | None:
-    data = build_session_team_report(session_id, db)
+async def render_session_team_report_pdf(session_id: uuid.UUID, db: AsyncSession) -> bytes | None:
+    data = await build_session_team_report(session_id, db)
     if data is None:
         return None
     template = _jinja_env.get_template("session_team_report.html")
@@ -530,8 +530,8 @@ def render_session_team_report_pdf(session_id: uuid.UUID, db: Session) -> bytes 
     return HTML(string=html, base_url=str(TEMPLATE_DIR)).write_pdf()
 
 
-def render_session_player_report_pdf(session_id: uuid.UUID, player_id: uuid.UUID, db: Session) -> bytes | None:
-    data = build_session_player_report(session_id, player_id, db)
+async def render_session_player_report_pdf(session_id: uuid.UUID, player_id: uuid.UUID, db: AsyncSession) -> bytes | None:
+    data = await build_session_player_report(session_id, player_id, db)
     if data is None:
         return None
     template = _jinja_env.get_template("session_player_report.html")

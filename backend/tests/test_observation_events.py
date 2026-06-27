@@ -16,41 +16,40 @@ _SESSION_BODY = {
 }
 
 
-def _create_session(c, h, gid):
-    res = c.post("/api/sessions", headers=h, json={**_SESSION_BODY, "group_id": gid})
+async def _create_session(c, h, gid):
+    res = await c.post("/api/sessions", headers=h, json={**_SESSION_BODY, "group_id": gid})
     assert res.status_code == 201, res.json()
     return res.json()["id"]
 
 
-def _post_events(c, h, sid, events):
-    return c.post(f"/api/sessions/{sid}/events", headers=h, json={"events": events})
+async def _post_events(c, h, sid, events):
+    return await c.post(f"/api/sessions/{sid}/events", headers=h, json={"events": events})
 
 
-def _get_events(c, h, sid):
-    return c.get(f"/api/sessions/{sid}/events", headers=h)
+async def _get_events(c, h, sid):
+    return await c.get(f"/api/sessions/{sid}/events", headers=h)
 
 
-def _get_measurements(c, h, sid):
-    return c.get(f"/api/sessions/{sid}/measurements", headers=h)
+async def _get_measurements(c, h, sid):
+    return await c.get(f"/api/sessions/{sid}/measurements", headers=h)
 
 
 # ── Test 1: GET-OR-CREATE ─────────────────────────────────────────────────────
 
-def test_events_creates_measurement_row_when_none_exists(seeded):
+async def test_events_creates_measurement_row_when_none_exists(seeded):
     """Caso senza measurements preesistente: il write-back deve creare la riga
     con il campo corretto e lasciare NULL le metriche non inviate."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
-    sid = _create_session(c, h, gid)
+    sid = await _create_session(c, h, gid)
 
-    # Invia solo SR: numerator=8, denominator=12  → score = 1 + (8/12)*9 ≈ 7.0
-    res = _post_events(c, h, sid, [
+    res = await _post_events(c, h, sid, [
         {"player_id": pid, "metric_type": "SR", "numerator": 8, "denominator": 12},
     ])
     assert res.status_code == 200, res.json()
 
-    measurements = _get_measurements(c, h, sid).json()
+    measurements = (await _get_measurements(c, h, sid)).json()
     assert len(measurements) == 1, "deve esserci esattamente una riga measurements"
     m = measurements[0]
     assert m["player_id"] == pid
@@ -58,7 +57,6 @@ def test_events_creates_measurement_row_when_none_exists(seeded):
     expected_sr = round(min(10.0, max(1.0, 1.0 + (8 / 12) * 9.0)), 1)  # 7.0
     assert m["scanning_rate"] == pytest.approx(expected_sr, abs=0.05)
 
-    # Le metriche non inviate devono restare NULL
     assert m["decision_quality"] is None
     assert m["anticipation"] is None
     assert m["transition_reset"] is None
@@ -67,61 +65,52 @@ def test_events_creates_measurement_row_when_none_exists(seeded):
 
 # ── Test 2: IDEMPOTENZA ───────────────────────────────────────────────────────
 
-def test_events_idempotency_no_duplicate_rows(seeded):
+async def test_events_idempotency_no_duplicate_rows(seeded):
     """Il secondo invio dello stesso batch non deve produrre righe duplicate né
     raddoppiare lo score in measurements."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
-    sid = _create_session(c, h, gid)
+    sid = await _create_session(c, h, gid)
     events = [{"player_id": pid, "metric_type": "SR", "numerator": 5, "denominator": 10}]
 
-    # Primo invio
-    r1 = _post_events(c, h, sid, events)
+    r1 = await _post_events(c, h, sid, events)
     assert r1.status_code == 200, r1.json()
-    rows_after_first = len(_get_events(c, h, sid).json())
+    rows_after_first = len((await _get_events(c, h, sid)).json())
 
-    # Secondo invio — stesso batch identico
-    r2 = _post_events(c, h, sid, events)
+    r2 = await _post_events(c, h, sid, events)
     assert r2.status_code == 200, r2.json()
-    rows_after_second = len(_get_events(c, h, sid).json())
+    rows_after_second = len((await _get_events(c, h, sid)).json())
 
     assert rows_after_second == rows_after_first, (
         f"il secondo invio ha aggiunto righe: {rows_after_first} → {rows_after_second}"
     )
 
-    # Lo score in measurements non deve essere raddoppiato
-    # SR: num=5, den=10 → 1 + 0.5*9 = 5.5
     expected = round(min(10.0, max(1.0, 1.0 + (5 / 10) * 9.0)), 1)  # 5.5
-    m = _get_measurements(c, h, sid).json()[0]
+    m = (await _get_measurements(c, h, sid)).json()[0]
     assert m["scanning_rate"] == pytest.approx(expected, abs=0.05)
 
 
 # ── Test 3: AGGREGAZIONE MULTI-RIGA ──────────────────────────────────────────
 
-def test_events_aggregation_sums_numerator_denominator(seeded):
+async def test_events_aggregation_sums_numerator_denominator(seeded):
     """Tre eventi SR per lo stesso player in un batch: la response POST deve
     restituire UNA riga aggregata con SUM(numerator)/SUM(denominator), mentre
     GET /events deve restituire le 3 righe grezze."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
-    sid = _create_session(c, h, gid)
+    sid = await _create_session(c, h, gid)
 
-    # 3 ricezioni SR:
-    #   (2, 4), (3, 6), (1, 5)  →  SUM = (6, 15)
-    #   raw_rate = 6/15 = 0.4
-    #   normalized_score = 1 + 0.4*9 = 4.6
     events = [
         {"player_id": pid, "metric_type": "SR", "numerator": 2, "denominator": 4},
         {"player_id": pid, "metric_type": "SR", "numerator": 3, "denominator": 6},
         {"player_id": pid, "metric_type": "SR", "numerator": 1, "denominator": 5},
     ]
-    res = _post_events(c, h, sid, events)
+    res = await _post_events(c, h, sid, events)
     assert res.status_code == 200, res.json()
 
     data = res.json()
-    # La response aggregata ha UNA sola voce per (player, metric)
     assert len(data) == 1, f"attesa 1 riga aggregata, trovate {len(data)}"
     agg = data[0]
 
@@ -132,8 +121,7 @@ def test_events_aggregation_sums_numerator_denominator(seeded):
     expected_score = round(min(10.0, max(1.0, 1.0 + (6 / 15) * 9.0)), 1)  # 4.6
     assert agg["normalized_score"] == pytest.approx(expected_score, abs=0.05)
 
-    # GET /events: deve restituire le 3 righe grezze (audit)
-    raw = _get_events(c, h, sid).json()
+    raw = (await _get_events(c, h, sid)).json()
     assert len(raw) == 3, f"attese 3 righe grezze, trovate {len(raw)}"
     raw_nums = sorted(r["numerator"] for r in raw)
     assert raw_nums == [1, 2, 3]
@@ -141,15 +129,14 @@ def test_events_aggregation_sums_numerator_denominator(seeded):
 
 # ── Test 4: INVARIANTE WRITE-BACK == RESPONSE ────────────────────────────────
 
-def test_events_writeback_score_matches_response_score(seeded):
+async def test_events_writeback_score_matches_response_score(seeded):
     """Il valore scritto in measurements deve essere identico al normalized_score
-    della response aggregata — le due aggregazioni devono essere coerenti."""
+    della response aggregata."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
-    sid = _create_session(c, h, gid)
-    # DQI: decisioni buone=10, osservate=20 → score = 1 + 0.5*9 = 5.5
-    res = _post_events(c, h, sid, [
+    sid = await _create_session(c, h, gid)
+    res = await _post_events(c, h, sid, [
         {"player_id": pid, "metric_type": "DQI", "numerator": 10, "denominator": 20},
     ])
     assert res.status_code == 200, res.json()
@@ -157,7 +144,7 @@ def test_events_writeback_score_matches_response_score(seeded):
     response_score = res.json()[0]["normalized_score"]
     assert response_score is not None, "normalized_score non deve essere None"
 
-    m = _get_measurements(c, h, sid).json()[0]
+    m = (await _get_measurements(c, h, sid)).json()[0]
     assert m["decision_quality"] == pytest.approx(response_score, abs=0.01), (
         f"write-back ({m['decision_quality']}) diverge dalla response ({response_score})"
     )
@@ -165,14 +152,13 @@ def test_events_writeback_score_matches_response_score(seeded):
 
 # ── Test 5: CAMPI NUOVI ───────────────────────────────────────────────────────
 
-def test_events_video_ref_and_codebook_version_accepted(seeded):
-    """video_ref e codebook_version sono esposti nella response GET /events (audit)
-    e, per l'aggregato POST, video_ref=None e codebook_version='v1' (versione unica)."""
+async def test_events_video_ref_and_codebook_version_accepted(seeded):
+    """video_ref e codebook_version sono esposti nella response GET /events (audit)."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
-    sid = _create_session(c, h, gid)
-    res = _post_events(c, h, sid, [
+    sid = await _create_session(c, h, gid)
+    res = await _post_events(c, h, sid, [
         {
             "player_id": pid,
             "metric_type": "SR",
@@ -184,26 +170,23 @@ def test_events_video_ref_and_codebook_version_accepted(seeded):
     ])
     assert res.status_code == 200, res.json()
 
-    # POST response (aggregata): video_ref=None, codebook_version="v1" (versione unica)
     agg = res.json()[0]
     assert agg["video_ref"] is None
     assert agg["codebook_version"] == "v1"
 
-    # GET response (audit): i campi originali devono essere presenti
-    raw = _get_events(c, h, sid).json()
+    raw = (await _get_events(c, h, sid)).json()
     assert len(raw) == 1, "la riga deve essere stata persistita"
     assert raw[0]["video_ref"] == "match_2026-05-01_clip_03.mp4"
     assert raw[0]["codebook_version"] == "v1"
 
 
-def test_events_aggregated_response_exposes_shared_codebook_version(seeded):
-    """POST con più righe che condividono la stessa codebook_version:
-    la response aggregata espone codebook_version='v1' e video_ref=None."""
+async def test_events_aggregated_response_exposes_shared_codebook_version(seeded):
+    """POST con più righe che condividono la stessa codebook_version."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
-    sid = _create_session(c, h, gid)
-    res = _post_events(c, h, sid, [
+    sid = await _create_session(c, h, gid)
+    res = await _post_events(c, h, sid, [
         {"player_id": pid, "metric_type": "SR", "numerator": 3, "denominator": 6,
          "codebook_version": "v1", "video_ref": "clip_a.mp4"},
         {"player_id": pid, "metric_type": "SR", "numerator": 2, "denominator": 4,
@@ -216,15 +199,13 @@ def test_events_aggregated_response_exposes_shared_codebook_version(seeded):
     assert agg["codebook_version"] == "v1", "versione unica deve essere esposta"
 
 
-def test_events_rejects_mixed_codebook_versions(seeded):
-    """POST con codebook_version sconosciuta ('v2') deve dare 422.
-    Le versioni miste sono impossibili perché ogni versione è validata in input:
-    solo versioni registrate in _VALID_CODEBOOK_VERSIONS sono accettate."""
+async def test_events_rejects_mixed_codebook_versions(seeded):
+    """POST con codebook_version sconosciuta ('v2') deve dare 422."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
-    sid = _create_session(c, h, gid)
-    res = _post_events(c, h, sid, [
+    sid = await _create_session(c, h, gid)
+    res = await _post_events(c, h, sid, [
         {"player_id": pid, "metric_type": "SR", "numerator": 3, "denominator": 6,
          "codebook_version": "v1"},
         {"player_id": pid, "metric_type": "SR", "numerator": 2, "denominator": 4,
@@ -237,42 +218,34 @@ def test_events_rejects_mixed_codebook_versions(seeded):
 
 # ── Test 6: AUDIT — righe grezze via GET ─────────────────────────────────────
 
-def test_events_get_returns_one_raw_row_per_event_not_aggregated(seeded):
-    """GET /events è il percorso di audit: restituisce una riga per evento,
-    non l'aggregato. POST con 2 eventi per la stessa (player, metric) deve
-    lasciare 2 righe grezze distinte."""
+async def test_events_get_returns_one_raw_row_per_event_not_aggregated(seeded):
+    """GET /events è il percorso di audit: restituisce una riga per evento."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
-    sid = _create_session(c, h, gid)
-    # 2 ricezioni SR diverse
-    res = _post_events(c, h, sid, [
+    sid = await _create_session(c, h, gid)
+    res = await _post_events(c, h, sid, [
         {"player_id": pid, "metric_type": "SR", "numerator": 3, "denominator": 6},
         {"player_id": pid, "metric_type": "SR", "numerator": 2, "denominator": 4},
     ])
     assert res.status_code == 200, res.json()
 
-    # POST response: 1 riga aggregata
     post_data = res.json()
     assert len(post_data) == 1, "POST deve restituire 1 riga aggregata"
 
-    # GET response: 2 righe grezze
-    raw = _get_events(c, h, sid).json()
+    raw = (await _get_events(c, h, sid)).json()
     assert len(raw) == 2, f"GET deve restituire 2 righe grezze, trovate {len(raw)}"
 
 
 # ── Test 7: SR scan rate > 1 ─────────────────────────────────────────────────
 
-def test_sr_numerator_greater_than_denominator_is_valid(seeded):
-    """SR: denominator = durata finestra in secondi. Un giocatore può eseguire
-    più scan al secondo (es. 3 scan in 2 sec), perciò numerator > denominator
-    è una condizione legittima e non deve dare 422."""
+async def test_sr_numerator_greater_than_denominator_is_valid(seeded):
+    """SR: denominator = durata finestra in secondi. numerator > denominator è legittimo."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
-    sid = _create_session(c, h, gid)
-    # 3 scan in 2 secondi → scan rate = 1.5 → normalized_score = min(10, 1 + 1.5*9) = 10.0
-    res = _post_events(c, h, sid, [
+    sid = await _create_session(c, h, gid)
+    res = await _post_events(c, h, sid, [
         {"player_id": pid, "metric_type": "SR", "numerator": 3, "denominator": 2},
     ])
     assert res.status_code == 200, f"SR con numerator>denominator deve essere valido: {res.json()}"
@@ -282,16 +255,13 @@ def test_sr_numerator_greater_than_denominator_is_valid(seeded):
 
 # ── Test 7: SR RELIABILITY — COUNT-BASED ─────────────────────────────────────
 
-def test_sr_reliability_insufficient_when_few_events_many_seconds(seeded):
-    """Bug-pin: 2 ricezioni SR con molti secondi totali devono dare 'insufficient'.
-    Il denominator elevato (=secondi) NON deve salvare il flag — la reliability
-    è ora basata su COUNT(righe), non sulla somma dei secondi."""
+async def test_sr_reliability_insufficient_when_few_events_many_seconds(seeded):
+    """Bug-pin: 2 ricezioni SR con molti secondi totali devono dare 'insufficient'."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
-    sid = _create_session(c, h, gid)
-    # den totale = 40 secondi, ma solo 2 righe → n=2 < half(3) → "insufficient"
-    res = _post_events(c, h, sid, [
+    sid = await _create_session(c, h, gid)
+    res = await _post_events(c, h, sid, [
         {"player_id": pid, "metric_type": "SR", "numerator": 8, "denominator": 20},
         {"player_id": pid, "metric_type": "SR", "numerator": 5, "denominator": 20},
     ])
@@ -302,9 +272,8 @@ def test_sr_reliability_insufficient_when_few_events_many_seconds(seeded):
     )
 
 
-def test_sr_reliability_boundaries(seeded):
-    """Bande SR con min_n=6: <3 insufficient, 3-5 low, 6-11 medium, ≥12 high.
-    Copre tutti i confini di banda."""
+async def test_sr_reliability_boundaries(seeded):
+    """Bande SR con min_n=6: <3 insufficient, 3-5 low, 6-11 medium, ≥12 high."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
 
@@ -317,8 +286,8 @@ def test_sr_reliability_boundaries(seeded):
         (12, "high"),
     ]
     for count, expected in cases:
-        sid = _create_session(c, h, gid)
-        res = _post_events(c, h, sid, [
+        sid = await _create_session(c, h, gid)
+        res = await _post_events(c, h, sid, [
             {"player_id": pid, "metric_type": "SR", "numerator": 1, "denominator": 3}
             for _ in range(count)
         ])
@@ -332,115 +301,107 @@ def test_sr_reliability_boundaries(seeded):
 # ── Test 8: NON-REGRESSIONE DQI/TRS/VCI/AI ───────────────────────────────────
 
 def test_reliability_non_regression_dqi_trs_vci_ai():
-    """DQI/TRS/VCI usano ancora denominator, AI usa ancora numerator.
-    Soglie immutate rispetto a prima della modifica SR."""
+    """DQI/TRS/VCI usano ancora denominator, AI usa ancora numerator."""
 
-    # DQI: min_n=20, half=10
-    assert reliability_flag("DQI", 9)  == "insufficient"  # 9 < 10
-    assert reliability_flag("DQI", 10) == "low"           # 10 < 20
-    assert reliability_flag("DQI", 25) == "medium"        # 20 ≤ 25 < 40
-    assert reliability_flag("DQI", 40) == "high"          # ≥ 40
+    assert reliability_flag("DQI", 9)  == "insufficient"
+    assert reliability_flag("DQI", 10) == "low"
+    assert reliability_flag("DQI", 25) == "medium"
+    assert reliability_flag("DQI", 40) == "high"
 
-    # TRS: min_n=10, half=5
-    assert reliability_flag("TRS", 4)  == "insufficient"  # 4 < 5
-    assert reliability_flag("TRS", 5)  == "low"           # 5 < 10
-    assert reliability_flag("TRS", 15) == "medium"        # 10 ≤ 15 < 20
-    assert reliability_flag("TRS", 20) == "high"          # ≥ 20
+    assert reliability_flag("TRS", 4)  == "insufficient"
+    assert reliability_flag("TRS", 5)  == "low"
+    assert reliability_flag("TRS", 15) == "medium"
+    assert reliability_flag("TRS", 20) == "high"
 
-    # VCI: min_n=8, half=4
-    assert reliability_flag("VCI", 3)  == "insufficient"  # 3 < 4
-    assert reliability_flag("VCI", 4)  == "low"           # 4 < 8
-    assert reliability_flag("VCI", 10) == "medium"        # 8 ≤ 10 < 16
-    assert reliability_flag("VCI", 16) == "high"          # ≥ 16
+    assert reliability_flag("VCI", 3)  == "insufficient"
+    assert reliability_flag("VCI", 4)  == "low"
+    assert reliability_flag("VCI", 10) == "medium"
+    assert reliability_flag("VCI", 16) == "high"
 
-    # AI: soglie 3/6/10 invariate
-    assert reliability_flag("AI", 2)  == "insufficient"   # 2 < 3
-    assert reliability_flag("AI", 3)  == "low"            # 3 < 6
-    assert reliability_flag("AI", 6)  == "medium"         # 6 < 10
-    assert reliability_flag("AI", 10) == "high"           # ≥ 10
+    assert reliability_flag("AI", 2)  == "insufficient"
+    assert reliability_flag("AI", 3)  == "low"
+    assert reliability_flag("AI", 6)  == "medium"
+    assert reliability_flag("AI", 10) == "high"
 
 
 # ── Test 9: VALIDAZIONE INPUT ─────────────────────────────────────────────────
 
-def test_events_rejects_unknown_metric_type(seeded):
+async def test_events_rejects_unknown_metric_type(seeded):
     """Un metric_type non riconosciuto deve restituire 422."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
-    sid = _create_session(c, h, gid)
-    res = _post_events(c, h, sid, [
+    sid = await _create_session(c, h, gid)
+    res = await _post_events(c, h, sid, [
         {"player_id": pid, "metric_type": "XYZ", "numerator": 5, "denominator": 10},
     ])
     assert res.status_code == 422, res.json()
 
 
-def test_events_rejects_zero_denominator_for_ratio_metric(seeded):
+async def test_events_rejects_zero_denominator_for_ratio_metric(seeded):
     """denominator=0 per una metrica percentuale (SR/DQI/TRS) deve dare 422."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
-    sid = _create_session(c, h, gid)
+    sid = await _create_session(c, h, gid)
     for metric in ("SR", "DQI", "TRS", "VCI"):
-        res = _post_events(c, h, sid, [
+        res = await _post_events(c, h, sid, [
             {"player_id": pid, "metric_type": metric, "numerator": 0, "denominator": 0},
         ])
         assert res.status_code == 422, f"{metric}: atteso 422 con denominator=0, got {res.status_code}"
 
 
-def test_events_rejects_numerator_exceeds_denominator_for_ratio_metric(seeded):
-    """numerator > denominator per DQI/TRS è fisicamente impossibile (è una percentuale).
-    SR è escluso: denominator = secondi, la scan rate può superare 1 scan/sec."""
+async def test_events_rejects_numerator_exceeds_denominator_for_ratio_metric(seeded):
+    """numerator > denominator per DQI/TRS è fisicamente impossibile."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
-    sid = _create_session(c, h, gid)
+    sid = await _create_session(c, h, gid)
     for metric in ("DQI", "TRS"):
-        res = _post_events(c, h, sid, [
+        res = await _post_events(c, h, sid, [
             {"player_id": pid, "metric_type": metric, "numerator": 8, "denominator": 5},
         ])
         assert res.status_code == 422, f"{metric}: atteso 422 con num>den, got {res.status_code}"
 
 
-def test_events_rejects_unknown_codebook_version(seeded):
+async def test_events_rejects_unknown_codebook_version(seeded):
     """Una codebook_version non riconosciuta deve dare 422."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
-    sid = _create_session(c, h, gid)
-    res = _post_events(c, h, sid, [
+    sid = await _create_session(c, h, gid)
+    res = await _post_events(c, h, sid, [
         {"player_id": pid, "metric_type": "SR", "numerator": 5, "denominator": 10,
          "codebook_version": "v99"},
     ])
     assert res.status_code == 422, res.json()
 
 
-def test_events_accepts_vci_numerator_exceeding_denominator(seeded):
+async def test_events_accepts_vci_numerator_exceeding_denominator(seeded):
     """VCI è frequenza (eventi/minuto): numerator > denominator è valido."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
-    sid = _create_session(c, h, gid)
-    # 10 comunicazioni in 3 minuti = valido
-    res = _post_events(c, h, sid, [
+    sid = await _create_session(c, h, gid)
+    res = await _post_events(c, h, sid, [
         {"player_id": pid, "metric_type": "VCI", "numerator": 10, "denominator": 3},
     ])
     assert res.status_code == 200, res.json()
 
 
-def test_events_accepts_ai_with_denominator_zero(seeded):
+async def test_events_accepts_ai_with_denominator_zero(seeded):
     """AI è un conteggio puro: denominator=0 è accettato (AI non usa denominator)."""
     c, h = seeded["client"], seeded["headers"]
     gid, pid = seeded["group_id"], seeded["player_id"]
-    sid = _create_session(c, h, gid)
-    # AI count-only: il frontend manda denominator=1, ma 0 è ok per AI
-    res = _post_events(c, h, sid, [
+    sid = await _create_session(c, h, gid)
+    res = await _post_events(c, h, sid, [
         {"player_id": pid, "metric_type": "AI", "numerator": 5, "denominator": 0},
     ])
     assert res.status_code == 200, res.json()
 
 
-def test_upsert_events_unknown_player_returns_422(seeded):
-    """player_id inesistente nel batch eventi deve dare 422 (input non processabile)."""
+async def test_upsert_events_unknown_player_returns_422(seeded):
+    """player_id inesistente nel batch eventi deve dare 422."""
     import uuid as _uuid
     c, h = seeded["client"], seeded["headers"]
     gid = seeded["group_id"]
-    sid = _create_session(c, h, gid)
-    res = _post_events(c, h, sid, [
+    sid = await _create_session(c, h, gid)
+    res = await _post_events(c, h, sid, [
         {"player_id": str(_uuid.uuid4()), "metric_type": "SR", "numerator": 5, "denominator": 10},
     ])
     assert res.status_code == 422
