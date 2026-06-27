@@ -90,6 +90,15 @@ I moduli seguenti sono pianificati nell'ordine indicato. Ogni modulo segue il so
 | **GS-11** Convocazioni pre-gara | ✅ completato | match_convocations, tab Convocati in MatchDetailPage |
 | **GS-12** Tab Presenze in PlayerDetailPage | ✅ completato | GET /players/{id}/attendance, tab Presenze con sommario % |
 | **GS-13** Record stagionale e classifica marcatori | ✅ completato | GET /matches/scorers (SQL aggr.); header V/P/S in MatchesPage; tab Partite in GroupDetailPage |
+| **GS-14** Tab Partite in GroupDetailPage | ✅ completato | lista gare del gruppo per stagione |
+| **GS-15** SeasonGroupContext in MatchesPage + marcatori cliccabili | ✅ completato | filtro stagione/gruppo bidirezionale; link marcatori → PlayerDetailPage |
+| **GS-16** Filtro disponibilità in PlayersPage + link giocatori in MatchDetailPage | ✅ completato | filtro badge disponibilità; nomi formazione cliccabili |
+| **GS-17** Card sommario stagionale in PlayerDetailPage | ✅ completato | presenze %, gol, assist, minuti aggregati per stagione |
+| **HS-01** Fix rilevamento "server irraggiungibile" in OfflineContext | 🔲 pianificato | endpoint /api/health; stati online/server_down/offline; banner distinto |
+| **HS-02** Build di produzione con Nginx | 🔲 pianificato | Dockerfile.frontend.prod; nginx.conf; docker-compose.prod.yml |
+| **HS-03** Cloudflare Tunnel: setup e configurazione | 🔲 pianificato | config.yml; avvio automatico; docs/deploy/home-server.md |
+| **HS-04** PWA offline-first: audit e raffinamento UX | 🔲 pianificato | Workbox cache strategy; indicatore sync migliorato |
+| **HS-05** Conflict resolution multi-device (opzionale) | 🔲 opzionale | last-write-wins esplicito; modal diff conflitti |
 
 ## Observation events (metriche cognitive)
 - Modello **per-evento** (`observation_events`, append-only); salvataggio batch idempotente (delete-per-pair + insert), non upsert.

@@ -346,3 +346,148 @@ Dipende da: GS-04 (modulo presenze).
 - Tab **Presenze** in `PlayerDetailPage`: sommario (% presenze, presenti/assenti/giustificati) + lista sessioni con stato badge
 
 _File:_ `backend/app/schemas/attendance.py`, `backend/app/services/attendance_service.py`, `backend/app/routers/players.py`, `frontend/src/types/api.ts`, `frontend/src/api/attendance.ts`, `frontend/src/pages/PlayerDetailPage.tsx`
+
+---
+
+### ~~GS-13 — Record stagionale e classifica marcatori~~ ✅ Completato
+
+- Endpoint `GET /matches/scorers` con aggregazione SQL (SUM gol/assist per giocatore, stagione, gruppo)
+- Header V/P/S (vittorie/pareggi/sconfitte) in `MatchesPage`
+- Tab **Partite** in `GroupDetailPage` con classifica marcatori e record stagionale
+
+_File:_ `backend/app/routers/matches.py`, `backend/app/services/match_service.py`, `frontend/src/pages/MatchesPage.tsx`, `frontend/src/pages/GroupDetailPage.tsx`
+
+---
+
+### ~~GS-14 — Tab Partite in GroupDetailPage~~ ✅ Completato
+
+- Tab **Partite** in `GroupDetailPage` con lista gare del gruppo per stagione (risultati, avversario, data)
+
+_File:_ `frontend/src/pages/GroupDetailPage.tsx`
+
+---
+
+### ~~GS-15 — SeasonGroupContext in MatchesPage + marcatori cliccabili~~ ✅ Completato
+
+- `MatchesPage` ora consuma `SeasonGroupContext` per filtrare le gare per stagione/gruppo attivi
+- Marcatori nella classifica cliccabili → link a `PlayerDetailPage`
+
+_File:_ `frontend/src/pages/MatchesPage.tsx`
+
+---
+
+### ~~GS-16 — Filtro disponibilità in PlayersPage + link giocatori in MatchDetailPage~~ ✅ Completato
+
+- Filtro per stato disponibilità (disponibile / infortunato / limitato) in `PlayersPage`
+- Nomi giocatori nella formazione di `MatchDetailPage` cliccabili → link a `PlayerDetailPage`
+
+_File:_ `frontend/src/pages/PlayersPage.tsx`, `frontend/src/pages/MatchDetailPage.tsx`
+
+---
+
+### ~~GS-17 — Card sommario stagionale in PlayerDetailPage~~ ✅ Completato
+
+- Card riepilogativa in cima a `PlayerDetailPage`: presenze %, gol, assist, minuti stagionali aggregati
+
+_File:_ `frontend/src/pages/PlayerDetailPage.tsx`
+
+---
+
+## 7. Home Server Deployment (HS-*)
+
+> Obiettivo: rendere l'app raggiungibile da smartphone in campo, con inserimento dati offline quando il server (PC fisso di casa) è spento, e sincronizzazione automatica alla riaccensione. Costo: zero (Cloudflare Tunnel free tier + infrastruttura esistente).
+
+### Architettura target
+
+```
+Smartphone (campo/palestra)              PC fisso (casa)
+┌──────────────────────────┐             ┌───────────────────────────┐
+│  PWA installata          │             │  Docker Compose           │
+│  Inserimento dati        │   HTTPS     │  ├─ Nginx (porta 80)      │
+│  ↓ server non raggiung.  │ ─────────► │  │   ├─ /api → FastAPI     │
+│  Coda IndexedDB          │  sync auto  │  │   └─ / → React build    │
+│  (retry finché online)   │ ◄───────── │  └─ PostgreSQL             │
+└──────────────────────────┘             │  cloudflared tunnel        │
+                                         └───────────────────────────┘
+                                                    ↕
+                                         rete Cloudflare (HTTPS/SSL)
+                                                    ↕
+                                         dominio pubblico (es. team.example.com)
+```
+
+---
+
+### HS-01 — Fix rilevamento "server irraggiungibile" in OfflineContext
+
+**Problema attuale:** `OfflineContext` accoda le mutation solo quando `navigator.onLine = false`. Se lo smartphone ha connessione 4G ma il PC è spento, `navigator.onLine` rimane `true` → le mutation falliscono con errore invece di andare in coda.
+
+**Soluzione:**
+- Aggiungere endpoint leggero `GET /api/health` (no auth, risponde `{"ok": true}`)
+- `OfflineContext` distingue tre stati: `online` (server raggiungibile), `server_down` (internet sì, server no), `offline` (no internet)
+- Mutation fallite per errore di rete o 5xx → accoda con retry; 4xx → scarta (comportamento già corretto)
+- Banner distinto: "Nessuna connessione" vs "Server non raggiungibile — dati salvati in locale"
+- Ping periodico (ogni 30s) quando in stato `server_down` per rilevare il ritorno del server
+
+_File:_ `frontend/src/context/OfflineContext.tsx`, `backend/app/routers/health.py` (nuovo), `backend/app/main.py`
+
+---
+
+### HS-02 — Build di produzione con Nginx
+
+**Problema:** in sviluppo Vite dev server serve il frontend. In produzione serve un build statico servito da Nginx, con Nginx che fa anche proxy verso FastAPI — così Cloudflare Tunnel espone un solo endpoint (porta 80).
+
+**Soluzione:**
+- `Dockerfile.frontend.prod`: `npm run build` → immagine Nginx con il build in `/usr/share/nginx/html`
+- `nginx.conf`: `location /api/` → proxy a `backend:8000`; tutto il resto → `index.html` (SPA routing)
+- `docker-compose.prod.yml`: sostituisce il servizio `frontend` con l'immagine Nginx; rimuove `vite` e port `5173`; aggiunge variabili d'ambiente di produzione
+- `.env.production` (non versionato): `SECRET_KEY`, `DATABASE_URL`, `ALLOWED_ORIGINS` con il dominio Cloudflare
+
+_File:_ `Dockerfile.frontend.prod` (nuovo), `nginx.conf` (nuovo), `docker-compose.prod.yml` (nuovo), `.env.production.example` (nuovo, versionato come template)
+
+---
+
+### HS-03 — Cloudflare Tunnel: setup e configurazione
+
+**Cosa serve:**
+- Account Cloudflare gratuito + dominio collegato (o sottodominio su dominio esistente)
+- `cloudflared` installato sul PC fisso
+- Tunnel configurato: `tuodominio.com → localhost:80` (Nginx del compose)
+- CORS aggiornato: il dominio Cloudflare aggiunto a `ALLOWED_ORIGINS` in `backend/app/config.py`
+
+**Configurazione:**
+- `cloudflared/config.yml` (nel repo, template senza segreti): definisce ingress rules
+- Script di avvio automatico al boot del PC (systemd su Linux, launchd su Mac, Task Scheduler su Windows)
+- Documentazione in `docs/deploy/home-server.md`: step-by-step dal primo boot al dominio raggiungibile
+
+_File:_ `cloudflared/config.yml.example` (nuovo), `docs/deploy/home-server.md` (nuovo)
+
+---
+
+### HS-04 — PWA offline-first: audit e raffinamento UX
+
+**Obiettivo:** garantire che tutte le pagine di inserimento dati (sessioni, partite, presenze) siano completamente fruibili offline dopo il primo caricamento.
+
+**Azioni:**
+- Audit service worker: verifica che `SessionDetailPage`, `MatchDetailPage`, `PlayersPage` siano nella cache precache di Workbox
+- Strategia cache per le API GET: `StaleWhileRevalidate` per dati relativamente statici (giocatori, gruppi); `NetworkFirst` con fallback cache per sessioni e partite
+- Indicatore sync migliorato: contatore item in coda, timestamp ultimo sync riuscito, progress bar durante flush della coda
+- Test manuale del flusso completo: modalità aereo → inserimento dati → riconnessione → verifica sync
+
+_File:_ `frontend/vite.config.ts` (workbox config), `frontend/src/context/OfflineContext.tsx`, `frontend/src/components/OfflineBanner.tsx`
+
+---
+
+### HS-05 — Conflict resolution per sync multi-device (opzionale)
+
+Dipende da: HS-01.
+
+**Problema:** se due allenatori modificano lo stesso record offline e poi sincronizzano, vince l'ultimo che sincronizza (last-write-wins implicito). Per la maggior parte dei casi d'uso è accettabile; questo modulo lo rende esplicito e gestibile.
+
+**Soluzione minima (last-write-wins esplicito):**
+- Tutti i modelli hanno già `updated_at` — il backend confronta il timestamp del client con quello del DB
+- Se `client.updated_at < db.updated_at` → risponde `409 Conflict` con il record corrente
+- Frontend: modal "Dati più recenti disponibili sul server — vuoi sovrascrivere?" con anteprima diff
+
+**Prerequisiti:** `updated_at` già presente sui modelli principali (da verificare).
+
+_File:_ `backend/app/services/` (logica conflict check), `frontend/src/context/OfflineContext.tsx`, `frontend/src/components/ConflictModal.tsx` (nuovo)
