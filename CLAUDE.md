@@ -85,6 +85,10 @@ I moduli seguenti sono pianificati nell'ordine indicato. Ogni modulo segue il so
 | **GS-06** Impostazioni gruppo (allenatore) | ✅ completato | Gate modalità punteggio in SessionDetailPage |
 | **GS-07** Infortuni & disponibilità | ✅ completato | InjuryLog, stato rosa, badge disponibilità |
 | **GS-08** UI redesign: context bar + layout allargato | ✅ completato | SeasonGroupContext + sidebar collassabile + bottom nav mobile |
+| **GS-09** Statistiche partita estese + tab Partite giocatore | ✅ completato | goals/assists/cards/rating su match_lineups; tab Partite in PlayerDetailPage |
+| **GS-10** Dashboard role-specific | ✅ completato | Banner pending (admin), panoramica gruppi (resp.tecnico), disponibilità rosa (allenatore) |
+| **GS-11** Convocazioni pre-gara | ✅ completato | match_convocations, tab Convocati in MatchDetailPage |
+| **GS-12** Tab Presenze in PlayerDetailPage | ✅ completato | GET /players/{id}/attendance, tab Presenze con sommario % |
 
 ## Observation events (metriche cognitive)
 - Modello **per-evento** (`observation_events`, append-only); salvataggio batch idempotente (delete-per-pair + insert), non upsert.

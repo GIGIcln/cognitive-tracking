@@ -304,3 +304,45 @@ Tabella `injury_log` (player_id, injury_type, start_date, expected_return, actua
 - **Dashboard role-specific**: non implementata — `DashboardPage` è ancora uniforme per tutti i ruoli. Da valutare come task separato se necessario.
 
 _File:_ `frontend/src/context/SeasonGroupContext.jsx`, `frontend/src/layouts/MainLayout.jsx`, `frontend/src/pages/SessionsPage.jsx`
+
+---
+
+### ~~GS-09 — Statistiche Partita estese + tab Partite in PlayerDetailPage~~ ✅ Completato
+
+- Migrazione 0021: `goals`, `assists`, `yellow_cards`, `red_cards`, `rating` (Numeric 3,1) su `match_lineups`
+- `MatchDetailPage`: griglia formazione espansa con gol, assist, cartellini, voto (step 0.5)
+- Endpoint `GET /players/{id}/matches` con storico gare e stats per giocatore
+- Tab **Partite** in `PlayerDetailPage`: sommario stagionale (partite/minuti/gol/assist/voto medio) + lista gare con risultato V/S/P
+
+_File:_ `backend/alembic/versions/0021_*`, `backend/app/models/match.py`, `backend/app/schemas/match.py`, `backend/app/services/match_service.py`, `backend/app/routers/players.py`, `frontend/src/pages/MatchDetailPage.tsx`, `frontend/src/pages/PlayerDetailPage.tsx`
+
+---
+
+### ~~GS-10 — Dashboard role-specific~~ ✅ Completato
+
+- **Admin**: banner utenti in attesa di attivazione (status `pending`) con link a `/impostazioni/utenti`
+- **Responsabile tecnico**: sezione "Squadre" con card per ogni gruppo (nome, livello, categoria, anno)
+- **Allenatore**: sezione "Disponibilità rosa" con lista giocatori del proprio gruppo e badge disponibilità
+
+_File:_ `frontend/src/pages/DashboardPage.tsx`
+
+---
+
+### ~~GS-11 — Convocazioni pre-gara~~ ✅ Completato
+
+- Migrazione 0022: tabella `match_convocations` (match_id, player_id, unique constraint)
+- Endpoint `GET/PUT /matches/{id}/convocations` per salvataggio batch
+- Tab **Convocati** in `MatchDetailPage`: toggle per giocatore (ordinati: convocati prima), flag disponibilità, badge count nel tab header
+
+_File:_ `backend/alembic/versions/0022_*`, `backend/app/models/match.py`, `backend/app/schemas/match.py`, `backend/app/services/match_service.py`, `backend/app/routers/matches.py`, `frontend/src/pages/MatchDetailPage.tsx`
+
+---
+
+### ~~GS-12 — Tab Presenze in PlayerDetailPage~~ ✅ Completato
+
+Dipende da: GS-04 (modulo presenze).
+
+- Endpoint `GET /players/{id}/attendance` (join Attendance + TrainingSession + Group, scoping RBAC)
+- Tab **Presenze** in `PlayerDetailPage`: sommario (% presenze, presenti/assenti/giustificati) + lista sessioni con stato badge
+
+_File:_ `backend/app/schemas/attendance.py`, `backend/app/services/attendance_service.py`, `backend/app/routers/players.py`, `frontend/src/types/api.ts`, `frontend/src/api/attendance.ts`, `frontend/src/pages/PlayerDetailPage.tsx`

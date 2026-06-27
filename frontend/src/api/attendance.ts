@@ -5,3 +5,6 @@ export const getAttendance = (sessionId: string) =>
 
 export const saveAttendance = (sessionId: string, records: unknown[]) =>
   axios.put(`/sessions/${sessionId}/attendance`, { records })
+
+export const getPlayerAttendance = (playerId: string) =>
+  axios.get(`/players/${playerId}/attendance`)

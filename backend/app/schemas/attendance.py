@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 from pydantic import BaseModel, field_validator
 
@@ -30,3 +31,12 @@ class AttendanceResponse(BaseModel):
     note: str | None
 
     model_config = {"from_attributes": True}
+
+
+class PlayerAttendanceItemResponse(BaseModel):
+    session_id: uuid.UUID
+    session_date: date
+    session_type: str
+    group_name: str
+    status: str
+    note: str | None

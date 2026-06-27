@@ -7,9 +7,10 @@ import {
 import { getPlayer, getPlayerHistory, getPlayerAssignments, getPlayerStreak } from '../api/players'
 import { listInjuries, createInjury, updateInjury, deleteInjury } from '../api/injuries'
 import { getPlayerMatches } from '../api/matches'
+import { getPlayerAttendance } from '../api/attendance'
 import { COGNITIVE_PARAMS, METRIC_COLORS } from '../constants/domain'
 import AvailabilityBadge from '../components/AvailabilityBadge'
-import type { Player, PlayerAssignment, PlayerHistoryItem, InjuryLog, PlayerMatchItem } from '../types/api'
+import type { Player, PlayerAssignment, PlayerHistoryItem, InjuryLog, PlayerMatchItem, PlayerAttendanceItem } from '../types/api'
 
 const METRICS = COGNITIVE_PARAMS.map((p) => ({ key: p.field, label: p.label, color: METRIC_COLORS[p.field] }))
 
@@ -369,6 +370,84 @@ function InjuryTab({ playerId }: { playerId: string }) {
   )
 }
 
+const SESSION_TYPE_LABELS: Record<string, string> = { training: 'Allenamento', match: 'Partita', test: 'Test' }
+const ATTENDANCE_STATUS: Record<string, { label: string; cls: string }> = {
+  present:   { label: 'Presente',    cls: 'bg-green-100 text-green-700' },
+  absent:    { label: 'Assente',     cls: 'bg-red-100 text-red-700' },
+  justified: { label: 'Giustificato', cls: 'bg-yellow-100 text-yellow-700' },
+  injured:   { label: 'Infortunato', cls: 'bg-orange-100 text-orange-700' },
+}
+
+function AttendanceTab({ playerId }: { playerId: string }) {
+  const [records, setRecords] = useState<PlayerAttendanceItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getPlayerAttendance(playerId)
+      .then((res) => setRecords(res.data as PlayerAttendanceItem[]))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [playerId])
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="animate-spin rounded-full h-6 w-6 border-4 border-granata border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (!records.length) {
+    return <div className="text-center text-gray-400 py-12 text-sm">Nessuna presenza registrata</div>
+  }
+
+  const total = records.length
+  const present = records.filter((r) => r.status === 'present').length
+  const absent = records.filter((r) => r.status === 'absent').length
+  const justified = records.filter((r) => r.status === 'justified').length
+  const injured = records.filter((r) => r.status === 'injured').length
+  const pct = total > 0 ? Math.round((present / total) * 100) : 0
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {[
+          { label: '% presenze', value: `${pct}%` },
+          { label: 'Presenti', value: present },
+          { label: 'Assenti', value: absent },
+          { label: 'Giustificati', value: justified + injured },
+        ].map(({ label, value }) => (
+          <div key={label} className="bg-white rounded-xl border border-gray-200 px-3 py-2 text-center">
+            <div className="text-lg font-bold text-gray-900">{value}</div>
+            <div className="text-xs text-gray-500">{label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+        {records.map((r) => {
+          const st = ATTENDANCE_STATUS[r.status] ?? { label: r.status, cls: 'bg-gray-100 text-gray-600' }
+          return (
+            <div key={r.session_id} className="flex items-center justify-between px-4 py-2.5 gap-2">
+              <div className="min-w-0">
+                <div className="text-sm text-gray-900">
+                  {new Date(r.session_date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  <span className="text-xs text-gray-400 ml-2">{SESSION_TYPE_LABELS[r.session_type] ?? r.session_type}</span>
+                </div>
+                {r.note && <div className="text-xs text-gray-400 mt-0.5 italic">{r.note}</div>}
+              </div>
+              <span className={`shrink-0 text-xs font-medium px-2.5 py-0.5 rounded-full ${st.cls}`}>
+                {st.label}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+      <div className="text-xs text-gray-400 text-right">{total} sessioni totali</div>
+    </div>
+  )
+}
+
 const HOME_AWAY_LABEL: Record<string, string> = { home: 'Casa', away: 'Trasferta', neutral: 'Neutro' }
 const MATCH_TYPE_LABEL: Record<string, string> = { campionato: 'Camp.', coppa: 'Coppa', amichevole: 'Amich.' }
 
@@ -573,6 +652,7 @@ export default function PlayerDetailPage() {
           { key: 'anagrafica', label: 'Anagrafica' },
           { key: 'gruppi',     label: 'Storico gruppi' },
           { key: 'trend',      label: 'Trend metriche' },
+          { key: 'presenze',   label: 'Presenze' },
           { key: 'partite',    label: 'Partite' },
           { key: 'infortuni',  label: 'Infortuni' },
         ].map(({ key, label }) => (
@@ -642,6 +722,11 @@ export default function PlayerDetailPage() {
       {/* Trend metriche */}
       {activeTab === 'trend' && (
         <MetricsTrend history={history} loading={historyLoading} />
+      )}
+
+      {/* Presenze */}
+      {activeTab === 'presenze' && (
+        <AttendanceTab playerId={id!} />
       )}
 
       {/* Partite */}

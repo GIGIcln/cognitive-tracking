@@ -189,6 +189,15 @@ export interface MatchDetail extends Match {
   lineups: MatchLineup[]
 }
 
+export interface PlayerAttendanceItem {
+  session_id: string
+  session_date: string
+  session_type: string
+  group_name: string
+  status: string
+  note: string | null
+}
+
 export interface InjuryLog {
   id: string
   player_id: string
