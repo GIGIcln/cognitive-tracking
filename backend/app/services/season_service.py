@@ -2,25 +2,28 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.season import Season
 from app.schemas.season import SeasonCreate
 
 
 class SeasonService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    def get_current(self) -> Season | None:
-        return self.db.query(Season).filter(Season.is_current.is_(True)).first()
+    async def get_current(self) -> Season | None:
+        result = await self.db.execute(select(Season).where(Season.is_current.is_(True)))
+        return result.scalars().first()
 
-    def list_all(self) -> list[Season]:
-        return self.db.query(Season).order_by(Season.start_date.desc()).all()
+    async def list_all(self) -> list[Season]:
+        result = await self.db.execute(select(Season).order_by(Season.start_date.desc()))
+        return result.scalars().all()
 
-    def create(self, body: SeasonCreate) -> Season:
+    async def create(self, body: SeasonCreate) -> Season:
         """Archives the current season (if any) and creates a new current one."""
-        current = self.get_current()
+        current = await self.get_current()
         if current:
             current.is_current = False
 
@@ -31,16 +34,16 @@ class SeasonService:
             is_current=True,
         )
         self.db.add(new_season)
-        self.db.commit()
-        self.db.refresh(new_season)
+        await self.db.commit()
+        await self.db.refresh(new_season)
         return new_season
 
-    def archive(self, season_id: uuid.UUID) -> Season | None:
+    async def archive(self, season_id: uuid.UUID) -> Season | None:
         """Sets is_current=False. Returns None if season not found."""
-        season = self.db.get(Season, season_id)
+        season = await self.db.get(Season, season_id)
         if season is None:
             return None
         season.is_current = False
-        self.db.commit()
-        self.db.refresh(season)
+        await self.db.commit()
+        await self.db.refresh(season)
         return season

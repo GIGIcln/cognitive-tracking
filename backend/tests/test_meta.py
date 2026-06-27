@@ -3,21 +3,21 @@
 from app.codebook import METRIC_DEFINITIONS, METRIC_MIN_N, METRIC_TO_FIELD
 
 
-def test_get_metrics_returns_all_definitions(client):
-    res = client.get("/api/meta/metrics")
+async def test_get_metrics_returns_all_definitions(client):
+    res = await client.get("/api/meta/metrics")
     assert res.status_code == 200
     data = res.json()
     assert len(data) == len(METRIC_DEFINITIONS)
 
 
-def test_get_metrics_no_auth_required(client):
+async def test_get_metrics_no_auth_required(client):
     """L'endpoint è pubblico — nessun token necessario."""
-    res = client.get("/api/meta/metrics")
+    res = await client.get("/api/meta/metrics")
     assert res.status_code == 200
 
 
-def test_get_metrics_fields_present(client):
-    res = client.get("/api/meta/metrics")
+async def test_get_metrics_fields_present(client):
+    res = await client.get("/api/meta/metrics")
     for m in res.json():
         assert "field" in m
         assert "label" in m
@@ -42,9 +42,9 @@ def test_metric_to_field_derived_from_definitions():
         assert METRIC_TO_FIELD[m["metric_type"]] == m["field"]
 
 
-def test_get_metrics_sr_reliability_n_basis(client):
+async def test_get_metrics_sr_reliability_n_basis(client):
     """SR deve usare count_rows come base per la reliability (non denominator)."""
-    res = client.get("/api/meta/metrics")
+    res = await client.get("/api/meta/metrics")
     sr = next(m for m in res.json() if m["metric_type"] == "SR")
     assert sr["reliability_n_basis"] == "count_rows"
     assert sr["min_n"] == 6

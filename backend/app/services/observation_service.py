@@ -3,10 +3,11 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 
-from sqlalchemy import func, tuple_
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.codebook import METRIC_MIN_N as _METRIC_MIN_N, METRIC_TO_FIELD as _METRIC_TO_FIELD
 from app.models.measurement import Measurement
@@ -38,17 +39,7 @@ def reliability_flag(metric: str, n: int) -> str:
 
 
 def normalized_score(metric: str, numerator: int, denominator: int) -> float | None:
-    """Derive a 1–10 score from raw event counts.
-
-    SR / DQI / TRS — percentage metrics:
-        rate = numerator / denominator   (0 → 1.0,  1 → 10.0)
-
-    AI — absolute count metric:
-        count = numerator  (0 → 1.0,  10+ → 10.0)
-
-    VCI — frequency metric (events per minute observed):
-        rate = numerator / denominator   (0 → 1.0,  2+ /min → 10.0)
-    """
+    """Derive a 1–10 score from raw event counts."""
     if metric in ("SR", "DQI", "TRS"):
         if denominator == 0:
             return None
@@ -74,7 +65,6 @@ def event_to_response(event: ObservationEvent) -> ObservationEventResponse:
     raw: float | None = (
         event.numerator / event.denominator if event.denominator > 0 else None
     )
-    # For AI: n = successes; for SR: n = 1 (single raw row = 1 reception); others: denominator
     n = 1 if event.metric_type == "SR" else (event.numerator if event.metric_type == "AI" else event.denominator)
     return ObservationEventResponse(
         id=event.id,
@@ -96,11 +86,7 @@ def event_to_response(event: ObservationEvent) -> ObservationEventResponse:
 
 
 def aggregate_events_to_responses(events: list[ObservationEvent]) -> list[ObservationEventResponse]:
-    """Aggregate raw event rows by (player_id, metric_type) → one response per group.
-
-    Derivation formulas and reliability thresholds are unchanged — they receive the
-    same scalar inputs as before, now computed as SUM across all rows in the group.
-    """
+    """Aggregate raw event rows by (player_id, metric_type) → one response per group."""
     groups: dict[tuple, list[ObservationEvent]] = defaultdict(list)
     for ev in events:
         groups[(ev.player_id, ev.metric_type)].append(ev)
@@ -134,36 +120,51 @@ def aggregate_events_to_responses(events: list[ObservationEvent]) -> list[Observ
     return responses
 
 
+def _is_postgresql(db: AsyncSession) -> bool:
+    """Detect if the underlying engine is PostgreSQL."""
+    try:
+        engine = db.get_bind()
+        return engine.dialect.name == "postgresql"
+    except Exception:
+        pass
+    try:
+        return db.bind.dialect.name == "postgresql"
+    except Exception:
+        pass
+    return False
+
+
 class ObservationService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    def upsert_events(
+    async def upsert_events(
         self,
         session_id: uuid.UUID,
         group_id: uuid.UUID,
         batch: ObservationEventsBatchInput,
     ) -> list[ObservationEvent]:
         """Idempotent batch save: delete existing rows for each (player, metric) pair
-        in the batch, then insert all incoming rows fresh.  Multiple rows per pair
-        are supported — the table is now append-only with no UNIQUE constraint."""
+        in the batch, then insert all incoming rows fresh."""
 
         # 0. Validate all player IDs exist in one batch query
         player_ids = {ev.player_id for ev in batch.events}
-        found_ids = {
-            row.id
-            for row in self.db.query(Player.id).filter(Player.id.in_(player_ids)).all()
-        }
+        found_result = await self.db.execute(
+            select(Player.id).where(Player.id.in_(player_ids))
+        )
+        found_ids = {row.id for row in found_result.all()}
         missing = sorted(str(pid) for pid in player_ids - found_ids)
         if missing:
             raise ValueError(f"Giocatori non trovati: {missing}")
 
-        # 1. Delete previous rows only for the (player_id, metric_type) pairs in this batch
+        # 1. Delete previous rows for the (player_id, metric_type) pairs in this batch
         pairs = list({(ev.player_id, ev.metric_type) for ev in batch.events})
-        self.db.query(ObservationEvent).filter(
-            ObservationEvent.session_id == session_id,
-            tuple_(ObservationEvent.player_id, ObservationEvent.metric_type).in_(pairs),
-        ).delete(synchronize_session=False)
+        await self.db.execute(
+            ObservationEvent.__table__.delete().where(
+                ObservationEvent.session_id == session_id,
+                tuple_(ObservationEvent.player_id, ObservationEvent.metric_type).in_(pairs),
+            )
+        )
 
         # 2. Insert all incoming rows as new events
         for ev in batch.events:
@@ -180,11 +181,9 @@ class ObservationService:
                 codebook_version=ev.codebook_version,
             ))
 
-        self.db.flush()
+        await self.db.flush()
 
         # 3. Write derived scores back to measurements using AGGREGATED batch values.
-        #    We aggregate from batch.events (the data we just inserted for these pairs).
-        #    Other (player, metric) pairs already in measurements are untouched.
         player_metric_agg: dict[tuple, dict[str, int]] = defaultdict(lambda: {"num": 0, "den": 0})
         for ev in batch.events:
             key = (ev.player_id, ev.metric_type)
@@ -197,12 +196,15 @@ class ObservationService:
             if score is not None:
                 player_updates[player_id][_METRIC_TO_FIELD[metric_type]] = score
 
-        existing_map: dict[uuid.UUID, Measurement] = {
-            m.player_id: m
-            for m in self.db.query(Measurement).filter(
+        existing_result = await self.db.execute(
+            select(Measurement).where(
                 Measurement.session_id == session_id,
                 Measurement.player_id.in_(player_updates.keys()),
-            ).all()
+            )
+        )
+        existing_map: dict[uuid.UUID, Measurement] = {
+            m.player_id: m
+            for m in existing_result.scalars().all()
         }
 
         new_players: dict[uuid.UUID, dict] = {}
@@ -215,14 +217,8 @@ class ObservationService:
                 new_players[player_id] = updates
 
         if new_players:
-            bind = getattr(self.db, "bind", None)
-            is_pg = bind is not None and bind.dialect.name == "postgresql"
+            is_pg = _is_postgresql(self.db)
             if is_pg:
-                # Atomic upsert: avoids the SAVEPOINT race where two concurrent
-                # transactions both pass the "not found" check, one commits first,
-                # and the second silently drops the update after its SAVEPOINT
-                # rollback can't see the just-committed row within the outer tx.
-                # COALESCE preserves existing non-NULL fields not present in this batch.
                 _score_fields = list(_METRIC_TO_FIELD.values())
                 rows = [
                     {
@@ -241,12 +237,12 @@ class ObservationService:
                         for f in _score_fields
                     },
                 )
-                self.db.execute(stmt)
+                await self.db.execute(stmt)
             else:
                 # SQLite path (tests only): no concurrent writers, SAVEPOINT is safe.
                 for player_id, updates in new_players.items():
                     try:
-                        with self.db.begin_nested():
+                        async with self.db.begin_nested():
                             self.db.add(Measurement(
                                 session_id=session_id,
                                 player_id=player_id,
@@ -254,32 +250,31 @@ class ObservationService:
                                 **updates,
                             ))
                     except IntegrityError:
-                        existing = (
-                            self.db.query(Measurement)
-                            .filter(
+                        existing_r = await self.db.execute(
+                            select(Measurement).where(
                                 Measurement.session_id == session_id,
                                 Measurement.player_id == player_id,
                             )
-                            .first()
                         )
+                        existing = existing_r.scalars().first()
                         if existing:
                             for field, value in updates.items():
                                 setattr(existing, field, value)
 
-        self.db.commit()
+        await self.db.commit()
 
-        return (
-            self.db.query(ObservationEvent)
+        result = await self.db.execute(
+            select(ObservationEvent)
             .options(joinedload(ObservationEvent.player))
-            .filter(ObservationEvent.session_id == session_id)
-            .all()
+            .where(ObservationEvent.session_id == session_id)
         )
+        return result.scalars().all()
 
-    def get_events(self, session_id: uuid.UUID) -> list[ObservationEvent]:
+    async def get_events(self, session_id: uuid.UUID) -> list[ObservationEvent]:
         """Return all raw event rows for a session (audit access)."""
-        return (
-            self.db.query(ObservationEvent)
+        result = await self.db.execute(
+            select(ObservationEvent)
             .options(joinedload(ObservationEvent.player))
-            .filter(ObservationEvent.session_id == session_id)
-            .all()
+            .where(ObservationEvent.session_id == session_id)
         )
+        return result.scalars().all()

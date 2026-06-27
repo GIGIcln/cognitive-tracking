@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
@@ -29,14 +29,14 @@ _DUMMY_HASH = hash_password("DummyPassword1!")
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
-def login(
+async def login(
     request: Request,
     response: Response,
     body: LoginRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     svc = UserService(db)
-    user = svc.get_by_email(body.email)
+    user = await svc.get_by_email(body.email)
     candidate_hash = user.hashed_password if user else _DUMMY_HASH
     is_valid = verify_password(body.password, candidate_hash)
     rid = getattr(request.state, "request_id", "-")
@@ -73,7 +73,7 @@ def login(
 
 
 @router.post("/logout")
-def logout(response: Response):
+async def logout(response: Response):
     settings = get_settings()
     is_production = settings.app_env == "production"
     response.delete_cookie(
@@ -87,16 +87,16 @@ def logout(response: Response):
 
 @router.post("/register", response_model=UserResponse, status_code=201)
 @limiter.limit("5/minute")
-def register(
+async def register(
     request: Request,
     body: RegisterRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Registrazione pubblica per allenatori. Account creato in stato pending."""
     svc = UserService(db)
-    if svc.get_by_email(body.email):
+    if await svc.get_by_email(body.email):
         raise HTTPException(status_code=409, detail="Email già in uso")
-    user = svc.create(UserCreate(
+    user = await svc.create(UserCreate(
         email=body.email,
         password=body.password,
         full_name=body.full_name,
@@ -115,7 +115,7 @@ def register(
 
 
 @router.get("/me", response_model=UserResponse)
-def me(current_user: UserContext = Depends(get_current_user)):
+async def me(current_user: UserContext = Depends(get_current_user)):
     return UserResponse(
         id=current_user.id,
         email=current_user.email,

@@ -4,8 +4,9 @@ import uuid
 from collections import defaultdict
 from datetime import date
 
-from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.models.assignment import PlayerGroupAssignment
 from app.models.group import Group
@@ -18,10 +19,10 @@ _PARAM_FIELDS = ('scanning_rate', 'decision_quality', 'anticipation', 'transitio
 
 
 class PlayerService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    def list(
+    async def list(
         self,
         group_id: uuid.UUID | None,
         skip: int,
@@ -34,7 +35,7 @@ class PlayerService:
         """
         if group_id is not None:
             q = (
-                self.db.query(Player, Group.name)
+                select(Player, Group.name)
                 .join(
                     PlayerGroupAssignment,
                     (PlayerGroupAssignment.player_id == Player.id)
@@ -46,14 +47,14 @@ class PlayerService:
             )
         elif allowed_group_ids is not None:
             q = (
-                self.db.query(Player, Group.name)
+                select(Player, Group.name)
                 .join(
                     PlayerGroupAssignment,
                     (PlayerGroupAssignment.player_id == Player.id)
                     & PlayerGroupAssignment.is_current.is_(True),
                 )
                 .join(Group, Group.id == PlayerGroupAssignment.group_id)
-                .filter(
+                .where(
                     Player.is_active.is_(True),
                     PlayerGroupAssignment.group_id.in_(allowed_group_ids),
                 )
@@ -61,115 +62,114 @@ class PlayerService:
             )
         else:
             q = (
-                self.db.query(Player, Group.name)
+                select(Player, Group.name)
                 .outerjoin(
                     PlayerGroupAssignment,
                     (PlayerGroupAssignment.player_id == Player.id)
                     & PlayerGroupAssignment.is_current.is_(True),
                 )
                 .outerjoin(Group, Group.id == PlayerGroupAssignment.group_id)
-                .filter(Player.is_active.is_(True))
+                .where(Player.is_active.is_(True))
                 .order_by(Player.last_name.asc(), Player.first_name.asc())
             )
-        return q.offset(skip).limit(limit).all()
+        result = await self.db.execute(q.offset(skip).limit(limit))
+        return result.all()
 
-    def count(
+    async def count(
         self,
         group_id: uuid.UUID | None = None,
         allowed_group_ids: set[uuid.UUID] | None = None,
     ) -> int:
         if group_id is not None:
-            return (
-                self.db.query(func.count(Player.id))
+            result = await self.db.execute(
+                select(func.count(Player.id))
                 .join(
                     PlayerGroupAssignment,
                     (PlayerGroupAssignment.player_id == Player.id)
                     & (PlayerGroupAssignment.group_id == group_id)
                     & PlayerGroupAssignment.is_current.is_(True),
                 )
-                .scalar()
-                or 0
             )
+            return result.scalar() or 0
         elif allowed_group_ids is not None:
-            return (
-                self.db.query(func.count(Player.id))
+            result = await self.db.execute(
+                select(func.count(Player.id))
                 .join(
                     PlayerGroupAssignment,
                     (PlayerGroupAssignment.player_id == Player.id)
                     & PlayerGroupAssignment.is_current.is_(True),
                 )
-                .filter(
+                .where(
                     Player.is_active.is_(True),
                     PlayerGroupAssignment.group_id.in_(allowed_group_ids),
                 )
-                .scalar()
-                or 0
             )
+            return result.scalar() or 0
         else:
-            return (
-                self.db.query(func.count(Player.id))
-                .filter(Player.is_active.is_(True))
-                .scalar()
-                or 0
+            result = await self.db.execute(
+                select(func.count(Player.id))
+                .where(Player.is_active.is_(True))
             )
+            return result.scalar() or 0
 
-    def create(self, body: PlayerCreate) -> Player:
+    async def create(self, body: PlayerCreate) -> Player:
         player = Player(**body.model_dump(exclude={"group_id"}))
         self.db.add(player)
         if body.group_id:
             # flush within the transaction so player.id is populated before building the FK
-            self.db.flush()
+            await self.db.flush()
             self.db.add(PlayerGroupAssignment(
                 player_id=player.id,
                 group_id=body.group_id,
                 start_date=date.today(),
                 is_current=True,
             ))
-        self.db.commit()
-        self.db.refresh(player)
+        await self.db.commit()
+        await self.db.refresh(player)
         return player
 
-    def get(self, player_id: uuid.UUID) -> Player | None:
-        return self.db.get(Player, player_id)
+    async def get(self, player_id: uuid.UUID) -> Player | None:
+        return await self.db.get(Player, player_id)
 
-    def get_with_group(
+    async def get_with_group(
         self,
         player_id: uuid.UUID,
         allowed_group_ids: set[uuid.UUID] | None = None,
     ) -> tuple[Player, str | None] | None:
         q = (
-            self.db.query(Player, Group.name)
+            select(Player, Group.name)
             .outerjoin(
                 PlayerGroupAssignment,
                 (PlayerGroupAssignment.player_id == Player.id)
                 & PlayerGroupAssignment.is_current.is_(True),
             )
             .outerjoin(Group, Group.id == PlayerGroupAssignment.group_id)
-            .filter(Player.id == player_id, Player.is_active.is_(True))
+            .where(Player.id == player_id, Player.is_active.is_(True))
         )
         if allowed_group_ids is not None:
-            q = q.filter(PlayerGroupAssignment.group_id.in_(allowed_group_ids))
-        return q.first()
+            q = q.where(PlayerGroupAssignment.group_id.in_(allowed_group_ids))
+        result = await self.db.execute(q)
+        return result.first()
 
-    def update(self, player_id: uuid.UUID, body: PlayerUpdate) -> Player | None:
-        player = self.db.get(Player, player_id)
+    async def update(self, player_id: uuid.UUID, body: PlayerUpdate) -> Player | None:
+        player = await self.db.get(Player, player_id)
         if player is None:
             return None
         for field, value in body.model_dump(exclude_unset=True).items():
             setattr(player, field, value)
-        self.db.commit()
-        self.db.refresh(player)
+        await self.db.commit()
+        await self.db.refresh(player)
         return player
 
-    def deactivate(self, player_id: uuid.UUID) -> bool:
-        player = self.db.get(Player, player_id)
+    async def deactivate(self, player_id: uuid.UUID) -> bool:
+        player = await self.db.get(Player, player_id)
         if player is None:
             return False
         player.is_active = False
-        self.db.commit()
+        await self.db.commit()
         return True
 
-    def get_history(
+    async def get_history(
         self,
         player_id: uuid.UUID,
         skip: int = 0,
@@ -183,19 +183,21 @@ class PlayerService:
         Esclude sessioni soft-deleted (is_active=False).
         """
         q = (
-            self.db.query(Measurement, TrainingSession, Group)
+            select(Measurement, TrainingSession, Group)
             .join(TrainingSession, TrainingSession.id == Measurement.session_id)
             .join(Group, Group.id == TrainingSession.group_id)
-            .filter(
+            .where(
                 Measurement.player_id == player_id,
                 Measurement.is_absent.is_(False),
                 TrainingSession.is_active.is_(True),
             )
         )
         if allowed_group_ids is not None:
-            q = q.filter(TrainingSession.group_id.in_(allowed_group_ids))
+            q = q.where(TrainingSession.group_id.in_(allowed_group_ids))
 
-        rows = q.order_by(TrainingSession.session_date.asc()).offset(skip).limit(limit).all()
+        q = q.order_by(TrainingSession.session_date.asc()).offset(skip).limit(limit)
+        result = await self.db.execute(q)
+        rows = result.all()
         return [
             {
                 "session_id": m.session_id,
@@ -212,7 +214,7 @@ class PlayerService:
             for m, ts, g in rows
         ]
 
-    def get_at_risk_players(
+    async def get_at_risk_players(
         self,
         min_sessions: int = 3,
         allowed_group_ids: set[uuid.UUID] | None = None,
@@ -222,17 +224,20 @@ class PlayerService:
         all have an average score below the group's avg insufficient_max.
         Groups without targets are excluded.
         """
-        group_q = (
-            self.db.query(Group)
+        q = (
+            select(Group)
             .options(joinedload(Group.targets))
-            .filter(Group.is_active.is_(True))
+            .where(Group.is_active.is_(True))
         )
         if allowed_group_ids is not None:
-            group_q = group_q.filter(Group.id.in_(allowed_group_ids))
+            q = q.where(Group.id.in_(allowed_group_ids))
+
+        result = await self.db.execute(q)
+        groups = result.scalars().unique().all()
 
         thresholds: dict[uuid.UUID, float] = {}
         group_names: dict[uuid.UUID, str] = {}
-        for g in group_q.all():
+        for g in groups:
             group_names[g.id] = g.name
             if g.targets:
                 thresholds[g.id] = sum(float(t.insufficient_max) for t in g.targets) / len(g.targets)
@@ -240,37 +245,35 @@ class PlayerService:
         if not thresholds:
             return []
 
-        player_rows = (
-            self.db.query(Player, PlayerGroupAssignment.group_id)
+        player_result = await self.db.execute(
+            select(Player, PlayerGroupAssignment.group_id)
             .join(
                 PlayerGroupAssignment,
                 (PlayerGroupAssignment.player_id == Player.id)
                 & PlayerGroupAssignment.is_current.is_(True),
             )
-            .filter(
+            .where(
                 Player.is_active.is_(True),
                 PlayerGroupAssignment.group_id.in_(thresholds.keys()),
             )
-            .all()
         )
+        player_rows = player_result.all()
 
         player_ids = [p.id for p, _ in player_rows]
         player_to_group: dict[uuid.UUID, uuid.UUID] = {p.id: gid for p, gid in player_rows}
 
         # Single batch query replaces the previous per-player N+1 loop.
-        # Global ORDER BY session_date DESC ensures each player's bucket
-        # accumulates measurements most-recent-first.
-        all_meas = (
-            self.db.query(Measurement, TrainingSession.session_date)
+        all_meas_result = await self.db.execute(
+            select(Measurement, TrainingSession.session_date)
             .join(TrainingSession, TrainingSession.id == Measurement.session_id)
-            .filter(
+            .where(
                 Measurement.player_id.in_(player_ids),
                 Measurement.is_absent.is_(False),
                 Measurement.group_id.in_(thresholds.keys()),
             )
             .order_by(TrainingSession.session_date.desc())
-            .all()
         )
+        all_meas = all_meas_result.all()
 
         measurements_by_player: dict[uuid.UUID, list[Measurement]] = defaultdict(list)
         for m, _ in all_meas:
@@ -280,7 +283,7 @@ class PlayerService:
                 if len(bucket) < min_sessions:
                     bucket.append(m)
 
-        result = []
+        result_list = []
         for player, group_id in player_rows:
             threshold = thresholds[group_id]
             measurements = measurements_by_player.get(player.id, [])
@@ -297,7 +300,7 @@ class PlayerService:
             if len(scores) < min_sessions or not all(s < threshold for s in scores):
                 continue
 
-            result.append({
+            result_list.append({
                 "player_id": str(player.id),
                 "first_name": player.first_name,
                 "last_name": player.last_name,
@@ -308,18 +311,18 @@ class PlayerService:
                 "threshold": round(threshold, 2),
             })
 
-        return result
+        return result_list
 
-    def get_assignments(self, player_id: uuid.UUID) -> list[dict] | None:
-        if not self.db.get(Player, player_id):
+    async def get_assignments(self, player_id: uuid.UUID) -> list[dict] | None:
+        if not await self.db.get(Player, player_id):
             return None
-        rows = (
-            self.db.query(PlayerGroupAssignment, Group.name)
+        result = await self.db.execute(
+            select(PlayerGroupAssignment, Group.name)
             .join(Group, Group.id == PlayerGroupAssignment.group_id)
-            .filter(PlayerGroupAssignment.player_id == player_id)
+            .where(PlayerGroupAssignment.player_id == player_id)
             .order_by(PlayerGroupAssignment.start_date.desc())
-            .all()
         )
+        rows = result.all()
         return [
             {
                 "id": a.id,
@@ -332,19 +335,19 @@ class PlayerService:
             for a, name in rows
         ]
 
-    def get_streak(self, player_id: uuid.UUID) -> dict:
-        rows = (
-            self.db.query(Measurement, TrainingSession.session_date)
+    async def get_streak(self, player_id: uuid.UUID) -> dict:
+        result = await self.db.execute(
+            select(Measurement, TrainingSession.session_date)
             .join(TrainingSession, Measurement.session_id == TrainingSession.id)
-            .filter(
+            .where(
                 Measurement.player_id == player_id,
                 Measurement.is_absent.is_(False),
                 TrainingSession.is_active.is_(True),
             )
             .order_by(TrainingSession.session_date.desc())
             .limit(30)
-            .all()
         )
+        rows = result.all()
 
         OTTIMO_MIN = 8.0
         streak = 0
@@ -359,21 +362,21 @@ class PlayerService:
 
         return {"streak": streak, "sessions_checked": len(rows)}
 
-    def assign_to_group(self, player_id: uuid.UUID, group_id: uuid.UUID) -> None:
+    async def assign_to_group(self, player_id: uuid.UUID, group_id: uuid.UUID) -> None:
         """Raises ValueError('player') or ValueError('group') if not found."""
-        if self.db.get(Player, player_id) is None:
+        if await self.db.get(Player, player_id) is None:
             raise ValueError("player")
-        if self.db.get(Group, group_id) is None:
+        if await self.db.get(Group, group_id) is None:
             raise ValueError("group")
 
-        current = (
-            self.db.query(PlayerGroupAssignment)
-            .filter(
+        result = await self.db.execute(
+            select(PlayerGroupAssignment)
+            .where(
                 PlayerGroupAssignment.player_id == player_id,
                 PlayerGroupAssignment.is_current.is_(True),
             )
-            .first()
         )
+        current = result.scalars().first()
         if current:
             current.end_date = date.today()
             current.is_current = False
@@ -384,28 +387,27 @@ class PlayerService:
             start_date=date.today(),
             is_current=True,
         ))
-        self.db.commit()
+        await self.db.commit()
 
-    def bulk_assign_to_group(
+    async def bulk_assign_to_group(
         self, player_ids: list[uuid.UUID], group_id: uuid.UUID
     ) -> dict:
-        """Assign multiple players to a group in one commit.
+        """Assign multiple players to a group in one commit."""
+        found_result = await self.db.execute(
+            select(Player.id).where(Player.id.in_(player_ids))
+        )
+        found_players = {row.id for row in found_result.all()}
 
-        Returns a dict with counts of assigned and not-found player IDs.
-        Uses two batch queries instead of O(n) per-player queries.
-        """
-        found_players = {
-            p.id
-            for p in self.db.query(Player.id).filter(Player.id.in_(player_ids)).all()
-        }
-        current_assignments = {
-            a.player_id: a
-            for a in self.db.query(PlayerGroupAssignment)
-            .filter(
+        current_result = await self.db.execute(
+            select(PlayerGroupAssignment)
+            .where(
                 PlayerGroupAssignment.player_id.in_(player_ids),
                 PlayerGroupAssignment.is_current.is_(True),
             )
-            .all()
+        )
+        current_assignments = {
+            a.player_id: a
+            for a in current_result.scalars().all()
         }
 
         assigned, not_found = [], []
@@ -429,6 +431,6 @@ class PlayerService:
             assigned.append(str(pid))
 
         if assigned:
-            self.db.commit()
+            await self.db.commit()
 
         return {"assigned": len(assigned), "not_found": not_found}

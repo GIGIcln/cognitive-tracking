@@ -3,20 +3,19 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-# Must be set before any app module is imported so get_settings() (lru_cached) picks them up.
-os.environ.setdefault("DATABASE_URL", "sqlite:///./test_setup.db")
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_setup.db")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production")
-os.environ.setdefault("ALLOW_MANUAL_SCORES", "true")  # test esistenti usano POST /measurements
+os.environ.setdefault("ALLOW_MANUAL_SCORES", "true")
 
 import uuid
 from datetime import date
 
 import bcrypt as _bcrypt
 import pytest
-from fastapi.testclient import TestClient
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
 from pytest_postgresql import factories as pg_factories
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 from app.database import get_db
 from app.limiter import limiter as _rate_limiter
@@ -28,16 +27,14 @@ from app.models.player import Player
 from app.models.season import Season
 from app.models.user import User
 
-TEST_DB_URL = "sqlite:///./test_setup.db"
-TEST_DB_URL_INT = "sqlite:///./test_integration.db"
+TEST_ASYNC_DB_URL = "sqlite+aiosqlite:///./test_setup.db"
+TEST_ASYNC_DB_URL_INT = "sqlite+aiosqlite:///./test_integration.db"
 
-# Pre-compute bcrypt hash once per process (rounds=4 for test speed vs. rounds=12 in prod)
 _TEST_PASSWORD = "Admin123"
 _TEST_HASH = _bcrypt.hashpw(_TEST_PASSWORD.encode(), _bcrypt.gensalt(rounds=4)).decode()
 
 _LOGIN = {"email": "admin@test.com", "password": _TEST_PASSWORD}
 
-# ── Utenti di test ─────────────────────────────────────────────────────────
 ADMIN_ID = "a1a1a1a1-b2b2-c3c3-d4d4-e5e5e5e5e5e5"
 COACH_ID = "f1f1f1f1-a2a2-b3b3-c4c4-d5d5d5d5d5d5"
 RESP_ID  = "c1c1c1c1-d2d2-e3e3-f4f4-a5a5a5a5a5a5"
@@ -52,7 +49,6 @@ _TEST_ADMIN = {
     "assigned_group_ids": [],
 }
 
-# assigned_group_ids del coach viene aggiornato dinamicamente in seeded/pg_seeded.
 _TEST_COACH: dict = {
     "id": COACH_ID,
     "email": "coach@test.com",
@@ -76,10 +72,9 @@ _TEST_RESP = {
 _ALL_TEST_USERS = [_TEST_ADMIN, _TEST_COACH, _TEST_RESP]
 
 
-def _seed_users(db, users: list = _ALL_TEST_USERS) -> None:
-    """Crea utenti nel DB per i test."""
+async def _seed_users(session: AsyncSession, users: list = _ALL_TEST_USERS) -> None:
     for u in users:
-        db.add(User(
+        session.add(User(
             id=uuid.UUID(u["id"]),
             email=u["email"],
             full_name=u.get("full_name"),
@@ -88,159 +83,186 @@ def _seed_users(db, users: list = _ALL_TEST_USERS) -> None:
             roles=list(u.get("roles", [])),
             assigned_group_ids=list(u.get("assigned_group_ids", [])),
         ))
-    db.commit()
+    await session.commit()
 
 
-# ── Fixtures ────────────────────────────────────────────────────────────────
+# ── Fixtures ─────────────────────────────────────────────────────────────────
 
-@pytest.fixture
-def client():
-    engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+@pytest_asyncio.fixture
+async def client():
+    engine = create_async_engine(TEST_ASYNC_DB_URL)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
-    def override_get_db():
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
+    AsyncTestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def override_get_db():
+        async with AsyncTestSession() as session:
+            yield session
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
     _rate_limiter.enabled = False
 
-    db = TestingSessionLocal()
-    _seed_users(db)
-    db.close()
+    async with AsyncTestSession() as session:
+        await _seed_users(session)
 
-    yield TestClient(fastapi_app)
+    async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://testserver") as http:
+        yield http
 
     _rate_limiter.enabled = True
     fastapi_app.dependency_overrides.clear()
-    Base.metadata.drop_all(engine)
-    engine.dispose()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
     if os.path.exists("./test_setup.db"):
         os.remove("./test_setup.db")
 
 
-@pytest.fixture
-def seeded():
+@pytest_asyncio.fixture
+async def seeded():
     """Client con stagione, gruppo e giocatore pre-seeded e admin autenticato."""
     _rate_limiter.enabled = False
-    engine = create_engine(TEST_DB_URL_INT, connect_args={"check_same_thread": False})
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    engine = create_async_engine(TEST_ASYNC_DB_URL_INT)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
-    def override_get_db():
-        session = TestingSessionLocal()
-        try:
+    AsyncTestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def override_get_db():
+        async with AsyncTestSession() as session:
             yield session
-        finally:
-            session.close()
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
 
-    db = TestingSessionLocal()
-    season_obj = Season(id=uuid.uuid4(), name="Stagione Test", is_current=True,
-                        start_date=date(2025, 9, 1), end_date=date(2026, 6, 30))
-    db.add(season_obj)
-    grp = GroupModel(id=uuid.uuid4(), season_id=season_obj.id, name="Under 15",
-                     category="Agonistica", level="A", birth_year=2010)
-    db.add(grp)
-    plr = Player(id=uuid.uuid4(), first_name="Mario", last_name="Rossi",
-                 birth_year=2010, is_active=True)
-    db.add(plr)
-    db.commit()
+    season_id: str
+    group_id: str
+    player_id: str
 
-    _TEST_COACH["assigned_group_ids"] = [str(grp.id)]
-    _seed_users(db)
+    async with AsyncTestSession() as session:
+        season_obj = Season(
+            id=uuid.uuid4(), name="Stagione Test", is_current=True,
+            start_date=date(2025, 9, 1), end_date=date(2026, 6, 30),
+        )
+        session.add(season_obj)
+        grp = GroupModel(
+            id=uuid.uuid4(), season_id=season_obj.id, name="Under 15",
+            category="Agonistica", level="A", birth_year=2010,
+        )
+        session.add(grp)
+        plr = Player(id=uuid.uuid4(), first_name="Mario", last_name="Rossi",
+                     birth_year=2010, is_active=True)
+        session.add(plr)
+        await session.commit()
 
-    http = TestClient(fastapi_app)
-    token = http.post("/api/auth/login", json=_LOGIN).json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-    anon = TestClient(fastapi_app)
+        _TEST_COACH["assigned_group_ids"] = [str(grp.id)]
+        await _seed_users(session)
 
-    yield {
-        "client": http,
-        "anon_client": anon,
-        "headers": headers,
-        "season_id": str(season_obj.id),
-        "group_id": str(grp.id),
-        "player_id": str(plr.id),
-    }
+        season_id = str(season_obj.id)
+        group_id = str(grp.id)
+        player_id = str(plr.id)
 
-    db.close()
+    async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://testserver") as http:
+        login_resp = await http.post("/api/auth/login", json=_LOGIN)
+        token = login_resp.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        anon = AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://testserver")
+
+        yield {
+            "client": http,
+            "anon_client": anon,
+            "headers": headers,
+            "season_id": season_id,
+            "group_id": group_id,
+            "player_id": player_id,
+        }
+
+        await anon.aclose()
+
     _rate_limiter.enabled = True
     _TEST_COACH["assigned_group_ids"] = []
     fastapi_app.dependency_overrides.clear()
-    Base.metadata.drop_all(engine)
-    engine.dispose()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
     if os.path.exists("./test_integration.db"):
         os.remove("./test_integration.db")
 
 
-# ── PostgreSQL fixtures (require pg_ctl in PATH) ─────────────────────────────
+# ── PostgreSQL fixtures ───────────────────────────────────────────────────────
+
 postgresql15_proc = pg_factories.postgresql_proc()
 postgresql15_conn = pg_factories.postgresql("postgresql15_proc")
 
 
-@pytest.fixture
-def pg_seeded(postgresql15_conn):
+@pytest_asyncio.fixture
+async def pg_seeded(postgresql15_conn):
     """Come `seeded` ma con PostgreSQL reale — abilita test che usano ON CONFLICT."""
     _rate_limiter.enabled = False
 
     info = postgresql15_conn.info
     pw = f":{info.password}" if info.password else ""
-    dsn = f"postgresql+psycopg2://{info.user}{pw}@{info.host}:{info.port}/{info.dbname}"
+    dsn = f"postgresql+asyncpg://{info.user}{pw}@{info.host}:{info.port}/{info.dbname}"
 
-    engine = create_engine(dsn)
-    Base.metadata.create_all(engine)
-    PGSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    engine = create_async_engine(dsn)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-    def override_get_db():
-        s = PGSession()
-        try:
-            yield s
-        finally:
-            s.close()
+    AsyncPGSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def override_get_db():
+        async with AsyncPGSession() as session:
+            yield session
 
     fastapi_app.dependency_overrides[get_db] = override_get_db
 
-    db = PGSession()
-    season_obj = Season(id=uuid.uuid4(), name="Stagione PG Test", is_current=True,
-                        start_date=date(2025, 9, 1), end_date=date(2026, 6, 30))
-    db.add(season_obj)
-    grp = GroupModel(id=uuid.uuid4(), season_id=season_obj.id, name="Under 15",
-                     category="Agonistica", level="A", birth_year=2010)
-    db.add(grp)
-    players = [
-        Player(id=uuid.uuid4(), first_name="Mario", last_name="Rossi",
-               birth_year=2010, is_active=True),
-        Player(id=uuid.uuid4(), first_name="Luigi", last_name="Bianchi",
-               birth_year=2010, is_active=True),
-    ]
-    for p in players:
-        db.add(p)
-    db.commit()
+    group_id: str
+    player_ids: list[str]
 
-    _TEST_COACH["assigned_group_ids"] = [str(grp.id)]
-    _seed_users(db)
+    async with AsyncPGSession() as session:
+        season_obj = Season(
+            id=uuid.uuid4(), name="Stagione PG Test", is_current=True,
+            start_date=date(2025, 9, 1), end_date=date(2026, 6, 30),
+        )
+        session.add(season_obj)
+        grp = GroupModel(
+            id=uuid.uuid4(), season_id=season_obj.id, name="Under 15",
+            category="Agonistica", level="A", birth_year=2010,
+        )
+        session.add(grp)
+        players = [
+            Player(id=uuid.uuid4(), first_name="Mario", last_name="Rossi",
+                   birth_year=2010, is_active=True),
+            Player(id=uuid.uuid4(), first_name="Luigi", last_name="Bianchi",
+                   birth_year=2010, is_active=True),
+        ]
+        for p in players:
+            session.add(p)
+        await session.commit()
 
-    http = TestClient(fastapi_app)
-    token = http.post("/api/auth/login", json=_LOGIN).json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+        _TEST_COACH["assigned_group_ids"] = [str(grp.id)]
+        await _seed_users(session)
 
-    yield {
-        "client": http,
-        "headers": headers,
-        "group_id": str(grp.id),
-        "player_ids": [str(p.id) for p in players],
-    }
+        group_id = str(grp.id)
+        player_ids = [str(p.id) for p in players]
 
-    db.close()
+    async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://testserver") as http:
+        login_resp = await http.post("/api/auth/login", json=_LOGIN)
+        token = login_resp.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        yield {
+            "client": http,
+            "headers": headers,
+            "group_id": group_id,
+            "player_ids": player_ids,
+        }
+
     _rate_limiter.enabled = True
     _TEST_COACH["assigned_group_ids"] = []
     fastapi_app.dependency_overrides.clear()
-    engine.dispose()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.models.assignment import PlayerGroupAssignment
 from app.models.group import Group
@@ -19,55 +20,60 @@ TRACKED_FIELDS = {"level", "category", "birth_year", "sub_group", "max_players",
 
 
 class GroupService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    def _current_season(self) -> Season | None:
-        return self.db.query(Season).filter(Season.is_current.is_(True)).first()
+    async def _current_season(self) -> Season | None:
+        result = await self.db.execute(select(Season).where(Season.is_current.is_(True)))
+        return result.scalars().first()
 
-    def list(self, scope: list[uuid.UUID] | None, season_id: uuid.UUID | None = None) -> list[Group]:
+    async def list(self, scope: list[uuid.UUID] | None, season_id: uuid.UUID | None = None) -> list[Group]:
         if season_id is None:
-            season = self._current_season()
+            season = await self._current_season()
             if not season:
                 return []
             season_id = season.id
         q = (
-            self.db.query(Group)
-            .filter(Group.season_id == season_id, Group.is_active.is_(True))
+            select(Group)
+            .where(Group.season_id == season_id, Group.is_active.is_(True))
             .order_by(Group.birth_year.desc(), Group.sub_group.asc())
         )
         if scope is not None:
-            q = q.filter(Group.id.in_(scope))
-        return q.all()
+            q = q.where(Group.id.in_(scope))
+        result = await self.db.execute(q)
+        return result.scalars().all()
 
-    def get(self, group_id: uuid.UUID) -> tuple[Group, list[PlayerGroupAssignment]] | tuple[None, None]:
-        group = (
-            self.db.query(Group)
+    async def get(self, group_id: uuid.UUID) -> tuple[Group, list[PlayerGroupAssignment]] | tuple[None, None]:
+        result = await self.db.execute(
+            select(Group)
             .options(joinedload(Group.targets))
-            .filter(Group.id == group_id)
-            .first()
+            .where(Group.id == group_id)
         )
+        group = result.scalars().first()
         if not group:
             return None, None
-        assignments = (
-            self.db.query(PlayerGroupAssignment)
+        result2 = await self.db.execute(
+            select(PlayerGroupAssignment)
             .options(joinedload(PlayerGroupAssignment.player))
-            .filter(
+            .where(
                 PlayerGroupAssignment.group_id == group_id,
                 PlayerGroupAssignment.is_current.is_(True),
             )
-            .all()
         )
+        assignments = result2.scalars().all()
         return group, assignments
 
-    def get_targets(self, group_id: uuid.UUID) -> list[GroupTarget] | None:
-        group = self.db.get(Group, group_id)
+    async def get_targets(self, group_id: uuid.UUID) -> list[GroupTarget] | None:
+        group = await self.db.get(Group, group_id)
         if not group:
             return None
-        return group.targets
+        result = await self.db.execute(
+            select(GroupTarget).where(GroupTarget.group_id == group_id)
+        )
+        return result.scalars().all()
 
-    def create(self, body: GroupCreate) -> Group | None:
-        season = self._current_season()
+    async def create(self, body: GroupCreate) -> Group | None:
+        season = await self._current_season()
         if not season:
             return None
         group = Group(
@@ -80,12 +86,12 @@ class GroupService:
             max_players=body.max_players,
         )
         self.db.add(group)
-        self.db.commit()
-        self.db.refresh(group)
+        await self.db.commit()
+        await self.db.refresh(group)
         return group
 
-    def update(self, group_id: uuid.UUID, body: GroupUpdate, changed_by: str | None = None) -> Group | None:
-        group = self.db.get(Group, group_id)
+    async def update(self, group_id: uuid.UUID, body: GroupUpdate, changed_by: str | None = None) -> Group | None:
+        group = await self.db.get(Group, group_id)
         if not group or not group.is_active:
             return None
         for field, value in body.model_dump(exclude_unset=True).items():
@@ -99,33 +105,33 @@ class GroupService:
                     changed_by=changed_by,
                 ))
             setattr(group, field, value)
-        self.db.commit()
-        self.db.refresh(group)
+        await self.db.commit()
+        await self.db.refresh(group)
         return group
 
-    def get_changelog(self, group_id: uuid.UUID) -> list[GroupChangeLog] | None:
-        if not self.db.get(Group, group_id):
+    async def get_changelog(self, group_id: uuid.UUID) -> list[GroupChangeLog] | None:
+        if not await self.db.get(Group, group_id):
             return None
-        return (
-            self.db.query(GroupChangeLog)
-            .filter(GroupChangeLog.group_id == group_id)
+        result = await self.db.execute(
+            select(GroupChangeLog)
+            .where(GroupChangeLog.group_id == group_id)
             .order_by(GroupChangeLog.changed_at.desc())
-            .all()
         )
+        return result.scalars().all()
 
-    def delete(self, group_id: uuid.UUID) -> bool:
-        group = self.db.get(Group, group_id)
+    async def delete(self, group_id: uuid.UUID) -> bool:
+        group = await self.db.get(Group, group_id)
         if not group or not group.is_active:
             return False
         group.is_active = False
-        self.db.commit()
+        await self.db.commit()
         return True
 
-    def get_history(
+    async def get_history(
         self, group_id: uuid.UUID, skip: int = 0, limit: int = 60
     ) -> list[dict]:
-        rows = (
-            self.db.query(
+        stmt = (
+            select(
                 TrainingSession.id.label("session_id"),
                 TrainingSession.session_date,
                 TrainingSession.session_type,
@@ -141,7 +147,7 @@ class GroupService:
                 (Measurement.session_id == TrainingSession.id)
                 & Measurement.is_absent.is_(False),
             )
-            .filter(
+            .where(
                 TrainingSession.group_id == group_id,
                 TrainingSession.is_active.is_(True),
             )
@@ -153,8 +159,9 @@ class GroupService:
             .order_by(TrainingSession.session_date.asc())
             .offset(skip)
             .limit(limit)
-            .all()
         )
+        result = await self.db.execute(stmt)
+        rows = result.all()
         return [
             {
                 "session_id": r.session_id,
@@ -170,48 +177,46 @@ class GroupService:
             for r in rows
         ]
 
-    def get_attendance(self, group_id: uuid.UUID, limit: int = 20) -> dict | None:
-        if not self.db.get(Group, group_id):
+    async def get_attendance(self, group_id: uuid.UUID, limit: int = 20) -> dict | None:
+        if not await self.db.get(Group, group_id):
             return None
 
-        players = (
-            self.db.query(Player)
+        result = await self.db.execute(
+            select(Player)
             .join(PlayerGroupAssignment, PlayerGroupAssignment.player_id == Player.id)
-            .filter(
+            .where(
                 PlayerGroupAssignment.group_id == group_id,
                 PlayerGroupAssignment.is_current.is_(True),
             )
             .order_by(Player.last_name.asc(), Player.first_name.asc())
-            .all()
         )
+        players = result.scalars().all()
 
-        session_ids = [
-            row.id for row in (
-                self.db.query(TrainingSession.id)
-                .filter(
-                    TrainingSession.group_id == group_id,
-                    TrainingSession.is_active.is_(True),
-                )
-                .order_by(TrainingSession.session_date.desc())
-                .limit(limit)
-                .all()
+        sid_result = await self.db.execute(
+            select(TrainingSession.id)
+            .where(
+                TrainingSession.group_id == group_id,
+                TrainingSession.is_active.is_(True),
             )
-        ]
+            .order_by(TrainingSession.session_date.desc())
+            .limit(limit)
+        )
+        session_ids = [row.id for row in sid_result.all()]
         if not session_ids:
             return {"sessions": [], "players": players, "records": []}
 
-        sessions = (
-            self.db.query(TrainingSession)
-            .filter(TrainingSession.id.in_(session_ids))
+        sess_result = await self.db.execute(
+            select(TrainingSession)
+            .where(TrainingSession.id.in_(session_ids))
             .order_by(TrainingSession.session_date.asc())
-            .all()
         )
+        sessions = sess_result.scalars().all()
 
-        measurements = (
-            self.db.query(Measurement)
-            .filter(Measurement.session_id.in_(session_ids))
-            .all()
+        meas_result = await self.db.execute(
+            select(Measurement)
+            .where(Measurement.session_id.in_(session_ids))
         )
+        measurements = meas_result.scalars().all()
         records = [
             {"player_id": m.player_id, "session_id": m.session_id, "is_absent": m.is_absent}
             for m in measurements
@@ -223,11 +228,11 @@ class GroupService:
             "records": records,
         }
 
-    def get_player_stats(self, group_id: uuid.UUID) -> list[dict] | None:
-        if not self.db.get(Group, group_id):
+    async def get_player_stats(self, group_id: uuid.UUID) -> list[dict] | None:
+        if not await self.db.get(Group, group_id):
             return None
-        rows = (
-            self.db.query(
+        stmt = (
+            select(
                 Measurement.player_id,
                 Player.first_name,
                 Player.last_name,
@@ -240,15 +245,16 @@ class GroupService:
             )
             .join(Player, Player.id == Measurement.player_id)
             .join(TrainingSession, TrainingSession.id == Measurement.session_id)
-            .filter(
+            .where(
                 TrainingSession.group_id == group_id,
                 TrainingSession.is_active.is_(True),
                 Measurement.is_absent.is_(False),
             )
             .group_by(Measurement.player_id, Player.first_name, Player.last_name)
             .order_by(Player.last_name.asc(), Player.first_name.asc())
-            .all()
         )
+        result = await self.db.execute(stmt)
+        rows = result.all()
         return [
             {
                 "player_id": r.player_id,
@@ -264,15 +270,18 @@ class GroupService:
             for r in rows
         ]
 
-    def update_targets(
+    async def update_targets(
         self, group_id: uuid.UUID, body: list[TargetUpdateItem]
     ) -> list[GroupTarget] | None:
         """Returns None if group not found."""
-        group = self.db.get(Group, group_id)
+        group = await self.db.get(Group, group_id)
         if not group:
             return None
 
-        existing = {t.parameter: t for t in group.targets}
+        existing_result = await self.db.execute(
+            select(GroupTarget).where(GroupTarget.group_id == group_id)
+        )
+        existing = {t.parameter: t for t in existing_result.scalars().all()}
         for item in body:
             if item.parameter in existing:
                 target = existing[item.parameter]
@@ -286,6 +295,9 @@ class GroupService:
                     ottimo_min=item.ottimo_min,
                 ))
 
-        self.db.commit()
-        self.db.refresh(group)
-        return group.targets
+        await self.db.commit()
+        # Return fresh targets
+        targets_result = await self.db.execute(
+            select(GroupTarget).where(GroupTarget.group_id == group_id)
+        )
+        return targets_result.scalars().all()

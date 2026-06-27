@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.rbac import require_auth
@@ -19,12 +19,12 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 
 
 @router.get("/player/{player_id}/pdf")
-def player_report_pdf(
+async def player_report_pdf(
     player_id: uuid.UUID,
     _: object = Depends(require_auth),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> Response:
-    pdf = render_player_report_pdf(player_id, db)
+    pdf = await render_player_report_pdf(player_id, db)
     if pdf is None:
         raise HTTPException(status_code=404, detail="Giocatore non trovato o nessun dato disponibile")
     return Response(
@@ -35,12 +35,12 @@ def player_report_pdf(
 
 
 @router.get("/team/{group_id}/pdf")
-def team_report_pdf(
+async def team_report_pdf(
     group_id: uuid.UUID,
     _: object = Depends(require_auth),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> Response:
-    pdf = render_team_report_pdf(group_id, db)
+    pdf = await render_team_report_pdf(group_id, db)
     if pdf is None:
         raise HTTPException(status_code=404, detail="Squadra non trovata o nessun dato disponibile")
     return Response(
@@ -51,12 +51,12 @@ def team_report_pdf(
 
 
 @router.get("/session/{session_id}/team/pdf")
-def session_team_report_pdf(
+async def session_team_report_pdf(
     session_id: uuid.UUID,
     _: object = Depends(require_auth),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> Response:
-    pdf = render_session_team_report_pdf(session_id, db)
+    pdf = await render_session_team_report_pdf(session_id, db)
     if pdf is None:
         raise HTTPException(status_code=404, detail="Sessione non trovata o nessun dato disponibile")
     return Response(
@@ -67,13 +67,13 @@ def session_team_report_pdf(
 
 
 @router.get("/session/{session_id}/player/{player_id}/pdf")
-def session_player_report_pdf(
+async def session_player_report_pdf(
     session_id: uuid.UUID,
     player_id: uuid.UUID,
     _: object = Depends(require_auth),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> Response:
-    pdf = render_session_player_report_pdf(session_id, player_id, db)
+    pdf = await render_session_player_report_pdf(session_id, player_id, db)
     if pdf is None:
         raise HTTPException(status_code=404, detail="Sessione o giocatore non trovati")
     return Response(
