@@ -47,6 +47,10 @@ alembic/versions/*.pyc
 !.env.example
 users.json
 
+# ── AI Tools (local config, worktrees) ───────────────────────
+.claude/
+.claire/
+
 # ── Editors & OS ─────────────────────────────────────────────
 .DS_Store
 .DS_Store?
