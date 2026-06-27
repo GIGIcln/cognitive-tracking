@@ -31,9 +31,9 @@ Il progetto è in uno stato strutturalmente solido per le sue dimensioni:
 Attualmente gli utenti sono in un file JSON caricato in memoria all'avvio. Aggiungere o modificare un utente richiede di editare il file e ricaricare il server. Non c'è UI di gestione, no auto-registrazione, no reset password self-service. **Pre-requisito bloccante per tutti i nuovi moduli del gestionale.**  
 _File:_ `backend/app/user_store.py`, `backend/users.json`
 
-**[TD-02] SQLAlchemy sincrono in un'app FastAPI asincrona**  
-FastAPI è costruito su Starlette/asyncio ma il motore è sincrono (`create_engine`, `sessionmaker` senza `async`). Sotto carico ogni query blocca un thread del pool. Non è un problema ora (utenti pochi, query veloci), ma limita la scalabilità futura.  
-_File:_ `backend/app/database.py`
+**~~[TD-02] SQLAlchemy sincrono in un'app FastAPI asincrona~~** ✅ Risolto  
+`create_async_engine` + `AsyncSession` + `async_sessionmaker`. Driver: `asyncpg` (PostgreSQL), `aiosqlite` (test). Tutti gli 11 service e 8 router convertiti in `async def`. Test suite: `pytest-asyncio` (`asyncio_mode=auto`) + `httpx.AsyncClient` + `ASGITransport`. 106 test passati su SQLite; pg_seeded per i test che richiedono ON CONFLICT reale.  
+_File:_ `backend/app/database.py`, tutti i `services/`, `routers/`, `tests/`
 
 **~~[TD-03] Nessun sistema di CI/CD~~** ✅ Risolto con OB-01  
 `.github/workflows/ci.yml` attivo su ogni push/PR: job `backend` (ruff + pytest + postgres reale) e `frontend` (eslint + vitest + tsc + build). Job `e2e` Playwright con Chromium (OL-05).
